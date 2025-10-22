@@ -1,0 +1,33 @@
+package com.njumarket.njumarket.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Data;
+
+/**
+ * 用户注册数据传输对象
+ */
+@Schema(description = "用户注册")
+@Data
+public class RegisterDTO {
+    
+    @Schema(description = "手机号", example = "13800138000", required = true)
+    private String phone;
+    
+    @Schema(description = "用户名（可选）", example = "user123")
+    private String username;
+    
+    @Schema(description = "密码", example = "password123", required = true)
+    private String password;
+    
+    @Schema(description = "确认密码", example = "password123", required = true)
+    private String confirmPassword;
+    
+    @Schema(description = "手机验证码", example = "123456", required = true)
+    private String code;
+    
+    @Schema(description = "昵称（可选）", example = "小明")
+    private String nickname;
+    
+    @Schema(description = "邀请码（可选）", example = "INV123456")
+    private String inviteCode;
+}
