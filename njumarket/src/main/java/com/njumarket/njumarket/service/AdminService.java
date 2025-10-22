@@ -1,181 +1,84 @@
 package com.njumarket.njumarket.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.PromotionDTO;
+import com.njumarket.njumarket.dto.AdminLoginDTO;
+import com.njumarket.njumarket.entity.Admin;
+import jakarta.servlet.http.HttpSession;
+
+import java.util.List;
 
 /**
  * 管理员服务接口
  */
 public interface AdminService {
     
-    // ========== 用户管理 ==========
     /**
-     * 获取用户列表
+     * 管理员登录
      */
-    Result getUserList(Integer page, Integer size, String status);
+    Result login(AdminLoginDTO loginDTO, HttpSession session);
     
     /**
-     * 封禁用户
+     * 管理员登出
      */
-    Result banUser(String userId, String reason, String banType, String endTime);
+    Result logout(HttpSession session);
     
     /**
-     * 解封用户
+     * 获取当前登录的管理员信息
      */
-    Result unbanUser(String userId);
+    Result getCurrentAdmin();
     
     /**
-     * 获取用户详细信息
+     * 创建管理员账号
      */
-    Result getUserDetail(String userId);
+    Result createAdmin(Admin admin);
     
     /**
-     * 更新用户VIP等级
+     * 更新管理员信息
      */
-    Result updateUserVipLevel(String userId, String vipLevel);
+    Result updateAdmin(String adminId, Admin admin);
     
     /**
-     * 获取封禁记录
+     * 删除管理员账号
      */
-    Result getBanRecords(Integer page, Integer size);
-    
-    // ========== 商品管理 ==========
-    /**
-     * 获取待审核商品列表
-     */
-    Result getPendingAudits(Integer page, Integer size);
+    Result deleteAdmin(String adminId);
     
     /**
-     * 审核商品
+     * 获取管理员列表
      */
-    Result auditCommodity(String commodityId, String decision, String reason);
+    Result getAdminList(Integer page, Integer size, String keyword);
     
     /**
-     * 批量审核商品
+     * 根据ID获取管理员信息
      */
-    Result batchAudit(String[] commodityIds, String decision);
+    Result getAdminById(String adminId);
     
     /**
-     * 获取商品列表
+     * 更新管理员状态
      */
-    Result getCommodityList(Integer page, Integer size, String status);
+    Result updateAdminStatus(String adminId, String status);
     
     /**
-     * 强制下架商品
+     * 重置管理员密码
      */
-    Result removeCommodity(String commodityId, String reason);
+    Result resetPassword(String adminId, String newPassword);
     
     /**
-     * 获取审核记录
+     * 修改密码
      */
-    Result getAuditRecords(Integer page, Integer size);
-    
-    // ========== 投诉管理 ==========
-    /**
-     * 获取投诉列表
-     */
-    Result getComplaints(Integer page, Integer size, String status);
+    Result changePassword(String adminId, String oldPassword, String newPassword);
     
     /**
-     * 处理投诉
+     * 获取管理员统计信息
      */
-    Result handleComplaint(String complaintId, String decision, String remark);
+    Result getAdminStatistics();
     
     /**
-     * 获取投诉详情
+     * 检查管理员权限
      */
-    Result getComplaintDetail(String complaintId);
+    Result checkPermission(String adminId, String permission);
     
     /**
-     * 批量处理投诉
+     * 更新管理员权限
      */
-    Result batchHandleComplaints(String[] complaintIds, String decision);
-    
-    /**
-     * 获取投诉统计
-     */
-    Result getComplaintStatistics();
-    
-    // ========== 数据统计 ==========
-    /**
-     * 获取平台概览
-     */
-    Result getPlatformOverview();
-    
-    /**
-     * 获取用户统计数据
-     */
-    Result getUserStatistics(String period);
-    
-    /**
-     * 获取商品统计数据
-     */
-    Result getCommodityStatistics(String period);
-    
-    /**
-     * 获取订单统计数据
-     */
-    Result getOrderStatistics(String period);
-    
-    /**
-     * 获取交易额统计
-     */
-    Result getRevenueStatistics(String period, String category);
-    
-    /**
-     * 导出统计报表
-     */
-    Result exportStatistics(String type, String startDate, String endDate);
-    
-    /**
-     * 获取热门商品排行
-     */
-    Result getHotCommodities(Integer limit);
-    
-    /**
-     * 获取活跃用户排行
-     */
-    Result getActiveUsers(Integer limit);
-    
-    // ========== 促销管理 ==========
-    /**
-     * 创建促销活动
-     */
-    Result createPromotion(PromotionDTO promotionDTO);
-    
-    /**
-     * 获取促销活动列表
-     */
-    Result getPromotions(Integer page, Integer size, String status);
-    
-    /**
-     * 更新促销活动
-     */
-    Result updatePromotion(String promotionId, PromotionDTO promotionDTO);
-    
-    /**
-     * 激活促销活动
-     */
-    Result activatePromotion(String promotionId);
-    
-    /**
-     * 停用促销活动
-     */
-    Result deactivatePromotion(String promotionId);
-    
-    /**
-     * 删除促销活动
-     */
-    Result deletePromotion(String promotionId);
-    
-    /**
-     * 获取促销活动统计
-     */
-    Result getPromotionStatistics(String promotionId);
-    
-    // ========== 内部方法 ==========
-    /**
-     * 自动审核
-     */
-    Boolean autoAudit(String commodityId);
+    Result updatePermissions(String adminId, List<String> permissions);
 }

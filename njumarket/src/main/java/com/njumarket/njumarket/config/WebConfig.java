@@ -1,6 +1,7 @@
 package com.njumarket.njumarket.config;
 
 import com.njumarket.njumarket.interceptor.LoginInterceptor;
+import com.njumarket.njumarket.interceptor.AdminInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,9 +20,11 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class WebConfig implements WebMvcConfigurer {
 
     private final LoginInterceptor loginInterceptor;
+    private final AdminInterceptor adminInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 用户拦截器 - 只拦截用户相关路径
         registry.addInterceptor(loginInterceptor)
                 .addPathPatterns("/api/user/**")
                 .excludePathPatterns(
@@ -33,6 +36,14 @@ public class WebConfig implements WebMvcConfigurer {
                     "/api/user/auth/login-by-code",
                     "/api/user/auth/login-third-party",
                     "/api/user/auth/reset-password"
+                );
+        
+        // 管理员拦截器 - 只拦截管理员相关路径
+        registry.addInterceptor(adminInterceptor)
+                .addPathPatterns("/api/admin/**")
+                .excludePathPatterns(
+                    // 管理员登录接口不需要拦截
+                    "/api/admin/login"
                 );
     }
 
