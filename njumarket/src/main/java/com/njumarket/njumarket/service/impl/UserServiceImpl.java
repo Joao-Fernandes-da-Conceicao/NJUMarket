@@ -282,7 +282,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Result loginThirdParty(String type, String code, HttpSession session) {
-        // 第三方登录逻辑
+        // TODO:实现第三方登录逻辑
         return Result.ok("登录成功");
     }
 

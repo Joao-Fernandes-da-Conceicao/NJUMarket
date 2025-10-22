@@ -10,7 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Spring Security配置类
+ * Spring Security配置类 - 仅提供密码编码器，不进行认证拦截
  */
 @Configuration
 @EnableWebSecurity
@@ -27,18 +27,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Swagger文档接口 - 无需认证
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
-                // 公共接口 - 无需认证
-                .requestMatchers("/api/public/**").permitAll()
-                // 用户认证接口 - 无需认证（必须在用户接口规则之前）
-                .requestMatchers("/api/user/auth/**").permitAll()
-                // 管理员接口 - 需要管理员权限
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                // 用户接口 - 需要用户认证
-                .requestMatchers("/api/user/**").authenticated()
-                // 其他请求需要认证
-                .anyRequest().authenticated()
+                // 允许所有请求通过，由JWT拦截器处理认证
+                .anyRequest().permitAll()
             );
         
         return http.build();
