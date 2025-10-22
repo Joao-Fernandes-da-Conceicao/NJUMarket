@@ -3,6 +3,7 @@ package com.njumarket.njumarket.controller.user;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
 import com.njumarket.njumarket.service.UserProfileService;
+import com.njumarket.njumarket.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -63,12 +64,12 @@ public class UserProfileController {
         @ApiResponse(responseCode = "400", description = "文件格式错误"),
         @ApiResponse(responseCode = "401", description = "用户未登录")
     })
-    @PostMapping("/avatar")
+    @PostMapping(value = "/avatar", consumes = "multipart/form-data")
     public Result uploadAvatar(
         @Parameter(description = "头像文件", required = true)
         @RequestParam("file") MultipartFile file) {
-        // 图片逻辑暂缓实现
-        return Result.fail("头像上传功能暂未实现");
+        String currentUserId = UserHolder.getUser().getUserId();
+        return userProfileService.uploadAvatar(currentUserId, file);
     }
 
     @Operation(summary = "搜索用户档案", description = "根据昵称搜索用户档案")

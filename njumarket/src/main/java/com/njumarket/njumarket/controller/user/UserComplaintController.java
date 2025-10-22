@@ -28,7 +28,7 @@ public class UserComplaintController {
     /**
      * 上传投诉证据
      */
-    @PostMapping("/upload-evidence")
+    @PostMapping(value = "/upload-evidence", consumes = "multipart/form-data")
     public Result uploadEvidence(@RequestParam("files") MultipartFile[] files) {
         return complaintService.uploadEvidence(files);
     }

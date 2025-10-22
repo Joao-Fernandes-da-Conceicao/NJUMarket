@@ -63,7 +63,7 @@ public class UserCommodityController {
     /**
      * 上传商品图片
      */
-    @PostMapping("/upload-image")
+    @PostMapping(value = "/upload-image", consumes = "multipart/form-data")
     public Result uploadImage(@RequestParam("file") MultipartFile file) {
         return commodityService.uploadImage(file);
     }
