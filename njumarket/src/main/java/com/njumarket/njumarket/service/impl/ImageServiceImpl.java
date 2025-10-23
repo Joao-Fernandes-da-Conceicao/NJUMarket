@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -42,6 +43,10 @@ public class ImageServiceImpl implements ImageService {
     // 头像存储路径
     @Value("${app.upload.avatar-path:uploads/avatars}")
     private String avatarUploadPath;
+    
+    // 商品图片存储路径
+    @Value("${app.upload.commodity-path:uploads/commodities}")
+    private String commodityUploadPath;
     
     // 图片访问基础URL
     @Value("${app.image.base-url:http://localhost:8080}")
@@ -89,6 +94,68 @@ public class ImageServiceImpl implements ImageService {
     }
 
     @Override
+    public ImageUploadDTO uploadCommodityImage(String commodityId, MultipartFile file) {
+        try {
+            // 1. 验证文件
+            if (!validateImageFile(file)) {
+                throw new IllegalArgumentException("无效的图片文件");
+            }
+            
+            // 2. 生成唯一文件名
+            String fileName = generateCommodityImageFileName(file.getOriginalFilename(), commodityId);
+            
+            // 3. 确保上传目录存在
+            Path uploadDir = Paths.get(commodityUploadPath);
+            if (!Files.exists(uploadDir)) {
+                Files.createDirectories(uploadDir);
+                log.info("创建商品图片上传目录: {}", uploadDir.toAbsolutePath());
+            }
+            
+            // 4. 保存文件
+            Path filePath = uploadDir.resolve(fileName);
+            Files.copy(file.getInputStream(), filePath);
+            
+            // 5. 构建响应
+            ImageUploadDTO result = new ImageUploadDTO();
+            result.setImageUrl(getCommodityImageAccessUrl(fileName));
+            result.setFileName(fileName);
+            result.setFileSize(file.getSize());
+            result.setContentType(file.getContentType());
+            result.setUploadTime(System.currentTimeMillis());
+            
+            log.info("商品图片上传成功: commodityId={}, fileName={}, size={}", 
+                commodityId, fileName, file.getSize());
+            
+            return result;
+            
+        } catch (IOException e) {
+            log.error("商品图片上传失败: commodityId={}, error={}", commodityId, e.getMessage());
+            throw new RuntimeException("商品图片上传失败", e);
+        }
+    }
+
+    @Override
+    public List<ImageUploadDTO> uploadCommodityImages(String commodityId, List<MultipartFile> files) {
+        List<ImageUploadDTO> results = new ArrayList<>();
+        
+        for (MultipartFile file : files) {
+            try {
+                ImageUploadDTO result = uploadCommodityImage(commodityId, file);
+                results.add(result);
+            } catch (Exception e) {
+                log.error("批量上传商品图片失败: commodityId={}, fileName={}, error={}", 
+                    commodityId, file.getOriginalFilename(), e.getMessage());
+                // 继续处理其他文件，不中断整个批量上传过程
+            }
+        }
+        
+        log.info("批量上传商品图片完成: commodityId={}, 成功={}, 总数={}", 
+            commodityId, results.size(), files.size());
+        
+        return results;
+    }
+
+    @Override
     public boolean deleteAvatar(String userId, String fileName) {
         try {
             Path filePath = Paths.get(avatarUploadPath, fileName);
@@ -104,6 +171,26 @@ public class ImageServiceImpl implements ImageService {
         } catch (IOException e) {
             log.error("头像删除失败: userId={}, fileName={}, error={}", 
                 userId, fileName, e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean deleteCommodityImage(String commodityId, String fileName) {
+        try {
+            Path filePath = Paths.get(commodityUploadPath, fileName);
+            
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+                log.info("商品图片删除成功: commodityId={}, fileName={}", commodityId, fileName);
+                return true;
+            } else {
+                log.warn("商品图片文件不存在: commodityId={}, fileName={}", commodityId, fileName);
+                return false;
+            }
+        } catch (IOException e) {
+            log.error("商品图片删除失败: commodityId={}, fileName={}, error={}", 
+                commodityId, fileName, e.getMessage());
             return false;
         }
     }
@@ -168,6 +255,66 @@ public class ImageServiceImpl implements ImageService {
     }
 
     @Override
+    public boolean deleteCommodityImageByUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.trim().isEmpty()) {
+            log.warn("商品图片URL为空，无法删除");
+            return false;
+        }
+        
+        try {
+            // 从URL中提取文件名
+            String fileName = extractFileNameFromUrl(imageUrl);
+            if (fileName == null) {
+                log.warn("无法从URL中提取文件名: {}", imageUrl);
+                return false;
+            }
+            
+            // 删除文件
+            Path filePath = Paths.get(commodityUploadPath, fileName);
+            if (Files.exists(filePath)) {
+                Files.delete(filePath);
+                log.info("根据URL删除商品图片成功: url={}, fileName={}", imageUrl, fileName);
+                return true;
+            } else {
+                log.warn("根据URL删除商品图片失败，文件不存在: url={}, fileName={}", imageUrl, fileName);
+                return false;
+            }
+        } catch (IOException e) {
+            log.error("根据URL删除商品图片失败: url={}, error={}", imageUrl, e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public List<String> getCommodityImageUrls(String commodityId) {
+        List<String> imageUrls = new ArrayList<>();
+        
+        try {
+            Path commodityDir = Paths.get(commodityUploadPath);
+            if (!Files.exists(commodityDir)) {
+                return imageUrls;
+            }
+            
+            // 查找以commodityId开头的图片文件
+            Files.list(commodityDir)
+                .filter(path -> path.getFileName().toString().contains("_" + commodityId + "_"))
+                .sorted((p1, p2) -> {
+                    try {
+                        return Files.getLastModifiedTime(p1).compareTo(Files.getLastModifiedTime(p2));
+                    } catch (IOException e) {
+                        return 0;
+                    }
+                })
+                .forEach(path -> imageUrls.add(getCommodityImageAccessUrl(path.getFileName().toString())));
+                
+        } catch (IOException e) {
+            log.error("获取商品图片URL列表失败: commodityId={}, error={}", commodityId, e.getMessage());
+        }
+        
+        return imageUrls;
+    }
+
+    @Override
     public boolean validateImageFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             log.warn("文件为空");
@@ -211,10 +358,28 @@ public class ImageServiceImpl implements ImageService {
         
         return String.format("%s_avatar_%s_%s.%s", timestamp, userId, uuid, extension);
     }
+    
+    /**
+     * 生成商品图片唯一文件名
+     */
+    public String generateCommodityImageFileName(String originalFilename, String commodityId) {
+        String extension = getFileExtension(originalFilename);
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        String uuid = UUID.randomUUID().toString().substring(0, 8);
+        
+        return String.format("%s_commodity_%s_%s.%s", timestamp, commodityId, uuid, extension);
+    }
 
     @Override
     public String getImageAccessUrl(String fileName) {
         return imageBaseUrl + "/api/images/avatars/" + fileName;
+    }
+    
+    /**
+     * 获取商品图片访问URL
+     */
+    public String getCommodityImageAccessUrl(String fileName) {
+        return imageBaseUrl + "/api/images/commodities/" + fileName;
     }
     
     /**

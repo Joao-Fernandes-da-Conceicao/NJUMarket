@@ -120,4 +120,14 @@ public class UserAuthController {
         
         return userService.resetPassword(passwordDTO.getPhone(), passwordDTO.getCode(), passwordDTO.getNewPassword());
     }
+    
+    @Operation(summary = "获取当前用户信息", description = "获取当前登录用户的基本信息和档案信息")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "获取成功"),
+        @ApiResponse(responseCode = "401", description = "用户未登录")
+    })
+    @GetMapping("/me")
+    public Result getCurrentUser() {
+        return userService.getCurrentUser();
+    }
 }

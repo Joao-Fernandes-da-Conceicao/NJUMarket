@@ -10,6 +10,12 @@ import lombok.Data;
 @Data
 public class ImageUploadDTO {
     
+    @Schema(description = "是否成功", example = "true")
+    private boolean success;
+    
+    @Schema(description = "消息", example = "上传成功")
+    private String message;
+    
     @Schema(description = "图片URL", example = "http://localhost:8080/api/images/avatars/20241022_avatar_123456.jpg")
     private String imageUrl;
     

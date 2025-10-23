@@ -12,8 +12,19 @@ public class OrderDTO {
     private String sellerId;
     private String commodityId;
     private String orderStatus;
+    private String sellerVisibility;
+    private String buyerVisibility;
     private Double payAmount;
     private Integer quantity;
-    private String deliveryAddress;
+    private String shippingAddress;
+    private String trackingNumber;
     private String remark;
+    
+    // 退货相关字段
+    private String returnReason;
+    private String returnRequestTime;
+    private String returnApprovalTime;
+    private String returnRejectionReason;
+    private String returnTrackingNumber;
+    private String returnCompletionTime;
 }

@@ -35,8 +35,16 @@ public class Result {
         return new Result(true, null, data, null);
     }
     
+    public static Result ok(String message, Object data){
+        return new Result(true, message, data, null);
+    }
+    
     public static Result ok(List<?> data, Long total){
         return new Result(true, null, data, total);
+    }
+    
+    public static Result ok(String message, List<?> data, Long total){
+        return new Result(true, message, data, total);
     }
     
     public static Result fail(String errorMsg){

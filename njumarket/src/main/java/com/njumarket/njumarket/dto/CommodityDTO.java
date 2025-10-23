@@ -2,6 +2,7 @@ package com.njumarket.njumarket.dto;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -16,7 +17,12 @@ public class CommodityDTO {
     private Double price;
     private Integer stock;
     private String location;
+    private LocalDateTime publishTime;
     private String commodityStatus;
-    private List<String> images;
+    private String sellerVisibility;
+    private String buyerVisibility;
     private String category;
+    private String conditionLevel;
+    private List<String> images;
+    private Integer clickCount;
 }

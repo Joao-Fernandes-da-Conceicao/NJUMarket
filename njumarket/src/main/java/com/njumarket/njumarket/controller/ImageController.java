@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,18 +26,36 @@ public class ImageController {
 
     @Value("${app.upload.avatar-path:uploads/avatars}")
     private String avatarUploadPath;
+    
+    @Value("${app.upload.commodity-path:uploads/commodities}")
+    private String commodityUploadPath;
 
     /**
      * 获取头像图片
      */
     @GetMapping("/avatars/{fileName}")
     public ResponseEntity<Resource> getAvatar(@PathVariable String fileName) {
+        return getImage(avatarUploadPath, fileName);
+    }
+
+    /**
+     * 获取商品图片
+     */
+    @GetMapping("/commodities/{fileName}")
+    public ResponseEntity<Resource> getCommodityImage(@PathVariable String fileName) {
+        return getImage(commodityUploadPath, fileName);
+    }
+
+    /**
+     * 通用图片获取方法
+     */
+    private ResponseEntity<Resource> getImage(String uploadPath, String fileName) {
         try {
-            Path filePath = Paths.get(avatarUploadPath, fileName);
+            Path filePath = Paths.get(uploadPath, fileName);
             File file = filePath.toFile();
             
             if (!file.exists()) {
-                log.warn("头像文件不存在: {}", fileName);
+                log.warn("图片文件不存在: {}", filePath);
                 return ResponseEntity.notFound().build();
             }
             
@@ -51,27 +68,12 @@ public class ImageController {
             }
             
             return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(contentType))
-                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=3600") // 缓存1小时
-                .body(resource);
-                
-        } catch (IOException e) {
-            log.error("获取头像文件失败: fileName={}, error={}", fileName, e.getMessage());
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-    
-    /**
-     * 获取默认头像
-     */
-    @GetMapping("/avatars/default")
-    public ResponseEntity<Resource> getDefaultAvatar() {
-        try {
-            // 这里可以返回一个默认头像文件
-            // 暂时返回404，表示没有默认头像
-            return ResponseEntity.notFound().build();
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CACHE_CONTROL, "max-age=3600") // 缓存1小时
+                    .body(resource);
+                    
         } catch (Exception e) {
-            log.error("获取默认头像失败: {}", e.getMessage());
+            log.error("获取图片失败: path={}, fileName={}, error={}", uploadPath, fileName, e.getMessage());
             return ResponseEntity.internalServerError().build();
         }
     }

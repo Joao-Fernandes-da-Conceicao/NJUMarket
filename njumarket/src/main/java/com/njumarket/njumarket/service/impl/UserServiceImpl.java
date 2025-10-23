@@ -5,6 +5,7 @@ import com.njumarket.njumarket.dto.UserDTO;
 import com.njumarket.njumarket.dto.LoginFormDTO;
 import com.njumarket.njumarket.dto.RegisterDTO;
 import com.njumarket.njumarket.entity.User;
+import com.njumarket.njumarket.entity.UserProfile;
 import com.njumarket.njumarket.repository.UserRepository;
 import com.njumarket.njumarket.service.UserService;
 import com.njumarket.njumarket.service.PasswordService;
@@ -407,9 +408,20 @@ public class UserServiceImpl implements UserService {
     // ========== 用户档案相关 ==========
     @Override
     public Result getCurrentUser() {
-        // 获取当前用户信息
-        User currentUser = UserHolder.getUser();
-        return Result.ok(currentUser);
+        try {
+            // 获取当前用户信息
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 转换为UserDTO（包含profile信息）
+            UserDTO userDTO = convertToUserDTO(currentUser);
+            return Result.ok(userDTO);
+        } catch (Exception e) {
+            log.error("获取当前用户信息失败: {}", e.getMessage(), e);
+            return Result.fail("获取用户信息失败");
+        }
     }
 
     @Override
@@ -500,7 +512,12 @@ public class UserServiceImpl implements UserService {
         user.setRegisterTime(java.time.LocalDateTime.now());
         
         // 保存用户到数据库
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        
+        // 创建用户档案
+        createUserProfile(savedUser, null);
+        
+        return savedUser;
     }
     
     /**
@@ -518,7 +535,19 @@ public class UserServiceImpl implements UserService {
         userDTO.setUserId(user.getUserId());
         userDTO.setPrimaryPhone(user.getPrimaryPhone());
         userDTO.setAccountStatus(user.getAccountStatus());
-        // 可以添加更多字段转换
+        userDTO.setRegisterTime(user.getRegisterTime());
+        
+        // 从UserProfile获取头像和昵称信息
+        if (user.getUserProfile() != null) {
+            UserProfile profile = user.getUserProfile();
+            userDTO.setNickname(profile.getNickname());
+            userDTO.setAvatar(profile.getAvatar());
+            userDTO.setCreditScore(profile.getCreditScore());
+            userDTO.setBuyerRating(profile.getBuyerRating());
+            userDTO.setSellerRating(profile.getSellerRating());
+            userDTO.setVipLevel(profile.getVipLevel());
+        }
+        
         return userDTO;
     }
     

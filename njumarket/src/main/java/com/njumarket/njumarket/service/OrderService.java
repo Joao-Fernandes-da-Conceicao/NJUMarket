@@ -62,6 +62,51 @@ public interface OrderService {
     Result getOrderDetail(String orderId);
     
     /**
+     * 修改订单可见性
+     */
+    Result updateOrderVisibility(String orderId, String visibility);
+    
+    /**
+     * 修改订单卖家可见性
+     */
+    Result updateOrderSellerVisibility(String orderId, String sellerVisibility);
+    
+    /**
+     * 修改订单买家可见性
+     */
+    Result updateOrderBuyerVisibility(String orderId, String buyerVisibility);
+    
+    /**
+     * 申请退货（买家功能）
+     */
+    Result requestReturn(String orderId, String returnReason);
+    
+    /**
+     * 审批退货申请（卖家功能）
+     */
+    Result approveReturnRequest(String orderId, Boolean approved, String rejectionReason);
+    
+    /**
+     * 确认退货发货（买家功能）
+     */
+    Result confirmReturnShipment(String orderId, String returnTrackingNumber);
+    
+    /**
+     * 完成退货（卖家功能）
+     */
+    Result completeReturn(String orderId);
+    
+    /**
+     * 获取退货申请列表（卖家功能）
+     */
+    Result getReturnRequests(Integer page, Integer size, String status);
+    
+    /**
+     * 获取我的退货记录（买家功能）
+     */
+    Result getMyReturnRecords(Integer page, Integer size, String status);
+    
+    /**
      * 评价订单
      */
     Result rateOrder(String orderId, Integer rating, String comment);

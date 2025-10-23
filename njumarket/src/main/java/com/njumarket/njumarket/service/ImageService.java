@@ -3,6 +3,8 @@ package com.njumarket.njumarket.service;
 import com.njumarket.njumarket.dto.ImageUploadDTO;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * 图片服务接口
  */
@@ -14,9 +16,24 @@ public interface ImageService {
     ImageUploadDTO uploadAvatar(String userId, MultipartFile file);
     
     /**
+     * 上传商品图片
+     */
+    ImageUploadDTO uploadCommodityImage(String commodityId, MultipartFile file);
+    
+    /**
+     * 批量上传商品图片
+     */
+    List<ImageUploadDTO> uploadCommodityImages(String commodityId, List<MultipartFile> files);
+    
+    /**
      * 删除头像
      */
     boolean deleteAvatar(String userId, String fileName);
+    
+    /**
+     * 删除商品图片
+     */
+    boolean deleteCommodityImage(String commodityId, String fileName);
     
     /**
      * 根据头像URL删除头像文件
@@ -24,9 +41,19 @@ public interface ImageService {
     boolean deleteAvatarByUrl(String avatarUrl);
     
     /**
+     * 根据商品图片URL删除商品图片文件
+     */
+    boolean deleteCommodityImageByUrl(String imageUrl);
+    
+    /**
      * 获取用户头像URL
      */
     String getUserAvatarUrl(String userId);
+    
+    /**
+     * 获取商品图片URL列表
+     */
+    List<String> getCommodityImageUrls(String commodityId);
     
     /**
      * 验证图片文件

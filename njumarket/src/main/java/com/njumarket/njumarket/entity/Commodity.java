@@ -47,7 +47,22 @@ public class Commodity {
     private LocalDateTime publishTime;
     
     @Column(name = "commodity_status", length = 20, nullable = false)
-    private String commodityStatus; // DRAFT, PUBLISHED, SOLD_OUT, REMOVED
+    private String commodityStatus; // DRAFT, ON_SHELF, SOLD_OUT
+    
+    @Column(name = "seller_visibility", length = 20, nullable = false)
+    private String sellerVisibility = "PUBLIC"; // PUBLIC, PRIVATE, HIDDEN
+    
+    @Column(name = "buyer_visibility", length = 20, nullable = false)
+    private String buyerVisibility = "PUBLIC"; // PUBLIC, PRIVATE, HIDDEN
+    
+    @Column(name = "category", length = 50)
+    private String category;
+    
+    @Column(name = "condition_level", length = 20)
+    private String conditionLevel = "GOOD"; // EXCELLENT, GOOD, FAIR, POOR
+    
+    @Column(name = "images", columnDefinition = "TEXT")
+    private String images; // JSON格式的图片URL列表
     
     @Column(name = "click_count", nullable = false)
     private Integer clickCount = 0;
@@ -107,7 +122,68 @@ public class Commodity {
      * @return 下架是否成功
      */
     public Boolean unpublish() {
-        this.commodityStatus = "REMOVED";
+        this.commodityStatus = "DRAFT";
+        this.sellerVisibility = "PRIVATE";
+        this.buyerVisibility = "HIDDEN";
         return true;
+    }
+    
+    /**
+     * 设置卖家可见性
+     * @param sellerVisibility 卖家可见性状态
+     * @return 设置是否成功
+     */
+    public Boolean setSellerVisibility(String sellerVisibility) {
+        if ("PUBLIC".equals(sellerVisibility) || "PRIVATE".equals(sellerVisibility) || "HIDDEN".equals(sellerVisibility)) {
+            this.sellerVisibility = sellerVisibility;
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * 设置买家可见性
+     * @param buyerVisibility 买家可见性状态
+     * @return 设置是否成功
+     */
+    public Boolean setBuyerVisibility(String buyerVisibility) {
+        if ("PUBLIC".equals(buyerVisibility) || "PRIVATE".equals(buyerVisibility) || "HIDDEN".equals(buyerVisibility)) {
+            this.buyerVisibility = buyerVisibility;
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * 设置可见性（兼容旧接口）
+     * @param visibility 可见性状态
+     * @return 设置是否成功
+     */
+    public Boolean setVisibility(String visibility) {
+        return setSellerVisibility(visibility) && setBuyerVisibility(visibility);
+    }
+    
+    /**
+     * 检查商品对卖家是否可见
+     * @return 是否可见
+     */
+    public Boolean isVisibleToSeller() {
+        return "PUBLIC".equals(this.sellerVisibility) && "PUBLISHED".equals(this.commodityStatus);
+    }
+    
+    /**
+     * 检查商品对买家是否可见
+     * @return 是否可见
+     */
+    public Boolean isVisibleToBuyer() {
+        return "PUBLIC".equals(this.buyerVisibility) && "PUBLISHED".equals(this.commodityStatus);
+    }
+    
+    /**
+     * 检查商品是否可见（兼容旧接口）
+     * @return 是否可见
+     */
+    public Boolean isVisible() {
+        return isVisibleToSeller() && isVisibleToBuyer();
     }
 }
