@@ -50,6 +50,13 @@
                   style="margin-top: 10px;"
                 />
                 <el-alert
+                  v-else-if="currentStock <= 0"
+                  title="商品已售罄"
+                  type="error"
+                  :closable="false"
+                  style="margin-top: 10px;"
+                />
+                <el-alert
                   v-else
                   title="商品正常可购买"
                   type="success"
@@ -68,11 +75,14 @@
                 <el-input-number
                   v-model="orderForm.quantity"
                   :min="1"
-                  :max="commodityExists && commodityOnShelf ? currentStock : 1"
-                  :disabled="!commodityExists || !commodityOnShelf"
+                  :max="commodityExists && commodityOnShelf && currentStock > 0 ? currentStock : 1"
+                  :disabled="!commodityExists || !commodityOnShelf || currentStock <= 0"
                 />
                 <span v-if="commodityExists && commodityOnShelf" class="stock-info">
                   （当前库存：{{ currentStock }}）
+                </span>
+                <span v-if="commodityExists && commodityOnShelf && currentStock <= 0" class="sold-out-info">
+                  （已售罄）
                 </span>
               </el-form-item>
               
@@ -80,7 +90,7 @@
                 <el-input
                   v-model="orderForm.shippingAddress"
                   placeholder="请输入收货地址"
-                  :disabled="!commodityExists || !commodityOnShelf"
+                  :disabled="!commodityExists || !commodityOnShelf || currentStock <= 0"
                 />
               </el-form-item>
               
@@ -90,7 +100,7 @@
                   type="textarea"
                   placeholder="请输入备注信息（可选）"
                   :rows="3"
-                  :disabled="!commodityExists || !commodityOnShelf"
+                  :disabled="!commodityExists || !commodityOnShelf || currentStock <= 0"
                 />
               </el-form-item>
               
@@ -108,14 +118,14 @@
           <!-- 操作按钮 -->
           <div class="action-section">
             <el-button size="large" @click="$router.back()">取消</el-button>
-            <el-button
-              type="primary"
-              size="large"
-              :disabled="!canCreateOrder"
-              @click="handleCreateOrder"
-            >
-              {{ !canCreateOrder ? '无法下单' : '确认下单' }}
-            </el-button>
+              <el-button
+                type="primary"
+                size="large"
+                :disabled="!canCreateOrder"
+                @click="handleCreateOrder"
+              >
+                {{ !canCreateOrder ? (currentStock <= 0 ? '已售罄' : '无法下单') : '确认下单' }}
+              </el-button>
           </div>
         </div>
 
@@ -461,6 +471,13 @@ export default {
   font-size: 12px;
   color: #999;
   margin-left: 10px;
+}
+
+.sold-out-info {
+  font-size: 12px;
+  color: #e74c3c;
+  margin-left: 10px;
+  font-weight: bold;
 }
 
 .total-amount {

@@ -35,12 +35,13 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     // ========== 公开商品查询实现 ==========
     
     @Override
-    public Result searchCommodities(String keyword, Integer page, Integer size, String location, Double minPrice, Double maxPrice, String category) {
+    public Result searchCommodities(String keyword, Integer page, Integer size, String location, Double minPrice, Double maxPrice, String category, String sortBy) {
         try {
-            log.info("搜索商品 - keyword: {}, page: {}, size: {}, location: {}, minPrice: {}, maxPrice: {}, category: {}", 
-                    keyword, page, size, location, minPrice, maxPrice, category);
+            log.info("搜索商品 - keyword: {}, page: {}, size: {}, location: {}, minPrice: {}, maxPrice: {}, category: {}, sortBy: {}", 
+                    keyword, page, size, location, minPrice, maxPrice, category, sortBy);
                 
-            Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "publishTime"));
+            // 根据排序参数创建Pageable
+            Pageable pageable = createPageable(page, size, sortBy);
             
             Page<Commodity> commodityPage;
             
@@ -242,7 +243,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             log.info("AI语义搜索 - query: {}, location: {}", query, location);
             
             // 简单的AI搜索实现：基于关键词搜索
-            return searchCommodities(query, 1, 10, location, null, null, null);
+            return searchCommodities(query, 1, 10, location, null, null, null, null);
             
         } catch (Exception e) {
             log.error("AI语义搜索失败: {}", e.getMessage(), e);
@@ -559,5 +560,38 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         dto.setClickCount(commodity.getClickCount());
         
         return dto;
+    }
+    
+    /**
+     * 根据排序参数创建Pageable
+     * @param page 页码
+     * @param size 每页数量
+     * @param sortBy 排序方式
+     * @return Pageable对象
+     */
+    private Pageable createPageable(Integer page, Integer size, String sortBy) {
+        Sort sort;
+        
+        if (StringUtils.hasText(sortBy)) {
+            switch (sortBy) {
+                case "price_asc":
+                    sort = Sort.by(Sort.Direction.ASC, "price");
+                    break;
+                case "price_desc":
+                    sort = Sort.by(Sort.Direction.DESC, "price");
+                    break;
+                case "latest":
+                    sort = Sort.by(Sort.Direction.DESC, "publishTime");
+                    break;
+                default:
+                    sort = Sort.by(Sort.Direction.DESC, "publishTime");
+                    break;
+            }
+        } else {
+            // 默认按发布时间降序
+            sort = Sort.by(Sort.Direction.DESC, "publishTime");
+        }
+        
+        return PageRequest.of(page - 1, size, sort);
     }
 }

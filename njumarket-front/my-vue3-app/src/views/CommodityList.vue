@@ -182,6 +182,9 @@ export default {
         if (maxPrice.value) {
           params.maxPrice = parseFloat(maxPrice.value)
         }
+        if (sortBy.value) {
+          params.sortBy = sortBy.value
+        }
         
         const response = await commodityAPI.search(params)
         if (response.success) {

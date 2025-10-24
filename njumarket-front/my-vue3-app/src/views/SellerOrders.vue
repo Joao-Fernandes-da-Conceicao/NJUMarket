@@ -137,6 +137,11 @@
                     拒绝退款
                   </el-button>
                   
+                  <!-- 查看订单详情按钮 -->
+                  <el-button @click="viewOrderDetail(order.orderId)">
+                    查看详情
+                  </el-button>
+                  
                   <el-dropdown @command="(command) => handleVisibilityChange(order.orderId, command)">
                     <el-button>
                       可见性<el-icon><ArrowDown /></el-icon>
@@ -422,6 +427,11 @@ export default {
       router.push('/my-commodities')
     }
     
+    // 查看订单详情
+    const viewOrderDetail = (orderId) => {
+      router.push(`/order/${orderId}`)
+    }
+    
     // 格式化时间
     const formatTime = (time) => {
       if (!time) return ''
@@ -491,6 +501,7 @@ export default {
       handleApproveRefund,
       handleRejectRefund,
       handleVisibilityChange,
+      viewOrderDetail,
       getStatusType,
       getStatusText,
       getEmptyDescription,

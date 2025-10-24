@@ -29,8 +29,9 @@ public class PublicController {
             @Parameter(description = "位置", example = "仙林校区") @RequestParam(required = false) String location,
             @Parameter(description = "最低价格", example = "100.0") @RequestParam(required = false) Double minPrice,
             @Parameter(description = "最高价格", example = "5000.0") @RequestParam(required = false) Double maxPrice,
-            @Parameter(description = "商品分类", example = "电子产品") @RequestParam(required = false) String category) {
-        return commodityQueryService.searchCommodities(keyword, page, size, location, minPrice, maxPrice, category);
+            @Parameter(description = "商品分类", example = "电子产品") @RequestParam(required = false) String category,
+            @Parameter(description = "排序方式", example = "price_asc") @RequestParam(required = false) String sortBy) {
+        return commodityQueryService.searchCommodities(keyword, page, size, location, minPrice, maxPrice, category, sortBy);
     }
 
     @Operation(summary = "AI语义搜索", description = "使用AI进行智能商品搜索和推荐")

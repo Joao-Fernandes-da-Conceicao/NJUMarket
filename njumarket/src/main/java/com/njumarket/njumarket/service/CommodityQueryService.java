@@ -16,10 +16,16 @@ public interface CommodityQueryService {
     /**
      * 搜索商品（公开可见）
      * @param keyword 关键词
-     * @param pageable 分页参数
+     * @param page 页码
+     * @param size 每页数量
+     * @param location 位置
+     * @param minPrice 最低价格
+     * @param maxPrice 最高价格
+     * @param category 分类
+     * @param sortBy 排序方式
      * @return 商品分页结果
      */
-    Result searchCommodities(String keyword, Integer page, Integer size, String location, Double minPrice, Double maxPrice, String category);
+    Result searchCommodities(String keyword, Integer page, Integer size, String location, Double minPrice, Double maxPrice, String category, String sortBy);
     
     /**
      * 根据分类查询商品（公开可见）

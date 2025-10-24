@@ -11,6 +11,7 @@ import SellerOrders from '../views/SellerOrders.vue'
 import MyCommodities from '../views/MyCommodities.vue'
 import PublishCommodity from '../views/PublishCommodity.vue'
 import CreateOrder from '../views/CreateOrder.vue'
+import OrderDetail from '../views/OrderDetail.vue'
 import LocalStorageDebug from '../views/LocalStorageDebug.vue'
 
 const routes = [
@@ -79,6 +80,12 @@ const routes = [
     path: '/create-order/:orderId',
     name: 'CreateOrder',
     component: CreateOrder,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/order/:id',
+    name: 'OrderDetail',
+    component: OrderDetail,
     meta: { requiresAuth: true }
   },
   {

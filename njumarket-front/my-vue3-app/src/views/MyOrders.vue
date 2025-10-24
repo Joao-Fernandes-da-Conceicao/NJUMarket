@@ -436,9 +436,8 @@ export default {
     }
     
     // 查看订单详情
-    const viewOrderDetail = () => {
-      // 这里可以打开订单详情对话框或跳转到详情页面
-      ElMessage.info('订单详情功能开发中...')
+    const viewOrderDetail = (orderId) => {
+      router.push(`/order/${orderId}`)
     }
     
     // 修改订单可见性

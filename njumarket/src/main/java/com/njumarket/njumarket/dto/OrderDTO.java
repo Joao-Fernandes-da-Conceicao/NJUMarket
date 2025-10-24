@@ -41,4 +41,34 @@ public class OrderDTO {
     private String commoditySnapshotSellerPhone;
     private String commoditySnapshotSellerEmail;
     private String commoditySnapshotTime;
+    
+    // ========== 卖家详细信息 ==========
+    private SellerInfo seller;
+    private BuyerInfo buyer;
+    
+    // 卖家信息内部类
+    @Data
+    public static class SellerInfo {
+        private String userId;
+        private String username;
+        private String nickname;
+        private String avatar;
+        private String phone;
+        private String email;
+        private Boolean isDeleted;
+        private String status; // ACTIVE, DELETED
+    }
+    
+    // 买家信息内部类
+    @Data
+    public static class BuyerInfo {
+        private String userId;
+        private String username;
+        private String nickname;
+        private String avatar;
+        private String phone;
+        private String email;
+        private Boolean isDeleted;
+        private String status; // ACTIVE, DELETED
+    }
 }

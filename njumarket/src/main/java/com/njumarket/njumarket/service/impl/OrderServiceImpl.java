@@ -5,9 +5,11 @@ import com.njumarket.njumarket.dto.OrderDTO;
 import com.njumarket.njumarket.entity.Order;
 import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
+import com.njumarket.njumarket.entity.UserProfile;
 import com.njumarket.njumarket.repository.OrderRepository;
 import com.njumarket.njumarket.repository.CommodityRepository;
 import com.njumarket.njumarket.repository.UserRepository;
+import com.njumarket.njumarket.repository.UserProfileRepository;
 import com.njumarket.njumarket.service.OrderService;
 import com.njumarket.njumarket.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final CommodityRepository commodityRepository;
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
 
     // ========== 买家功能 ==========
     @Override
@@ -570,7 +573,83 @@ public class OrderServiceImpl implements OrderService {
             // 转换为DTO
             OrderDTO orderDTO = convertToDTO(order);
             
-            return Result.ok("获取订单详情成功");
+            // 查询卖家详细信息
+            Optional<User> sellerOpt = userRepository.findById(order.getSellerId());
+            if (sellerOpt.isPresent()) {
+                User seller = sellerOpt.get();
+                OrderDTO.SellerInfo sellerInfo = new OrderDTO.SellerInfo();
+                sellerInfo.setUserId(seller.getUserId());
+                sellerInfo.setUsername(seller.getUsername());
+                
+                // 查询卖家档案信息
+                Optional<UserProfile> sellerProfileOpt = userProfileRepository.findByUserId(seller.getUserId());
+                if (sellerProfileOpt.isPresent()) {
+                    UserProfile sellerProfile = sellerProfileOpt.get();
+                    sellerInfo.setNickname(sellerProfile.getNickname());
+                    sellerInfo.setAvatar(sellerProfile.getAvatar());
+                } else {
+                    sellerInfo.setNickname(seller.getUsername());
+                    sellerInfo.setAvatar(null);
+                }
+                
+                sellerInfo.setPhone(seller.getPrimaryPhone());
+                sellerInfo.setEmail(null); // 邮箱需要从contact_info表查询，这里暂时设为null
+                sellerInfo.setIsDeleted("DELETED".equals(seller.getAccountStatus()));
+                sellerInfo.setStatus(sellerInfo.getIsDeleted() ? "DELETED" : "ACTIVE");
+                orderDTO.setSeller(sellerInfo);
+            } else {
+                // 卖家不存在，创建已注销的卖家信息
+                OrderDTO.SellerInfo sellerInfo = new OrderDTO.SellerInfo();
+                sellerInfo.setUserId(order.getSellerId());
+                sellerInfo.setUsername("已注销用户");
+                sellerInfo.setNickname("卖家已注销");
+                sellerInfo.setAvatar(null);
+                sellerInfo.setPhone(null);
+                sellerInfo.setEmail(null);
+                sellerInfo.setIsDeleted(true);
+                sellerInfo.setStatus("DELETED");
+                orderDTO.setSeller(sellerInfo);
+            }
+            
+            // 查询买家详细信息
+            Optional<User> buyerOpt = userRepository.findById(order.getBuyerId());
+            if (buyerOpt.isPresent()) {
+                User buyer = buyerOpt.get();
+                OrderDTO.BuyerInfo buyerInfo = new OrderDTO.BuyerInfo();
+                buyerInfo.setUserId(buyer.getUserId());
+                buyerInfo.setUsername(buyer.getUsername());
+                
+                // 查询买家档案信息
+                Optional<UserProfile> buyerProfileOpt = userProfileRepository.findByUserId(buyer.getUserId());
+                if (buyerProfileOpt.isPresent()) {
+                    UserProfile buyerProfile = buyerProfileOpt.get();
+                    buyerInfo.setNickname(buyerProfile.getNickname());
+                    buyerInfo.setAvatar(buyerProfile.getAvatar());
+                } else {
+                    buyerInfo.setNickname(buyer.getUsername());
+                    buyerInfo.setAvatar(null);
+                }
+                
+                buyerInfo.setPhone(buyer.getPrimaryPhone());
+                buyerInfo.setEmail(null); // 邮箱需要从contact_info表查询，这里暂时设为null
+                buyerInfo.setIsDeleted("DELETED".equals(buyer.getAccountStatus()));
+                buyerInfo.setStatus(buyerInfo.getIsDeleted() ? "DELETED" : "ACTIVE");
+                orderDTO.setBuyer(buyerInfo);
+            } else {
+                // 买家不存在，创建已注销的买家信息
+                OrderDTO.BuyerInfo buyerInfo = new OrderDTO.BuyerInfo();
+                buyerInfo.setUserId(order.getBuyerId());
+                buyerInfo.setUsername("已注销用户");
+                buyerInfo.setNickname("买家已注销");
+                buyerInfo.setAvatar(null);
+                buyerInfo.setPhone(null);
+                buyerInfo.setEmail(null);
+                buyerInfo.setIsDeleted(true);
+                buyerInfo.setStatus("DELETED");
+                orderDTO.setBuyer(buyerInfo);
+            }
+            
+            return Result.ok("获取订单详情成功", orderDTO);
             
         } catch (Exception e) {
             log.error("获取订单详情失败", e);
