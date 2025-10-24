@@ -236,6 +236,22 @@ export const useCommodityStore = defineStore('commodity', {
       }
     },
     
+    // 重新上架商品
+    async republishCommodity(commodityId) {
+      try {
+        const response = await commodityAPI.republish(commodityId)
+        
+        if (response.success) {
+          await this.getMyCommodities()
+        }
+        
+        return response
+      } catch (error) {
+        console.error('重新上架商品失败:', error)
+        throw error
+      }
+    },
+    
     // 获取热门商品
     async getHotCommodities(limit = 8) {
       try {

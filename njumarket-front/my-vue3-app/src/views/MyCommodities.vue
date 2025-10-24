@@ -93,6 +93,15 @@
                   设为草稿
                 </el-button>
                 
+                <!-- 已下架商品：重新上架按钮 -->
+                <el-button
+                  v-if="commodity.commodityStatus === 'OFF_SHELF'"
+                  type="primary"
+                  @click="handleRepublish(commodity.commodityId)"
+                >
+                  重新上架
+                </el-button>
+                
                 <!-- 已上架商品：设为售罄按钮 -->
                 <el-button
                   v-if="commodity.commodityStatus === 'ON_SHELF'"
@@ -304,6 +313,26 @@ export default {
       }
     }
     
+    // 重新上架商品
+    const handleRepublish = async (commodityId) => {
+      try {
+        const confirmed = confirm('确定要重新上架这个商品吗？')
+        if (!confirmed) {
+          return
+        }
+        
+        const response = await commodityAPI.republish(commodityId)
+        if (response.success) {
+          ElMessage.success('商品已重新上架')
+          fetchCommodities()
+        } else {
+          ElMessage.error(response.errorMsg || '重新上架失败')
+        }
+      } catch (error) {
+        ElMessage.error('重新上架失败')
+      }
+    }
+    
     // 编辑商品
     const handleEdit = (commodityId) => {
       router.push(`/publish?edit=${commodityId}`)
@@ -349,6 +378,7 @@ export default {
       const statusMap = {
         'DRAFT': 'warning',
         'ON_SHELF': 'success',
+        'OFF_SHELF': 'danger',
         'SOLD_OUT': 'info'
       }
       return statusMap[status] || 'info'
@@ -359,6 +389,7 @@ export default {
       const statusMap = {
         'DRAFT': '草稿',
         'ON_SHELF': '已上架',
+        'OFF_SHELF': '已下架',
         'SOLD_OUT': '已售完'
       }
       return statusMap[status] || status
@@ -447,6 +478,7 @@ export default {
       handleUnshelf,
       handleDraft,
       handleSoldOut,
+      handleRepublish,
       handleEdit,
       handleVisibilityChange,
       handleDelete,
