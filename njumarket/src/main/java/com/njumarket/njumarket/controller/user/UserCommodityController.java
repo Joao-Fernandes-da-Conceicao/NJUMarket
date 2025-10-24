@@ -3,9 +3,7 @@ package com.njumarket.njumarket.controller.user;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.CommodityDTO;
 import com.njumarket.njumarket.service.CommodityService;
-import com.njumarket.njumarket.service.CommodityQueryService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -85,12 +83,6 @@ public class UserCommodityController {
     @PostMapping("/{commodityId}/draft")
     public Result draftCommodity(@PathVariable String commodityId) {
         return commodityService.draftCommodity(commodityId);
-    }
-
-    @Operation(summary = "设为售罄", description = "将商品设为售罄状态")
-    @PostMapping("/{commodityId}/sold-out")
-    public Result soldOutCommodity(@PathVariable String commodityId) {
-        return commodityService.soldOutCommodity(commodityId);
     }
 
     @Operation(summary = "重新上架商品", description = "重新上架已下架的商品")

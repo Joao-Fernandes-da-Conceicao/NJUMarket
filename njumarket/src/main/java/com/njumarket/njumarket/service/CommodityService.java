@@ -56,11 +56,6 @@ public interface CommodityService {
     Result draftCommodity(String commodityId);
     
     /**
-     * 设为售罄
-     */
-    Result soldOutCommodity(String commodityId);
-    
-    /**
      * 重新上架商品
      */
     Result republishCommodity(String commodityId);

@@ -361,38 +361,6 @@ public class CommodityServiceImpl implements CommodityService {
     
     @Override
     @Transactional
-    public Result soldOutCommodity(String commodityId) {
-        try {
-            log.info("设为售罄 - commodityId: {}", commodityId);
-            
-            User currentUser = UserHolder.getUser();
-            if (currentUser == null) {
-                return Result.fail("用户未登录");
-            }
-            
-            Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
-            if (commodity == null) {
-                return Result.fail("商品不存在");
-            }
-            
-            if (!commodityQueryService.canUserEditCommodity(commodity, currentUser)) {
-                return Result.fail("无权限操作此商品");
-            }
-            
-            commodity.setCommodityStatus("SOLD_OUT");
-            commodityRepository.save(commodity);
-            
-            log.info("商品设为售罄成功 - commodityId: {}", commodityId);
-            return Result.ok("商品设为售罄成功");
-            
-        } catch (Exception e) {
-            log.error("设为售罄失败: {}", e.getMessage(), e);
-            return Result.fail("设为售罄失败");
-        }
-    }
-    
-    @Override
-    @Transactional
     public Result republishCommodity(String commodityId) {
         try {
             log.info("重新上架商品 - commodityId: {}", commodityId);
@@ -607,9 +575,6 @@ public class CommodityServiceImpl implements CommodityService {
                             break;
                         case "draft":
                             draftCommodity(commodityId);
-                            break;
-                        case "soldOut":
-                            soldOutCommodity(commodityId);
                             break;
                         case "delete":
                             deleteCommodity(commodityId);

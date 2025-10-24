@@ -94,7 +94,6 @@ const getStatusTagType = (status) => {
   const statusMap = {
     'DRAFT': 'info',
     'ON_SHELF': 'success',
-    'SOLD_OUT': 'warning',
     'OFF_SHELF': 'danger'
   }
   return statusMap[status] || 'info'
@@ -104,7 +103,6 @@ const getStatusText = (status) => {
   const statusMap = {
     'DRAFT': '草稿',
     'ON_SHELF': '在售',
-    'SOLD_OUT': '已售出',
     'OFF_SHELF': '已下架'
   }
   return statusMap[status] || '未知'

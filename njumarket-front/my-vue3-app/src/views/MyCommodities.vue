@@ -22,7 +22,6 @@
             <el-tab-pane label="草稿" name="DRAFT"></el-tab-pane>
             <el-tab-pane label="已发布" name="PUBLISHED"></el-tab-pane>
             <el-tab-pane label="已上架" name="ON_SHELF"></el-tab-pane>
-            <el-tab-pane label="已售完" name="SOLD_OUT"></el-tab-pane>
           </SafeTabs>
         </div>
 
@@ -105,14 +104,6 @@
                   重新上架
                 </el-button>
                 
-                <!-- 已上架商品：设为售罄按钮 -->
-                <el-button
-                  v-if="commodity.commodityStatus === 'ON_SHELF'"
-                  type="warning"
-                  @click="handleSoldOut(commodity.commodityId)"
-                >
-                  设为售罄
-                </el-button>
                 
                 <!-- 所有商品：编辑按钮 -->
                 <el-button @click="handleEdit(commodity.commodityId)">
@@ -277,26 +268,6 @@ export default {
     }
     
     
-    // 设为售罄
-    const handleSoldOut = async (commodityId) => {
-      try {
-        const confirmed = confirm('确定要将此商品设为售罄吗？')
-        if (!confirmed) {
-          return
-        }
-        
-        const response = await commodityAPI.soldOut(commodityId)
-        if (response.success) {
-          ElMessage.success('商品已设为售罄')
-          fetchCommodities()
-        } else {
-          ElMessage.error(response.errorMsg || '设为售罄失败')
-        }
-      } catch (error) {
-        ElMessage.error('设为售罄失败')
-      }
-    }
-    
     // 重新上架商品
     const handleRepublish = async (commodityId) => {
       try {
@@ -383,8 +354,7 @@ export default {
         'DRAFT': 'warning',
         'PUBLISHED': 'info',
         'ON_SHELF': 'success',
-        'OFF_SHELF': 'danger',
-        'SOLD_OUT': 'info'
+        'OFF_SHELF': 'danger'
       }
       return statusMap[status] || 'info'
     }
@@ -395,8 +365,7 @@ export default {
         'DRAFT': '草稿',
         'PUBLISHED': '已发布',
         'ON_SHELF': '已上架',
-        'OFF_SHELF': '已下架',
-        'SOLD_OUT': '已售完'
+        'OFF_SHELF': '已下架'
       }
       return statusMap[status] || status
     }
@@ -428,8 +397,7 @@ export default {
         'all': '暂无商品',
         'DRAFT': '暂无草稿商品',
         'PUBLISHED': '暂无已发布商品',
-        'ON_SHELF': '暂无已上架商品',
-        'SOLD_OUT': '暂无售罄商品'
+        'ON_SHELF': '暂无已上架商品'
       }
       return statusMap[activeTab.value] || '暂无商品'
     }
@@ -440,8 +408,7 @@ export default {
         'all': '发布商品',
         'DRAFT': '发布商品',
         'PUBLISHED': '发布商品',
-        'ON_SHELF': '发布商品',
-        'SOLD_OUT': '发布商品'
+        'ON_SHELF': '发布商品'
       }
       return actionMap[activeTab.value] || '发布商品'
     }
@@ -484,7 +451,6 @@ export default {
       handleCurrentChange,
       handleShelf,
       handleUnshelf,
-      handleSoldOut,
       handleRepublish,
       handlePublish,
       handleEdit,

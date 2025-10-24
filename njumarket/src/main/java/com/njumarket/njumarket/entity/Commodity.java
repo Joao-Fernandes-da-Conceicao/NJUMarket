@@ -47,7 +47,7 @@ public class Commodity {
     private LocalDateTime publishTime;
     
     @Column(name = "commodity_status", length = 20, nullable = false)
-    private String commodityStatus; // DRAFT, PUBLISHED, ON_SHELF, OFF_SHELF, SOLD_OUT
+    private String commodityStatus; // DRAFT, PUBLISHED, ON_SHELF, OFF_SHELF
     
     @Column(name = "seller_visibility", length = 20, nullable = false)
     private String sellerVisibility = "PUBLIC"; // PUBLIC, PRIVATE, HIDDEN

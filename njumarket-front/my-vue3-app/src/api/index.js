@@ -109,10 +109,6 @@ export const commodityAPI = {
   // 下架商品
   unshelf: (id) => api.post(`/user/commodity/${id}/unshelf`),
   
-  
-  // 设为售罄
-  soldOut: (id) => api.post(`/user/commodity/${id}/sold-out`),
-  
   // 重新上架
   republish: (id) => api.post(`/user/commodity/${id}/republish`),
   
