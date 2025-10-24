@@ -72,6 +72,18 @@ public class UserProfileController {
         return userProfileService.uploadAvatar(currentUserId, file);
     }
 
+    @Operation(summary = "删除头像", description = "删除用户当前头像")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "删除成功"),
+        @ApiResponse(responseCode = "401", description = "用户未登录"),
+        @ApiResponse(responseCode = "404", description = "用户档案不存在")
+    })
+    @DeleteMapping("/avatar")
+    public Result deleteAvatar() {
+        String currentUserId = UserHolder.getUser().getUserId();
+        return userProfileService.deleteAvatar(currentUserId);
+    }
+
     @Operation(summary = "搜索用户档案", description = "根据昵称搜索用户档案")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "搜索成功")

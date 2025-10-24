@@ -152,38 +152,61 @@ public class UserProfileServiceImpl implements UserProfileService {
             }
             
             UserProfile profile = profileOpt.get();
-            String oldAvatarUrl = profile.getAvatar();
             
-            // 2. 如果存在旧头像，先删除旧头像文件
-            if (oldAvatarUrl != null && !oldAvatarUrl.trim().isEmpty()) {
-                try {
-                    boolean deleted = imageService.deleteAvatarByUrl(oldAvatarUrl);
-                    if (deleted) {
-                        log.info("旧头像删除成功: userId={}, oldAvatarUrl={}", userId, oldAvatarUrl);
-                    } else {
-                        log.warn("旧头像删除失败: userId={}, oldAvatarUrl={}", userId, oldAvatarUrl);
-                    }
-                } catch (Exception e) {
-                    log.error("删除旧头像时发生异常: userId={}, oldAvatarUrl={}, error={}", 
-                        userId, oldAvatarUrl, e.getMessage());
-                    // 继续执行，不因为删除旧头像失败而中断上传流程
-                }
-            }
-            
-            // 3. 上传新头像
+            // 2. 上传新头像（ImageService会自动删除旧头像）
             ImageUploadDTO uploadResult = imageService.uploadAvatar(userId, file);
             
-            // 4. 更新用户档案中的头像URL
+            if (!uploadResult.isSuccess()) {
+                return Result.fail(uploadResult.getMessage());
+            }
+            
+            // 3. 更新用户档案中的头像URL
             profile.setAvatar(uploadResult.getImageUrl());
             userProfileRepository.save(profile);
             
-            log.info("用户头像上传成功: userId={}, oldAvatarUrl={}, newAvatarUrl={}", 
-                userId, oldAvatarUrl, uploadResult.getImageUrl());
-            return Result.ok(uploadResult);
+            log.info("用户头像上传成功: userId={}, newAvatarUrl={}", 
+                userId, uploadResult.getImageUrl());
+            return Result.ok("头像上传成功", uploadResult);
             
         } catch (Exception e) {
             log.error("用户头像上传失败: userId={}, error={}", userId, e.getMessage());
             return Result.fail("头像上传失败: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public Result deleteAvatar(String userId) {
+        try {
+            // 1. 验证用户是否存在
+            Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
+            if (profileOpt.isEmpty()) {
+                return Result.fail("用户档案不存在");
+            }
+            
+            UserProfile profile = profileOpt.get();
+            String currentAvatarUrl = profile.getAvatar();
+            
+            // 2. 如果没有头像，直接返回成功
+            if (currentAvatarUrl == null || currentAvatarUrl.trim().isEmpty()) {
+                return Result.ok("用户没有头像，无需删除");
+            }
+            
+            // 3. 删除头像文件
+            boolean deleted = imageService.deleteAvatarByUrl(currentAvatarUrl);
+            if (!deleted) {
+                log.warn("头像文件删除失败: userId={}, avatarUrl={}", userId, currentAvatarUrl);
+            }
+            
+            // 4. 清空用户档案中的头像URL
+            profile.setAvatar(null);
+            userProfileRepository.save(profile);
+            
+            log.info("用户头像删除成功: userId={}, avatarUrl={}", userId, currentAvatarUrl);
+            return Result.ok("头像删除成功");
+            
+        } catch (Exception e) {
+            log.error("用户头像删除失败: userId={}, error={}", userId, e.getMessage());
+            return Result.fail("头像删除失败: " + e.getMessage());
         }
     }
 

@@ -60,27 +60,40 @@ public class ImageServiceImpl implements ImageService {
                 throw new IllegalArgumentException("无效的图片文件");
             }
             
-            // 2. 生成唯一文件名
+            // 2. 删除旧头像（如果存在）
+            String oldAvatarUrl = getUserAvatarUrl(userId);
+            if (oldAvatarUrl != null) {
+                boolean deleted = deleteAvatarByUrl(oldAvatarUrl);
+                if (deleted) {
+                    log.info("旧头像删除成功: userId={}, oldUrl={}", userId, oldAvatarUrl);
+                } else {
+                    log.warn("旧头像删除失败: userId={}, oldUrl={}", userId, oldAvatarUrl);
+                }
+            }
+            
+            // 3. 生成唯一文件名
             String fileName = generateUniqueFileName(file.getOriginalFilename(), userId);
             
-            // 3. 确保上传目录存在
+            // 4. 确保上传目录存在
             Path uploadDir = Paths.get(avatarUploadPath);
             if (!Files.exists(uploadDir)) {
                 Files.createDirectories(uploadDir);
                 log.info("创建头像上传目录: {}", uploadDir.toAbsolutePath());
             }
             
-            // 4. 保存文件
+            // 5. 保存文件
             Path filePath = uploadDir.resolve(fileName);
             Files.copy(file.getInputStream(), filePath);
             
-            // 5. 构建响应
+            // 6. 构建响应
             ImageUploadDTO result = new ImageUploadDTO();
             result.setImageUrl(getImageAccessUrl(fileName));
             result.setFileName(fileName);
             result.setFileSize(file.getSize());
             result.setContentType(file.getContentType());
             result.setUploadTime(System.currentTimeMillis());
+            result.setSuccess(true);
+            result.setMessage("头像上传成功");
             
             log.info("头像上传成功: userId={}, fileName={}, size={}", 
                 userId, fileName, file.getSize());
@@ -89,7 +102,10 @@ public class ImageServiceImpl implements ImageService {
             
         } catch (IOException e) {
             log.error("头像上传失败: userId={}, error={}", userId, e.getMessage());
-            throw new RuntimeException("头像上传失败", e);
+            ImageUploadDTO errorResult = new ImageUploadDTO();
+            errorResult.setSuccess(false);
+            errorResult.setMessage("头像上传失败: " + e.getMessage());
+            return errorResult;
         }
     }
 

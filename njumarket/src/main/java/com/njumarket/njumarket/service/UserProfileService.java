@@ -43,6 +43,11 @@ public interface UserProfileService {
     Result uploadAvatar(String userId, MultipartFile file);
     
     /**
+     * 删除头像
+     */
+    Result deleteAvatar(String userId);
+    
+    /**
      * 更新用户评分
      */
     Result updateUserRating(String userId, Double rating, String role);
