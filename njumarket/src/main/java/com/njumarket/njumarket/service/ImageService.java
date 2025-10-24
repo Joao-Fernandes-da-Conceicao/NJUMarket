@@ -16,9 +16,14 @@ public interface ImageService {
     ImageUploadDTO uploadAvatar(String userId, MultipartFile file);
     
     /**
-     * 上传商品图片
+     * 上传商品图片（通用，不需要商品ID）
      */
-    ImageUploadDTO uploadCommodityImage(String commodityId, MultipartFile file);
+    ImageUploadDTO uploadCommodityImage(String userId, MultipartFile file);
+    
+    /**
+     * 为指定商品上传图片
+     */
+    ImageUploadDTO uploadCommodityImageForCommodity(String commodityId, MultipartFile file);
     
     /**
      * 批量上传商品图片

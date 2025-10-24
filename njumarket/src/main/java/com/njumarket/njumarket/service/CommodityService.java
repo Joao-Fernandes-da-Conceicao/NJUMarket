@@ -19,6 +19,16 @@ public interface CommodityService {
     Result publishCommodity(CommodityDTO commodityDTO);
     
     /**
+     * 创建草稿商品
+     */
+    Result createDraftCommodity(CommodityDTO commodityDTO);
+    
+    /**
+     * 发布草稿商品
+     */
+    Result publishDraftCommodity(String commodityId);
+    
+    /**
      * 更新商品信息
      */
     Result updateCommodity(String commodityId, CommodityDTO commodityDTO);

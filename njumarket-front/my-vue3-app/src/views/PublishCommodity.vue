@@ -139,7 +139,7 @@
                 type="warning"
                 size="large"
                 :loading="publishLoading"
-                @click="handlePublishAsDraft"
+                @click="handleSaveAsDraft"
               >
                 保存草稿
               </el-button>
@@ -361,14 +361,14 @@ export default {
     }
     
     // 保存草稿
-    const handlePublishAsDraft = async () => {
+    const handleSaveAsDraft = async () => {
       if (!publishFormRef.value) return
       
       try {
         await publishFormRef.value.validate()
         publishLoading.value = true
         
-        const publishForm = {
+        const draftData = {
           title: publishForm.title,
           description: publishForm.description,
           category: publishForm.category,
@@ -376,11 +376,10 @@ export default {
           price: publishForm.price,
           stock: publishForm.stock,
           location: publishForm.location,
-          images: publishForm.images,
-          status: 'DRAFT' // 设置为草稿状态
+          images: publishForm.images
         }
         
-        const response = await commodityAPI.publish(publishForm)
+        const response = await commodityAPI.createDraft(draftData)
         if (response.success) {
           ElMessage.success('草稿已保存')
           router.push('/my-commodities')
@@ -400,9 +399,15 @@ export default {
       
       try {
         await publishFormRef.value.validate()
+        if (publishForm.images.length === 0) {
+          ElMessage.warning('请至少上传一张商品图片')
+          return
+        }
+        
         publishLoading.value = true
         
-        const publishForm = {
+        // 先发布商品
+        const publishData = {
           title: publishForm.title,
           description: publishForm.description,
           category: publishForm.category,
@@ -410,16 +415,23 @@ export default {
           price: publishForm.price,
           stock: publishForm.stock,
           location: publishForm.location,
-          images: publishForm.images,
-          status: 'ACTIVE' // 直接设置为在售状态
+          images: publishForm.images
         }
         
-        const response = await commodityAPI.publish(publishForm)
-        if (response.success) {
-          ElMessage.success('商品已发布并上架')
-          router.push('/my-commodities')
+        const publishResponse = await commodityAPI.publish(publishData)
+        if (publishResponse.success) {
+          // 发布成功后立即上架
+          const commodityId = publishResponse.data.commodityId
+          const shelfResponse = await commodityAPI.shelf(commodityId)
+          if (shelfResponse.success) {
+            ElMessage.success('商品已发布并上架')
+            router.push('/my-commodities')
+          } else {
+            ElMessage.warning('商品已发布，但上架失败：' + shelfResponse.errorMsg)
+            router.push('/my-commodities')
+          }
         } else {
-          ElMessage.error(response.errorMsg || '发布并上架失败')
+          ElMessage.error(publishResponse.errorMsg || '发布失败')
         }
       } catch (error) {
         ElMessage.error('发布并上架失败')
@@ -434,9 +446,9 @@ export default {
       if (confirmed) {
         // 用户选择保存草稿
         try {
-          await handlePublishAsDraft()
+          await handleSaveAsDraft()
         } catch (error) {
-          // 错误已经在handlePublishAsDraft中处理
+          // 错误已经在handleSaveAsDraft中处理
         }
       } else {
         // 用户选择不保存，直接返回
@@ -478,7 +490,7 @@ export default {
       handleUploadError,
       handleRemove,
       handlePublish,
-      handlePublishAsDraft,
+      handleSaveAsDraft,
       handlePublishAndActivate,
       handleCancel,
       handleLogout

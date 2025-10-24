@@ -20,6 +20,7 @@
           >
             <el-tab-pane label="全部" name="all"></el-tab-pane>
             <el-tab-pane label="草稿" name="DRAFT"></el-tab-pane>
+            <el-tab-pane label="已发布" name="PUBLISHED"></el-tab-pane>
             <el-tab-pane label="已上架" name="ON_SHELF"></el-tab-pane>
             <el-tab-pane label="已售完" name="SOLD_OUT"></el-tab-pane>
           </SafeTabs>
@@ -68,10 +69,19 @@
 
             <div class="commodity-actions">
               <div class="action-buttons">
-                <!-- 草稿商品：上架按钮 -->
+                <!-- 草稿商品：发布按钮 -->
                 <el-button
                   v-if="commodity.commodityStatus === 'DRAFT'"
                   type="primary"
+                  @click="handlePublish(commodity.commodityId)"
+                >
+                  发布
+                </el-button>
+                
+                <!-- 已发布商品：上架按钮 -->
+                <el-button
+                  v-if="commodity.commodityStatus === 'PUBLISHED'"
+                  type="success"
                   @click="handleShelf(commodity.commodityId)"
                 >
                   上架
@@ -85,13 +95,6 @@
                   下架
                 </el-button>
                 
-                <!-- 已售完商品：设为草稿按钮 -->
-                <el-button
-                  v-if="commodity.commodityStatus === 'SOLD_OUT'"
-                  @click="handleDraft(commodity.commodityId)"
-                >
-                  设为草稿
-                </el-button>
                 
                 <!-- 已下架商品：重新上架按钮 -->
                 <el-button
@@ -273,25 +276,6 @@ export default {
       }
     }
     
-    // 设为草稿
-    const handleDraft = async (commodityId) => {
-      try {
-        const confirmed = confirm('确定要将此商品设为草稿吗？')
-        if (!confirmed) {
-          return
-        }
-        
-        const response = await commodityAPI.draft(commodityId)
-        if (response.success) {
-          ElMessage.success('商品已设为草稿')
-          fetchCommodities()
-        } else {
-          ElMessage.error(response.errorMsg || '设为草稿失败')
-        }
-      } catch (error) {
-        ElMessage.error('设为草稿失败')
-      }
-    }
     
     // 设为售罄
     const handleSoldOut = async (commodityId) => {
@@ -330,6 +314,26 @@ export default {
         }
       } catch (error) {
         ElMessage.error('重新上架失败')
+      }
+    }
+    
+    // 发布草稿商品
+    const handlePublish = async (commodityId) => {
+      try {
+        const confirmed = confirm('确定要发布这个草稿商品吗？')
+        if (!confirmed) {
+          return
+        }
+        
+        const response = await commodityAPI.publishDraft(commodityId)
+        if (response.success) {
+          ElMessage.success('商品已发布')
+          fetchCommodities()
+        } else {
+          ElMessage.error(response.errorMsg || '发布失败')
+        }
+      } catch (error) {
+        ElMessage.error('发布失败')
       }
     }
     
@@ -377,6 +381,7 @@ export default {
     const getStatusType = (status) => {
       const statusMap = {
         'DRAFT': 'warning',
+        'PUBLISHED': 'info',
         'ON_SHELF': 'success',
         'OFF_SHELF': 'danger',
         'SOLD_OUT': 'info'
@@ -388,6 +393,7 @@ export default {
     const getStatusText = (status) => {
       const statusMap = {
         'DRAFT': '草稿',
+        'PUBLISHED': '已发布',
         'ON_SHELF': '已上架',
         'OFF_SHELF': '已下架',
         'SOLD_OUT': '已售完'
@@ -421,6 +427,7 @@ export default {
       const statusMap = {
         'all': '暂无商品',
         'DRAFT': '暂无草稿商品',
+        'PUBLISHED': '暂无已发布商品',
         'ON_SHELF': '暂无已上架商品',
         'SOLD_OUT': '暂无售罄商品'
       }
@@ -432,6 +439,7 @@ export default {
       const actionMap = {
         'all': '发布商品',
         'DRAFT': '发布商品',
+        'PUBLISHED': '发布商品',
         'ON_SHELF': '发布商品',
         'SOLD_OUT': '发布商品'
       }
@@ -476,9 +484,9 @@ export default {
       handleCurrentChange,
       handleShelf,
       handleUnshelf,
-      handleDraft,
       handleSoldOut,
       handleRepublish,
+      handlePublish,
       handleEdit,
       handleVisibilityChange,
       handleDelete,

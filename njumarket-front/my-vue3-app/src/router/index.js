@@ -7,6 +7,7 @@ import CommodityDetail from '../views/CommodityDetail.vue'
 import UserProfile from '../views/UserProfile.vue'
 import UserMenu from '../views/UserMenu.vue'
 import MyOrders from '../views/MyOrders.vue'
+import SellerOrders from '../views/SellerOrders.vue'
 import MyCommodities from '../views/MyCommodities.vue'
 import PublishCommodity from '../views/PublishCommodity.vue'
 import LocalStorageDebug from '../views/LocalStorageDebug.vue'
@@ -53,6 +54,12 @@ const routes = [
     path: '/orders',
     name: 'MyOrders',
     component: MyOrders,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/seller-orders',
+    name: 'SellerOrders',
+    component: SellerOrders,
     meta: { requiresAuth: true }
   },
   {

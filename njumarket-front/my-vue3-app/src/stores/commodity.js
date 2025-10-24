@@ -61,6 +61,9 @@ export const useCommodityStore = defineStore('commodity', {
           case 'DRAFT':
             stats.draft++
             break
+          case 'PUBLISHED':
+            stats.draft++ // 将已发布但未上架的商品也计入草稿统计
+            break
           case 'SOLD_OUT':
             stats.sold++
             break

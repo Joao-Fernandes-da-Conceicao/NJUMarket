@@ -67,8 +67,8 @@ public class OrderServiceImpl implements OrderService {
             Commodity commodity = commodityOpt.get();
             
             // 检查商品状态
-            if (!"PUBLISHED".equals(commodity.getCommodityStatus())) {
-                return Result.fail("商品未发布，无法购买");
+            if (!"ON_SHELF".equals(commodity.getCommodityStatus())) {
+                return Result.fail("商品未上架，无法购买");
             }
             
             // 检查库存
@@ -209,15 +209,113 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public Result cancelOrder(String orderId, String reason) {
-        log.info("取消订单 - orderId: {}, reason: {}", orderId, reason);
-        return Result.ok("取消订单成功");
+        try {
+            log.info("取消订单 - orderId: {}, reason: {}", orderId, reason);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 查找订单
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                return Result.fail("订单不存在");
+            }
+            
+            Order order = orderOpt.get();
+            
+            // 检查权限：只有买家和卖家可以取消订单
+            if (!order.getBuyerId().equals(currentUser.getUserId()) && 
+                !order.getSellerId().equals(currentUser.getUserId())) {
+                return Result.fail("无权限取消此订单");
+            }
+            
+            // 检查订单状态：只有未发货的订单可以取消
+            if (!"CREATED".equals(order.getOrderStatus()) && !"PAID".equals(order.getOrderStatus())) {
+                return Result.fail("订单状态不允许取消");
+            }
+            
+            // 取消订单
+            if (order.cancelOrder()) {
+                // 恢复商品库存
+                Optional<Commodity> commodityOpt = commodityRepository.findById(order.getCommodityId());
+                if (commodityOpt.isPresent()) {
+                    Commodity commodity = commodityOpt.get();
+                    boolean stockUpdated = commodity.updateStock(order.getQuantity());
+                    if (stockUpdated) {
+                        commodityRepository.save(commodity);
+                        log.info("订单取消成功，库存已恢复 - orderId: {}, commodityId: {}, quantity: {}", 
+                            orderId, order.getCommodityId(), order.getQuantity());
+                    } else {
+                        log.warn("订单取消成功，但库存恢复失败 - orderId: {}, commodityId: {}, quantity: {}", 
+                            orderId, order.getCommodityId(), order.getQuantity());
+                    }
+                } else {
+                    log.warn("订单取消成功，但商品不存在 - orderId: {}, commodityId: {}", 
+                        orderId, order.getCommodityId());
+                }
+                
+                orderRepository.save(order);
+                log.info("订单取消成功 - orderId: {}", orderId);
+                return Result.ok("订单取消成功");
+            } else {
+                return Result.fail("订单取消失败");
+            }
+            
+        } catch (Exception e) {
+            log.error("取消订单失败", e);
+            return Result.fail("取消订单失败：" + e.getMessage());
+        }
     }
 
     @Override
+    @Transactional
     public Result requestRefund(String orderId, String reason) {
-        log.info("申请退款 - orderId: {}, reason: {}", orderId, reason);
-        return Result.ok("申请退款成功");
+        try {
+            log.info("申请退款/退货 - orderId: {}, reason: {}", orderId, reason);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 查找订单
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                return Result.fail("订单不存在");
+            }
+            
+            Order order = orderOpt.get();
+            
+            // 检查权限：只有买家可以申请退款/退货
+            if (!order.getBuyerId().equals(currentUser.getUserId())) {
+                return Result.fail("无权限申请此订单的退款/退货");
+            }
+            
+            // 检查订单状态：只有已完成或退款被拒的订单可以申请退款/退货
+            if (!"COMPLETED".equals(order.getOrderStatus()) && !"REFUND_REJECTED".equals(order.getOrderStatus())) {
+                return Result.fail("订单状态不允许申请退款/退货");
+            }
+            
+            // 设置退款/退货状态
+            order.setOrderStatus("REFUND_REQUESTED");
+            order.setReturnReason(reason);
+            order.setReturnRequestTime(LocalDateTime.now());
+            
+            orderRepository.save(order);
+            
+            log.info("退款/退货申请成功 - orderId: {}", orderId);
+            return Result.ok("退款/退货申请成功");
+            
+        } catch (Exception e) {
+            log.error("申请退款/退货失败", e);
+            return Result.fail("申请退款/退货失败：" + e.getMessage());
+        }
     }
 
     @Override
@@ -254,7 +352,7 @@ public class OrderServiceImpl implements OrderService {
             result.put("current", page);
             result.put("size", size);
             
-            return Result.ok("获取买家订单列表成功");
+            return Result.ok("获取买家订单列表成功", result);
             
         } catch (Exception e) {
             log.error("获取买家订单列表失败", e);
@@ -309,9 +407,78 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public Result handleRefund(String orderId, String decision, String remark) {
-        log.info("处理退款申请 - orderId: {}, decision: {}, remark: {}", orderId, decision, remark);
-        return Result.ok("处理退款申请成功");
+        try {
+            log.info("处理退款/退货申请 - orderId: {}, decision: {}, remark: {}", orderId, decision, remark);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 查找订单
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                return Result.fail("订单不存在");
+            }
+            
+            Order order = orderOpt.get();
+            
+            // 检查权限：只有卖家可以处理退款/退货申请
+            if (!order.getSellerId().equals(currentUser.getUserId())) {
+                return Result.fail("无权限处理此订单的退款/退货申请");
+            }
+            
+            // 检查订单状态：只有退款/退货申请中的订单可以处理
+            if (!"REFUND_REQUESTED".equals(order.getOrderStatus())) {
+                return Result.fail("订单状态不允许处理退款/退货申请");
+            }
+            
+            // 处理退款/退货申请
+            if ("APPROVE".equals(decision)) {
+                // 同意退款/退货
+                order.setOrderStatus("REFUND_APPROVED");
+                order.setReturnApprovalTime(LocalDateTime.now());
+                
+                // 恢复商品库存
+                Optional<Commodity> commodityOpt = commodityRepository.findById(order.getCommodityId());
+                if (commodityOpt.isPresent()) {
+                    Commodity commodity = commodityOpt.get();
+                    boolean stockUpdated = commodity.updateStock(order.getQuantity());
+                    if (stockUpdated) {
+                        commodityRepository.save(commodity);
+                        log.info("退款同意，库存已恢复 - orderId: {}, commodityId: {}, quantity: {}", 
+                            orderId, order.getCommodityId(), order.getQuantity());
+                    } else {
+                        log.warn("退款同意，但库存恢复失败 - orderId: {}, commodityId: {}, quantity: {}", 
+                            orderId, order.getCommodityId(), order.getQuantity());
+                    }
+                } else {
+                    log.warn("退款同意，但商品不存在 - orderId: {}, commodityId: {}", 
+                        orderId, order.getCommodityId());
+                }
+                
+                log.info("退款/退货申请已同意 - orderId: {}", orderId);
+            } else if ("REJECT".equals(decision)) {
+                // 拒绝退款/退货
+                order.setOrderStatus("REFUND_REJECTED");
+                order.setReturnRejectionReason(remark);
+                order.setReturnApprovalTime(LocalDateTime.now());
+                log.info("退款/退货申请已拒绝 - orderId: {}", orderId);
+            } else {
+                return Result.fail("无效的处理决定");
+            }
+            
+            orderRepository.save(order);
+            
+            return Result.ok("退款/退货申请处理成功");
+            
+        } catch (Exception e) {
+            log.error("处理退款/退货申请失败", e);
+            return Result.fail("处理退款/退货申请失败：" + e.getMessage());
+        }
     }
 
     @Override
@@ -348,7 +515,7 @@ public class OrderServiceImpl implements OrderService {
             result.put("current", page);
             result.put("size", size);
             
-            return Result.ok("获取卖家订单列表成功");
+            return Result.ok("获取卖家订单列表成功", result);
             
         } catch (Exception e) {
             log.error("获取卖家订单列表失败", e);

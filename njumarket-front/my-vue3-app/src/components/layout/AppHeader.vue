@@ -58,6 +58,14 @@
                     <el-icon><Setting /></el-icon>
                     用户中心
                   </el-dropdown-item>
+                  <el-dropdown-item command="orders">
+                    <el-icon><ShoppingCart /></el-icon>
+                    我的订单
+                  </el-dropdown-item>
+                  <el-dropdown-item command="seller-orders">
+                    <el-icon><Box /></el-icon>
+                    卖家订单
+                  </el-dropdown-item>
                   <el-dropdown-item command="publish" divided>
                     <el-icon><Plus /></el-icon>
                     发布商品
@@ -106,6 +114,12 @@ const handleCommand = async (command) => {
       break
     case 'user-menu':
       router.push('/user-menu')
+      break
+    case 'orders':
+      router.push('/orders')
+      break
+    case 'seller-orders':
+      router.push('/seller-orders')
       break
     case 'publish':
       router.push('/publish')

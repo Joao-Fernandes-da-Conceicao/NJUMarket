@@ -47,7 +47,7 @@ public class Commodity {
     private LocalDateTime publishTime;
     
     @Column(name = "commodity_status", length = 20, nullable = false)
-    private String commodityStatus; // DRAFT, ON_SHELF, SOLD_OUT
+    private String commodityStatus; // DRAFT, PUBLISHED, ON_SHELF, OFF_SHELF, SOLD_OUT
     
     @Column(name = "seller_visibility", length = 20, nullable = false)
     private String sellerVisibility = "PUBLIC"; // PUBLIC, PRIVATE, HIDDEN
@@ -168,7 +168,7 @@ public class Commodity {
      * @return 是否可见
      */
     public Boolean isVisibleToSeller() {
-        return "PUBLIC".equals(this.sellerVisibility) && "PUBLISHED".equals(this.commodityStatus);
+        return "PUBLIC".equals(this.sellerVisibility) && ("PUBLISHED".equals(this.commodityStatus) || "ON_SHELF".equals(this.commodityStatus));
     }
     
     /**
@@ -176,7 +176,7 @@ public class Commodity {
      * @return 是否可见
      */
     public Boolean isVisibleToBuyer() {
-        return "PUBLIC".equals(this.buyerVisibility) && "PUBLISHED".equals(this.commodityStatus);
+        return "PUBLIC".equals(this.buyerVisibility) && "ON_SHELF".equals(this.commodityStatus);
     }
     
     /**

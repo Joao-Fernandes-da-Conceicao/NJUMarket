@@ -140,77 +140,11 @@
       </div>
     </div>
 
-    <!-- 购买对话框 -->
-    <el-dialog
-      v-model="showBuyDialog"
-      title="确认购买"
-      width="500px"
-      :close-on-click-modal="false"
-    >
-      <div v-if="commodity" class="buy-dialog-content">
-        <div class="buy-item">
-              <img :src="getCommodityImageUrl(commodity.images?.[0])" :alt="commodity.title" />
-          <div class="buy-info">
-            <h3>{{ commodity.title }}</h3>
-            <p class="price">¥{{ commodity.price }}</p>
-          </div>
-        </div>
-        
-        <el-form :model="buyForm" label-width="80px">
-          <el-form-item label="购买数量">
-            <el-input-number
-              v-model="buyForm.quantity"
-              :min="1"
-              :max="commodity.stock"
-              controls-position="right"
-            />
-          </el-form-item>
-          <el-form-item label="收货地址">
-            <el-input
-              v-model="buyForm.shippingAddress"
-              type="textarea"
-              placeholder="请输入收货地址"
-              :rows="3"
-            />
-          </el-form-item>
-          <el-form-item label="备注">
-            <el-input
-              v-model="buyForm.remark"
-              type="textarea"
-              placeholder="给卖家的留言（可选）"
-              :rows="2"
-            />
-          </el-form-item>
-        </el-form>
-        
-        <div class="buy-summary">
-          <div class="summary-item">
-            <span>商品单价：</span>
-            <span>¥{{ commodity.price }}</span>
-          </div>
-          <div class="summary-item">
-            <span>购买数量：</span>
-            <span>{{ buyForm.quantity }}</span>
-          </div>
-          <div class="summary-item total">
-            <span>总计：</span>
-            <span class="total-price">¥{{ (commodity.price * buyForm.quantity).toFixed(2) }}</span>
-          </div>
-        </div>
-      </div>
-      
-      <template #footer>
-        <el-button @click="showBuyDialog = false">取消</el-button>
-        <el-button type="primary" :loading="buyLoading" @click="confirmBuy">
-          确认购买
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { commodityAPI, orderAPI, imageAPI } from '../api'
@@ -227,14 +161,6 @@ export default {
     const commodity = ref(null)
     const relatedCommodities = ref([])
     const currentImage = ref('')
-    const showBuyDialog = ref(false)
-    const buyLoading = ref(false)
-    
-    const buyForm = reactive({
-      quantity: 1,
-      shippingAddress: '',
-      remark: ''
-    })
     
     const isLoggedIn = computed(() => userStore.isLoggedIn)
     const user = computed(() => userStore.user)
@@ -302,8 +228,8 @@ export default {
       return imageAPI.getCommodityImage(fileName)
     }
     
-    // 购买商品
-    const handleBuy = () => {
+    // 购买商品 - 简化版：点击即创建订单
+    const handleBuy = async () => {
       if (!isLoggedIn.value) {
         ElMessage.warning('请先登录')
         router.push('/login')
@@ -315,39 +241,37 @@ export default {
         return
       }
       
-      showBuyDialog.value = true
-    }
-    
-    // 确认购买
-    const confirmBuy = async () => {
-      if (!buyForm.shippingAddress.trim()) {
-        ElMessage.warning('请输入收货地址')
+      // 检查商品状态
+      if (commodity.value.commodityStatus !== 'ON_SHELF') {
+        ElMessage.warning('商品未上架，无法购买')
         return
       }
       
-      buyLoading.value = true
+      // 检查库存
+      if (commodity.value.stock <= 0) {
+        ElMessage.warning('商品库存不足')
+        return
+      }
+      
       try {
         const orderData = {
           commodityId: commodity.value.commodityId,
           sellerId: commodity.value.sellerId,
-          quantity: buyForm.quantity,
-          payAmount: commodity.value.price * buyForm.quantity,
-          shippingAddress: buyForm.shippingAddress,
-          remark: buyForm.remark
+          quantity: 1, // 默认购买数量为1
+          payAmount: commodity.value.price,
+          shippingAddress: '校内自提', // 默认地址
+          remark: ''
         }
         
         const response = await orderAPI.create(orderData)
         if (response.success) {
-          ElMessage.success('订单创建成功')
-          showBuyDialog.value = false
+          ElMessage.success('订单创建成功！')
           router.push('/orders')
         } else {
           ElMessage.error(response.errorMsg || '创建订单失败')
         }
       } catch (error) {
         ElMessage.error('创建订单失败')
-      } finally {
-        buyLoading.value = false
       }
     }
     
@@ -382,15 +306,11 @@ export default {
       commodity,
       relatedCommodities,
       currentImage,
-      showBuyDialog,
-      buyLoading,
-      buyForm,
       isLoggedIn,
       user,
       handleImageError,
       getCommodityImageUrl,
       handleBuy,
-      confirmBuy,
       handleContact,
       viewSellerProfile,
       handleLogout

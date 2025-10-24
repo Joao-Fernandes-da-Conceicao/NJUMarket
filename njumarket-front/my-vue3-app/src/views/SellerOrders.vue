@@ -1,13 +1,13 @@
 <template>
-  <div class="orders-page">
+  <div class="seller-orders-page">
     <!-- 订单内容 -->
     <div class="orders-content">
       <div class="container">
         <div class="page-header">
-          <h1>我的订单</h1>
+          <h1>我的订单（卖家）</h1>
           <div class="header-actions">
             <el-button type="primary" @click="$router.push('/commodities')">
-              继续购物
+              管理商品
             </el-button>
           </div>
         </div>
@@ -24,9 +24,8 @@
             <el-tab-pane label="待收货" name="SHIPPED"></el-tab-pane>
             <el-tab-pane label="已完成" name="COMPLETED"></el-tab-pane>
             <el-tab-pane label="已取消" name="CANCELLED"></el-tab-pane>
-            <el-tab-pane label="退款中" name="REFUND_REQUESTED"></el-tab-pane>
+            <el-tab-pane label="退款申请" name="REFUND_REQUESTED"></el-tab-pane>
             <el-tab-pane label="退款完成" name="REFUND_APPROVED"></el-tab-pane>
-            <el-tab-pane label="退款被拒" name="REFUND_REJECTED"></el-tab-pane>
           </SafeTabs>
         </div>
 
@@ -68,7 +67,7 @@
                 <div class="commodity-details">
                   <h3 class="commodity-title">{{ order.commodity?.title }}</h3>
                   <p class="commodity-price">¥{{ order.payAmount }}</p>
-                  <p class="commodity-quantity">数量：{{ order.quantity }}</p>
+                  <p class="buyer-info">买家：{{ order.buyer?.nickname || '用户' + order.buyerId }}</p>
                 </div>
               </div>
 
@@ -77,55 +76,51 @@
                   <p class="total-price">总计：¥{{ order.payAmount }}</p>
                 </div>
                 <div class="action-buttons">
+                  <!-- 卖家发货按钮 -->
                   <el-button
-                    v-if="order.orderStatus === 'CREATED'"
+                    v-if="order.orderStatus === 'PAID'"
                     type="primary"
-                    @click="handlePay(order.orderId)"
+                    @click="handleShip(order.orderId)"
                   >
-                    立即支付
+                    发货
                   </el-button>
-                  <el-button
-                    v-if="order.orderStatus === 'SHIPPED'"
-                    type="success"
-                    @click="handleConfirm(order.orderId)"
-                  >
-                    确认收货
-                  </el-button>
+                  
+                  <!-- 卖家取消订单按钮 -->
                   <el-button
                     v-if="['CREATED', 'PAID'].includes(order.orderStatus)"
                     @click="handleCancel(order.orderId)"
                   >
                     取消订单
                   </el-button>
+                  
+                  <!-- 处理退款申请按钮 -->
                   <el-button
-                    v-if="order.orderStatus === 'COMPLETED'"
-                    @click="handleRefund(order.orderId)"
+                    v-if="order.orderStatus === 'REFUND_REQUESTED'"
+                    type="success"
+                    @click="handleApproveRefund(order.orderId)"
                   >
-                    申请退款
+                    同意退款
                   </el-button>
                   <el-button
-                    v-if="order.orderStatus === 'REFUND_REJECTED'"
-                    type="warning"
-                    @click="handleRefund(order.orderId)"
+                    v-if="order.orderStatus === 'REFUND_REQUESTED'"
+                    type="danger"
+                    @click="handleRejectRefund(order.orderId)"
                   >
-                    重新申请退款
+                    拒绝退款
                   </el-button>
+                  
                   <el-dropdown @command="(command) => handleVisibilityChange(order.orderId, command)">
                     <el-button>
                       可见性<el-icon><ArrowDown /></el-icon>
                     </el-button>
                     <template #dropdown>
                       <el-dropdown-menu>
-                        <el-dropdown-item command="VISIBLE">完全可见</el-dropdown-item>
-                        <el-dropdown-item command="SELLER_ONLY">仅卖家可见</el-dropdown-item>
-                        <el-dropdown-item command="BUYER_ONLY">仅买家可见</el-dropdown-item>
+                        <el-dropdown-item command="PUBLIC">完全可见</el-dropdown-item>
+                        <el-dropdown-item command="PRIVATE">仅卖家可见</el-dropdown-item>
                         <el-dropdown-item command="HIDDEN">隐藏</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
-                  <el-button @click="viewOrderDetail(order.orderId)">
-                    查看详情
-                  </el-button>
                 </div>
               </div>
             </div>
@@ -137,7 +132,7 @@
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
-            :page-sizes="[10, 20, 50]"
+            :page-sizes="[5, 10, 20, 50]"
             :total="total"
             layout="total, sizes, prev, pager, next, jumper"
             @size-change="handleSizeChange"
@@ -150,21 +145,19 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '../stores/user'
 import { orderAPI, imageAPI } from '../api'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import SafeTabs from '../components/SafeTabs.vue'
 
 export default {
-  name: 'MyOrders',
+  name: 'SellerOrders',
   components: {
     SafeTabs
   },
   setup() {
     const router = useRouter()
-    const userStore = useUserStore()
     
     const loading = ref(false)
     const orders = ref([])
@@ -172,11 +165,8 @@ export default {
     const currentPage = ref(1)
     const pageSize = ref(10)
     const activeTab = ref('all')
-    const isMounted = ref(false)
     
-    const user = ref(userStore.user)
-    
-    // 获取订单列表
+    // 获取卖家订单列表
     const fetchOrders = async () => {
       loading.value = true
       try {
@@ -189,8 +179,8 @@ export default {
           params.status = activeTab.value
         }
         
-        const response = await orderAPI.getBuyerOrders(params.page, params.size, params.status)
-        console.log('订单查询响应:', response) // 调试日志
+        const response = await orderAPI.getSellerOrders(params.page, params.size, params.status)
+        console.log('卖家订单查询响应:', response) // 调试日志
         
         if (response.success) {
           // 处理后端返回的数据结构
@@ -210,10 +200,10 @@ export default {
           }
         } else {
           // API调用失败时，保持当前状态
-          console.warn('获取订单列表失败:', response.errorMsg)
+          console.warn('获取卖家订单列表失败:', response.errorMsg)
         }
       } catch (error) {
-        console.error('获取订单列表异常:', error)
+        console.error('获取卖家订单列表异常:', error)
         // 网络异常时，保持当前状态，不显示错误消息
       } finally {
         loading.value = false
@@ -240,55 +230,40 @@ export default {
       fetchOrders()
     }
     
-    // 支付订单
-    const handlePay = async (orderId) => {
+    // 发货
+    const handleShip = async (orderId) => {
       try {
-        const response = await orderAPI.pay(orderId)
-        if (response.success) {
-          ElMessage.success('支付成功')
-          fetchOrders()
-        } else {
-          ElMessage.error(response.errorMsg || '支付失败')
-        }
-      } catch (error) {
-        ElMessage.error('支付失败')
-      }
-    }
-    
-    // 确认收货
-    const handleConfirm = async (orderId) => {
-      try {
-        const confirmed = confirm('确认收货后订单将完成，请确保商品完好无损')
-        if (!confirmed) {
-          return
-        }
+        const { value: trackingNumber } = await ElMessageBox.prompt('请输入快递单号', '发货', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          inputPattern: /.+/,
+          inputErrorMessage: '快递单号不能为空'
+        })
         
-        const response = await orderAPI.confirm(orderId)
+        const response = await orderAPI.ship(orderId, trackingNumber)
         if (response.success) {
-          ElMessage.success('确认收货成功')
+          ElMessage.success('发货成功')
           fetchOrders()
         } else {
-          ElMessage.error(response.errorMsg || '确认收货失败')
+          ElMessage.error(response.errorMsg || '发货失败')
         }
       } catch (error) {
-        ElMessage.error('确认收货失败')
+        if (error !== 'cancel') {
+          ElMessage.error('发货失败')
+        }
       }
     }
     
     // 取消订单
     const handleCancel = async (orderId) => {
       try {
-        const reason = prompt('请输入取消原因')
-        if (reason === null) {
-          // 用户取消输入
-          return
-        }
-        if (!reason.trim()) {
-          ElMessage.error('请输入取消原因')
-          return
-        }
+        await ElMessageBox.confirm('确定要取消这个订单吗？', '取消订单', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
         
-        const response = await orderAPI.cancel(orderId, reason)
+        const response = await orderAPI.cancel(orderId, '卖家取消')
         if (response.success) {
           ElMessage.success('订单已取消')
           fetchOrders()
@@ -296,45 +271,57 @@ export default {
           ElMessage.error(response.errorMsg || '取消订单失败')
         }
       } catch (error) {
-        ElMessage.error('取消订单失败')
+        if (error !== 'cancel') {
+          ElMessage.error('取消订单失败')
+        }
       }
     }
     
-    // 申请退款
-    const handleRefund = async (orderId) => {
+    // 同意退款
+    const handleApproveRefund = async (orderId) => {
       try {
-        // 查找订单状态
-        const order = orders.value.find(o => o.orderId === orderId)
-        const isReapply = order && order.orderStatus === 'REFUND_REJECTED'
+        await ElMessageBox.confirm('确定要同意这个退款申请吗？', '同意退款', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
         
-        const promptText = isReapply ? '请输入重新申请退款的原因' : '请输入退款原因'
-        const refundReason = prompt(promptText)
-        if (refundReason === null) {
-          // 用户取消输入
-          return
-        }
-        if (!refundReason.trim()) {
-          ElMessage.error('请输入退款原因')
-          return
-        }
-        
-        const response = await orderAPI.requestRefund(orderId, refundReason)
+        const response = await orderAPI.handleRefund(orderId, 'APPROVE', '同意退款')
         if (response.success) {
-          const successMsg = isReapply ? '重新申请退款已提交' : '退款申请已提交'
-          ElMessage.success(successMsg)
+          ElMessage.success('退款申请已同意')
           fetchOrders()
         } else {
-          ElMessage.error(response.errorMsg || '申请退款失败')
+          ElMessage.error(response.errorMsg || '处理退款申请失败')
         }
       } catch (error) {
-        ElMessage.error('申请退款失败')
+        if (error !== 'cancel') {
+          ElMessage.error('处理退款申请失败')
+        }
       }
     }
     
-    // 查看订单详情
-    const viewOrderDetail = () => {
-      // 这里可以打开订单详情对话框或跳转到详情页面
-      ElMessage.info('订单详情功能开发中...')
+    // 拒绝退款
+    const handleRejectRefund = async (orderId) => {
+      try {
+        const { value: reason } = await ElMessageBox.prompt('请输入拒绝原因', '拒绝退款', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          inputPattern: /.+/,
+          inputErrorMessage: '拒绝原因不能为空'
+        })
+        
+        const response = await orderAPI.handleRefund(orderId, 'REJECT', reason)
+        if (response.success) {
+          ElMessage.success('退款申请已拒绝')
+          fetchOrders()
+        } else {
+          ElMessage.error(response.errorMsg || '处理退款申请失败')
+        }
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('处理退款申请失败')
+        }
+      }
     }
     
     // 修改订单可见性
@@ -375,7 +362,7 @@ export default {
         'SHIPPED': '待收货',
         'COMPLETED': '已完成',
         'CANCELLED': '已取消',
-        'REFUND_REQUESTED': '退款中',
+        'REFUND_REQUESTED': '退款申请',
         'REFUND_APPROVED': '退款完成',
         'REFUND_REJECTED': '退款被拒'
       }
@@ -391,32 +378,20 @@ export default {
         'SHIPPED': '暂无待收货订单',
         'COMPLETED': '暂无已完成订单',
         'CANCELLED': '暂无已取消订单',
-        'REFUND_REQUESTED': '暂无退款订单',
-        'REFUND_APPROVED': '暂无退款完成订单',
-        'REFUND_REJECTED': '暂无退款被拒订单'
+        'REFUND_REQUESTED': '暂无退款申请',
+        'REFUND_APPROVED': '暂无退款完成订单'
       }
       return statusMap[activeTab.value] || '暂无订单'
     }
     
     // 获取空状态操作按钮文本
     const getEmptyActionText = () => {
-      const actionMap = {
-        'all': '去购物',
-        'CREATED': '去购物',
-        'PAID': '去购物',
-        'SHIPPED': '去购物',
-        'COMPLETED': '去购物',
-        'CANCELLED': '去购物',
-        'REFUND_REQUESTED': '去购物',
-        'REFUND_APPROVED': '去购物',
-        'REFUND_REJECTED': '去购物'
-      }
-      return actionMap[activeTab.value] || '去购物'
+      return '管理商品'
     }
     
     // 处理空状态操作
     const handleEmptyAction = () => {
-      router.push('/commodities')
+      router.push('/my-commodities')
     }
     
     // 格式化时间
@@ -440,24 +415,8 @@ export default {
       return imageAPI.getCommodityImage(fileName)
     }
     
-    // 登出
-    const handleLogout = async () => {
-      try {
-        await userStore.logout()
-        // userStore.logout()会处理跳转，不需要额外的跳转和消息
-      } catch (error) {
-        ElMessage.error('退出登录失败')
-      }
-    }
-    
     onMounted(() => {
-      isMounted.value = true
       fetchOrders()
-    })
-    
-    // 组件卸载时清理
-    onUnmounted(() => {
-      isMounted.value = false
     })
     
     return {
@@ -467,15 +426,13 @@ export default {
       currentPage,
       pageSize,
       activeTab,
-      user,
       handleTabChange,
       handleSizeChange,
       handleCurrentChange,
-      handlePay,
-      handleConfirm,
+      handleShip,
       handleCancel,
-      handleRefund,
-      viewOrderDetail,
+      handleApproveRefund,
+      handleRejectRefund,
       handleVisibilityChange,
       getStatusType,
       getStatusText,
@@ -483,21 +440,26 @@ export default {
       getEmptyActionText,
       handleEmptyAction,
       formatTime,
-      getCommodityImageUrl,
-      handleLogout
+      getCommodityImageUrl
     }
   }
 }
 </script>
 
 <style scoped>
-.orders-page {
+.seller-orders-page {
   min-height: 100vh;
   background-color: #f5f5f5;
 }
 
 .orders-content {
   padding: 30px 0;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
 }
 
 .page-header {
@@ -508,18 +470,13 @@ export default {
 }
 
 .page-header h1 {
-  font-size: 28px;
-  font-weight: bold;
-  color: #333;
   margin: 0;
+  color: #333;
+  font-size: 28px;
 }
 
 .order-tabs {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
 }
 
 .orders-list {
@@ -534,23 +491,24 @@ export default {
 .order-card {
   background: white;
   border-radius: 8px;
+  padding: 20px;
   margin-bottom: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
 }
 
 .order-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
 }
 
 .order-info {
   display: flex;
-  gap: 20px;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .order-id {
@@ -559,12 +517,11 @@ export default {
 }
 
 .order-time {
-  color: #999;
+  color: #666;
   font-size: 14px;
 }
 
 .order-content {
-  padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -572,6 +529,7 @@ export default {
 
 .commodity-info {
   display: flex;
+  align-items: center;
   gap: 15px;
   flex: 1;
 }
@@ -581,10 +539,7 @@ export default {
   height: 80px;
   border-radius: 6px;
   overflow: hidden;
-  background: #f5f5f5;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-color: #f5f5f5;
 }
 
 .commodity-image img {
@@ -594,12 +549,11 @@ export default {
 }
 
 .no-image {
+  width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  height: 100%;
-  background: #f0f0f0;
   color: #999;
   font-size: 12px;
 }
@@ -609,22 +563,23 @@ export default {
 }
 
 .commodity-title {
+  margin: 0 0 8px 0;
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 8px;
   color: #333;
 }
 
 .commodity-price {
+  margin: 0 0 5px 0;
+  color: #e74c3c;
+  font-weight: 600;
   font-size: 18px;
-  font-weight: bold;
-  color: var(--primary-color);
-  margin-bottom: 5px;
 }
 
-.commodity-quantity {
-  font-size: 14px;
+.buyer-info {
+  margin: 0;
   color: #666;
+  font-size: 14px;
 }
 
 .order-actions {
@@ -639,50 +594,40 @@ export default {
 }
 
 .total-price {
-  font-size: 18px;
-  font-weight: bold;
-  color: var(--primary-color);
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e74c3c;
 }
 
 .action-buttons {
   display: flex;
   gap: 10px;
+  align-items: center;
 }
 
 .pagination-wrapper {
   display: flex;
   justify-content: center;
+  margin-top: 30px;
 }
 
 @media (max-width: 768px) {
-  .nav-content {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .nav-menu {
-    gap: 20px;
-  }
-  
-  .page-header {
-    flex-direction: column;
-    gap: 15px;
-    text-align: center;
-  }
-  
   .order-content {
     flex-direction: column;
+    align-items: flex-start;
     gap: 20px;
   }
   
   .order-actions {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
   }
   
   .action-buttons {
     flex-wrap: wrap;
-    justify-content: center;
   }
 }
 </style>

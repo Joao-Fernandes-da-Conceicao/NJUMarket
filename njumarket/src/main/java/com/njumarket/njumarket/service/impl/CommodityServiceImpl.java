@@ -67,7 +67,7 @@ public class CommodityServiceImpl implements CommodityService {
             commodity.setCategory(commodityDTO.getCategory());
             commodity.setConditionLevel(commodityDTO.getConditionLevel());
             commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
-            commodity.setCommodityStatus("DRAFT"); // 默认设为草稿
+            commodity.setCommodityStatus("PUBLISHED"); // 默认设为已发布但未上架
             commodity.setSellerVisibility("PUBLIC");
             commodity.setBuyerVisibility("PUBLIC");
             commodity.setClickCount(0);
@@ -82,6 +82,90 @@ public class CommodityServiceImpl implements CommodityService {
         } catch (Exception e) {
             log.error("发布商品失败: {}", e.getMessage(), e);
             return Result.fail("发布商品失败，请稍后重试");
+        }
+    }
+    
+    @Override
+    @Transactional
+    public Result createDraftCommodity(CommodityDTO commodityDTO) {
+        try {
+            log.info("创建草稿商品 - commodityDTO: {}", commodityDTO);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 创建商品实体
+            Commodity commodity = new Commodity();
+            commodity.setCommodityId(generateCommodityId());
+            commodity.setSellerId(currentUser.getUserId());
+            commodity.setTitle(commodityDTO.getTitle());
+            commodity.setDescription(commodityDTO.getDescription());
+            commodity.setPrice(commodityDTO.getPrice());
+            commodity.setStock(commodityDTO.getStock());
+            commodity.setLocation(commodityDTO.getLocation());
+            commodity.setCategory(commodityDTO.getCategory());
+            commodity.setConditionLevel(commodityDTO.getConditionLevel());
+            commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
+            commodity.setCommodityStatus("DRAFT"); // 设为草稿状态
+            commodity.setSellerVisibility("PUBLIC");
+            commodity.setBuyerVisibility("PUBLIC");
+            commodity.setClickCount(0);
+            commodity.setPublishTime(LocalDateTime.now());
+            
+            // 保存商品
+            Commodity savedCommodity = commodityRepository.save(commodity);
+            
+            log.info("草稿商品创建成功 - commodityId: {}", savedCommodity.getCommodityId());
+            return Result.ok("草稿商品创建成功", convertToDTO(savedCommodity));
+            
+        } catch (Exception e) {
+            log.error("创建草稿商品失败: {}", e.getMessage(), e);
+            return Result.fail("创建草稿商品失败，请稍后重试");
+        }
+    }
+    
+    @Override
+    @Transactional
+    public Result publishDraftCommodity(String commodityId) {
+        try {
+            log.info("发布草稿商品 - commodityId: {}", commodityId);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 查找商品
+            Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
+            if (commodity == null) {
+                return Result.fail("商品不存在");
+            }
+            
+            // 检查权限
+            if (!commodityQueryService.canUserEditCommodity(commodity, currentUser)) {
+                return Result.fail("无权限操作此商品");
+            }
+            
+            // 检查商品状态：只有草稿状态的商品可以发布
+            if (!"DRAFT".equals(commodity.getCommodityStatus())) {
+                return Result.fail("只有草稿状态的商品可以发布");
+            }
+            
+            // 发布商品
+            commodity.setCommodityStatus("PUBLISHED");
+            commodity.setPublishTime(LocalDateTime.now());
+            commodityRepository.save(commodity);
+            
+            log.info("草稿商品发布成功 - commodityId: {}", commodityId);
+            return Result.ok("草稿商品发布成功");
+            
+        } catch (Exception e) {
+            log.error("发布草稿商品失败: {}", e.getMessage(), e);
+            return Result.fail("发布草稿商品失败");
         }
     }
     
@@ -191,6 +275,11 @@ public class CommodityServiceImpl implements CommodityService {
             
             if (!commodityQueryService.canUserEditCommodity(commodity, currentUser)) {
                 return Result.fail("无权限操作此商品");
+            }
+            
+            // 检查商品状态：只有已发布的商品可以上架
+            if (!"PUBLISHED".equals(commodity.getCommodityStatus())) {
+                return Result.fail("只有已发布的商品可以上架，请先发布商品");
             }
             
             commodity.setCommodityStatus("ON_SHELF");
@@ -478,7 +567,7 @@ public class CommodityServiceImpl implements CommodityService {
                 return Result.fail("无权限操作此商品");
             }
             
-            ImageUploadDTO uploadResult = imageService.uploadCommodityImage(currentUser.getUserId(), file);
+            ImageUploadDTO uploadResult = imageService.uploadCommodityImageForCommodity(commodityId, file);
             if (uploadResult.isSuccess()) {
                 return Result.ok("图片上传成功", uploadResult);
             } else {

@@ -29,6 +29,18 @@ public class UserCommodityController {
     public Result publishCommodity(@RequestBody CommodityDTO commodityDTO) {
         return commodityService.publishCommodity(commodityDTO);
     }
+    
+    @Operation(summary = "创建草稿商品", description = "创建草稿商品")
+    @PostMapping("/draft")
+    public Result createDraftCommodity(@RequestBody CommodityDTO commodityDTO) {
+        return commodityService.createDraftCommodity(commodityDTO);
+    }
+    
+    @Operation(summary = "发布草稿商品", description = "将草稿商品发布为已发布状态")
+    @PostMapping("/{commodityId}/publish")
+    public Result publishDraftCommodity(@PathVariable String commodityId) {
+        return commodityService.publishDraftCommodity(commodityId);
+    }
 
     @Operation(summary = "获取我发布的商品", description = "获取当前用户发布的商品列表")
     @GetMapping("/my")

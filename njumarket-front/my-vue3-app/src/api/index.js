@@ -100,20 +100,24 @@ export const commodityAPI = {
   // 发布商品
   publish: (data) => api.post('/user/commodity/publish', data),
   
+  // 创建草稿商品
+  createDraft: (data) => api.post('/user/commodity/draft', data),
+  
   // 上架商品
   shelf: (id) => api.post(`/user/commodity/${id}/shelf`),
   
   // 下架商品
   unshelf: (id) => api.post(`/user/commodity/${id}/unshelf`),
   
-  // 设为草稿
-  draft: (id) => api.post(`/user/commodity/${id}/draft`),
   
   // 设为售罄
   soldOut: (id) => api.post(`/user/commodity/${id}/sold-out`),
   
   // 重新上架
   republish: (id) => api.post(`/user/commodity/${id}/republish`),
+  
+  // 发布草稿商品
+  publishDraft: (id) => api.post(`/user/commodity/${id}/publish`),
   
   // 获取我的商品
   getMy: (page = 1, size = 10, status) => 
@@ -285,7 +289,25 @@ export const imageAPI = {
   getDefaultAvatar: () => `${api.defaults.baseURL}/images/avatars/default`,
   
   // 获取默认商品图片
-  getDefaultCommodityImage: () => '/default-commodity.jpg'
+  getDefaultCommodityImage: () => '/default-commodity.jpg',
+  
+  // 上传商品图片（通用）
+  upload: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/user/commodity/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+  
+  // 为指定商品上传图片
+  uploadForCommodity: (commodityId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/user/commodity/${commodityId}/upload-image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 export default api

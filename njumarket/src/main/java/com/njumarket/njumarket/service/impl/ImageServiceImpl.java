@@ -94,7 +94,53 @@ public class ImageServiceImpl implements ImageService {
     }
 
     @Override
-    public ImageUploadDTO uploadCommodityImage(String commodityId, MultipartFile file) {
+    public ImageUploadDTO uploadCommodityImage(String userId, MultipartFile file) {
+        try {
+            // 1. 验证文件
+            if (!validateImageFile(file)) {
+                throw new IllegalArgumentException("无效的图片文件");
+            }
+            
+            // 2. 生成唯一文件名
+            String fileName = generateCommodityImageFileName(file.getOriginalFilename(), userId);
+            
+            // 3. 确保上传目录存在
+            Path uploadDir = Paths.get(commodityUploadPath);
+            if (!Files.exists(uploadDir)) {
+                Files.createDirectories(uploadDir);
+                log.info("创建商品图片上传目录: {}", uploadDir.toAbsolutePath());
+            }
+            
+            // 4. 保存文件
+            Path filePath = uploadDir.resolve(fileName);
+            Files.copy(file.getInputStream(), filePath);
+            
+            // 5. 构建响应
+            ImageUploadDTO result = new ImageUploadDTO();
+            result.setSuccess(true);
+            result.setMessage("图片上传成功");
+            result.setImageUrl(getCommodityImageAccessUrl(fileName));
+            result.setFileName(fileName);
+            result.setFileSize(file.getSize());
+            result.setContentType(file.getContentType());
+            result.setUploadTime(System.currentTimeMillis());
+            
+            log.info("商品图片上传成功: userId={}, fileName={}, size={}", 
+                userId, fileName, file.getSize());
+            
+            return result;
+            
+        } catch (IOException e) {
+            log.error("商品图片上传失败: userId={}, error={}", userId, e.getMessage());
+            ImageUploadDTO result = new ImageUploadDTO();
+            result.setSuccess(false);
+            result.setMessage("商品图片上传失败: " + e.getMessage());
+            return result;
+        }
+    }
+
+    @Override
+    public ImageUploadDTO uploadCommodityImageForCommodity(String commodityId, MultipartFile file) {
         try {
             // 1. 验证文件
             if (!validateImageFile(file)) {
@@ -117,6 +163,8 @@ public class ImageServiceImpl implements ImageService {
             
             // 5. 构建响应
             ImageUploadDTO result = new ImageUploadDTO();
+            result.setSuccess(true);
+            result.setMessage("图片上传成功");
             result.setImageUrl(getCommodityImageAccessUrl(fileName));
             result.setFileName(fileName);
             result.setFileSize(file.getSize());
@@ -130,7 +178,10 @@ public class ImageServiceImpl implements ImageService {
             
         } catch (IOException e) {
             log.error("商品图片上传失败: commodityId={}, error={}", commodityId, e.getMessage());
-            throw new RuntimeException("商品图片上传失败", e);
+            ImageUploadDTO result = new ImageUploadDTO();
+            result.setSuccess(false);
+            result.setMessage("商品图片上传失败: " + e.getMessage());
+            return result;
         }
     }
 
@@ -140,7 +191,7 @@ public class ImageServiceImpl implements ImageService {
         
         for (MultipartFile file : files) {
             try {
-                ImageUploadDTO result = uploadCommodityImage(commodityId, file);
+                ImageUploadDTO result = uploadCommodityImageForCommodity(commodityId, file);
                 results.add(result);
             } catch (Exception e) {
                 log.error("批量上传商品图片失败: commodityId={}, fileName={}, error={}", 
