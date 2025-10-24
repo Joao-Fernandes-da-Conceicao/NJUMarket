@@ -55,19 +55,47 @@
             <div class="order-content">
               <div class="commodity-info">
                 <div class="commodity-image">
+                  <!-- 优先使用商品快照图片，如果没有则使用商品图片 -->
                   <img 
-                    v-if="order.commodity?.images && order.commodity.images.length > 0"
-                    :src="getCommodityImageUrl(order.commodity.images[0])"
-                    :alt="order.commodity?.title"
+                    v-if="getCommoditySnapshotImage(order) || (order.commodity?.images && order.commodity.images.length > 0)"
+                    :src="getCommoditySnapshotImage(order) || getCommodityImageUrl(order.commodity.images[0])"
+                    :alt="getCommoditySnapshotTitle(order) || order.commodity?.title"
                   />
                   <div v-else class="no-image">
                     <span>暂无照片</span>
                   </div>
                 </div>
                 <div class="commodity-details">
-                  <h3 class="commodity-title">{{ order.commodity?.title }}</h3>
+                  <h3 class="commodity-title">
+                    {{ getCommoditySnapshotTitle(order) || order.commodity?.title }}
+                    <!-- 显示商品快照状态提示 -->
+                    <el-tag 
+                      v-if="isCommoditySnapshotOffShelf(order)" 
+                      type="warning" 
+                      size="small"
+                      style="margin-left: 8px;"
+                    >
+                      已下架
+                    </el-tag>
+                  </h3>
                   <p class="commodity-price">¥{{ order.payAmount }}</p>
                   <p class="buyer-info">买家：{{ order.buyer?.nickname || '用户' + order.buyerId }}</p>
+                  <!-- 显示商品快照信息 -->
+                  <p v-if="order.commoditySnapshotLocation" class="commodity-location">
+                    位置：{{ order.commoditySnapshotLocation }}
+                  </p>
+                  <div v-if="order.commoditySnapshotSellerName" class="seller-info">
+                    <p class="seller-name">卖家：{{ order.commoditySnapshotSellerName }}</p>
+                    <p v-if="order.commoditySnapshotSellerPhone" class="seller-contact">
+                      电话：{{ order.commoditySnapshotSellerPhone }}
+                    </p>
+                    <p v-if="order.commoditySnapshotSellerEmail" class="seller-contact">
+                      邮箱：{{ order.commoditySnapshotSellerEmail }}
+                    </p>
+                    <p v-if="order.commoditySnapshotTime" class="snapshot-time">
+                      快照时间：{{ formatTime(order.commoditySnapshotTime) }}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -415,6 +443,35 @@ export default {
       return imageAPI.getCommodityImage(fileName)
     }
     
+    // 获取商品快照标题
+    const getCommoditySnapshotTitle = (order) => {
+      return order.commoditySnapshotTitle || order.commodity?.title
+    }
+    
+    // 获取商品快照图片
+    const getCommoditySnapshotImage = (order) => {
+      if (!order.commoditySnapshotImages) return null
+      
+      try {
+        // 解析JSON格式的图片URL列表
+        const images = JSON.parse(order.commoditySnapshotImages)
+        if (images && images.length > 0) {
+          return getCommodityImageUrl(images[0])
+        }
+      } catch (error) {
+        // 如果不是JSON格式，直接使用
+        return getCommodityImageUrl(order.commoditySnapshotImages)
+      }
+      
+      return null
+    }
+    
+    // 检查商品快照是否已下架
+    const isCommoditySnapshotOffShelf = (order) => {
+      return order.commoditySnapshotStatus === 'OFF_SHELF' || 
+             order.commoditySnapshotStatus === 'DRAFT'
+    }
+    
     onMounted(() => {
       fetchOrders()
     })
@@ -440,7 +497,10 @@ export default {
       getEmptyActionText,
       handleEmptyAction,
       formatTime,
-      getCommodityImageUrl
+      getCommodityImageUrl,
+      getCommoditySnapshotTitle,
+      getCommoditySnapshotImage,
+      isCommoditySnapshotOffShelf
     }
   }
 }
@@ -580,6 +640,36 @@ export default {
   margin: 0;
   color: #666;
   font-size: 14px;
+}
+
+.commodity-location {
+  font-size: 14px;
+  color: #666;
+  margin: 2px 0;
+}
+
+.seller-info {
+  margin: 5px 0;
+}
+
+.seller-name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  margin: 2px 0;
+}
+
+.seller-contact {
+  font-size: 12px;
+  color: #666;
+  margin: 1px 0;
+}
+
+.snapshot-time {
+  font-size: 11px;
+  color: #999;
+  margin: 1px 0;
+  font-style: italic;
 }
 
 .order-actions {

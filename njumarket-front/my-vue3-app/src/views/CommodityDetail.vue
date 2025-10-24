@@ -32,7 +32,18 @@
 
           <!-- 商品信息 -->
           <div class="info-section">
-            <h1 class="commodity-title">{{ commodity.title }}</h1>
+            <h1 class="commodity-title">
+              {{ commodity.title }}
+              <!-- 显示商品状态 -->
+              <el-tag 
+                v-if="!canOrder" 
+                type="warning" 
+                size="large"
+                style="margin-left: 12px;"
+              >
+                已下架
+              </el-tag>
+            </h1>
             <div class="price-section">
               <span class="price text-primary">¥{{ commodity.price }}</span>
               <span class="original-price" v-if="commodity.originalPrice">
@@ -69,11 +80,11 @@
               <el-button
                 type="primary"
                 size="large"
-                :disabled="!isLoggedIn || commodity.sellerId === user?.userId"
+                :disabled="!isLoggedIn || commodity.sellerId === user?.userId || !canOrder"
                 @click="handleBuy"
                 class="buy-btn"
               >
-                {{ commodity.sellerId === user?.userId ? '自己的商品' : '立即购买' }}
+                {{ !canOrder ? '商品已下架' : (commodity.sellerId === user?.userId ? '自己的商品' : '立即购买') }}
               </el-button>
               <el-button
                 size="large"
@@ -161,6 +172,7 @@ export default {
     const commodity = ref(null)
     const relatedCommodities = ref([])
     const currentImage = ref('')
+    const canOrder = ref(true)
     
     const isLoggedIn = computed(() => userStore.isLoggedIn)
     const user = computed(() => userStore.user)
@@ -170,10 +182,19 @@ export default {
       loading.value = true
       try {
         const commodityId = route.params.id
+        // 使用标准的商品详情API
         const response = await commodityAPI.getDetail(commodityId)
         if (response.success) {
           commodity.value = response.data
           currentImage.value = response.data.images?.[0] || ''
+          
+          // 检查商品状态
+          if (response.data.commodityStatus !== 'ON_SHELF') {
+            canOrder.value = false
+            ElMessage.warning('商品已下架')
+          } else {
+            canOrder.value = true
+          }
           
           // 记录浏览
           await commodityAPI.recordView(commodityId)
@@ -242,8 +263,8 @@ export default {
       }
       
       // 检查商品状态
-      if (commodity.value.commodityStatus !== 'ON_SHELF') {
-        ElMessage.warning('商品未上架，无法购买')
+      if (!canOrder.value) {
+        ElMessage.error('商品已下架，无法购买')
         return
       }
       
@@ -306,6 +327,7 @@ export default {
       commodity,
       relatedCommodities,
       currentImage,
+      canOrder,
       isLoggedIn,
       user,
       handleImageError,

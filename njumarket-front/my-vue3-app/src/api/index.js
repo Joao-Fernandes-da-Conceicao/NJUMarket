@@ -241,7 +241,13 @@ export const orderAPI = {
   
   // 修改订单买家可见性
   updateBuyerVisibility: (id, buyerVisibility) => 
-    api.put(`/user/order/${id}/buyer-visibility`, null, { params: { buyerVisibility } })
+    api.put(`/user/order/${id}/buyer-visibility`, null, { params: { buyerVisibility } }),
+  
+  // 查询原商品信息（基于商品快照）
+  queryOriginalCommodity: (orderId) => api.get(`/user/order/${orderId}/query-commodity`),
+  
+  // 基于快照创建新订单
+  createOrderFromSnapshot: (orderId, orderData) => api.post(`/user/order/${orderId}/create-from-snapshot`, orderData)
 }
 
 // 用户资料相关API

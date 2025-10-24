@@ -27,4 +27,18 @@ public class OrderDTO {
     private String returnRejectionReason;
     private String returnTrackingNumber;
     private String returnCompletionTime;
+    
+    // ========== 商品快照字段 ==========
+    private String commoditySnapshotTitle;
+    private String commoditySnapshotDescription;
+    private Double commoditySnapshotPrice;
+    private String commoditySnapshotLocation;
+    private String commoditySnapshotCategory;
+    private String commoditySnapshotConditionLevel;
+    private String commoditySnapshotImages; // JSON格式的图片URL列表
+    private String commoditySnapshotStatus;
+    private String commoditySnapshotSellerName;
+    private String commoditySnapshotSellerPhone;
+    private String commoditySnapshotSellerEmail;
+    private String commoditySnapshotTime;
 }

@@ -1,6 +1,7 @@
 package com.njumarket.njumarket.service;
 
 import com.njumarket.njumarket.dto.Result;
+import java.util.Map;
 import com.njumarket.njumarket.dto.OrderDTO;
 
 /**
@@ -131,4 +132,14 @@ public interface OrderService {
      * 获取订单历史
      */
     Result getOrderHistory(String userId);
+    
+    /**
+     * 查询原商品信息（基于商品快照，支持下架和已删除商品）
+     */
+    Result queryOriginalCommodity(String orderId);
+    
+    /**
+     * 创建新订单（基于商品快照，但允许用户修改信息）
+     */
+    Result createOrderFromSnapshot(String orderId, Map<String, Object> orderData);
 }

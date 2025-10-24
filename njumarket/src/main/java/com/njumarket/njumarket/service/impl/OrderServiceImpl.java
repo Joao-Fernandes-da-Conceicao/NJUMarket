@@ -7,6 +7,7 @@ import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
 import com.njumarket.njumarket.repository.OrderRepository;
 import com.njumarket.njumarket.repository.CommodityRepository;
+import com.njumarket.njumarket.repository.UserRepository;
 import com.njumarket.njumarket.service.OrderService;
 import com.njumarket.njumarket.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final CommodityRepository commodityRepository;
+    private final UserRepository userRepository;
 
     // ========== 买家功能 ==========
     @Override
@@ -101,6 +103,14 @@ public class OrderServiceImpl implements OrderService {
             order.setShippingAddress(orderDTO.getShippingAddress());
             order.setRemark(orderDTO.getRemark());
             order.setCreateTime(LocalDateTime.now());
+            
+            // 创建商品快照 - 获取卖家信息
+            Optional<User> sellerOpt = userRepository.findById(commodity.getSellerId());
+            if (sellerOpt.isPresent()) {
+                order.createCommoditySnapshot(commodity, sellerOpt.get());
+            } else {
+                log.warn("卖家不存在，无法创建商品快照 - sellerId: {}", commodity.getSellerId());
+            }
             
             // 保存订单
             orderRepository.save(order);
@@ -239,24 +249,32 @@ public class OrderServiceImpl implements OrderService {
                 return Result.fail("订单状态不允许取消");
             }
             
+            // 在取消订单前检查是否可以恢复库存
+            boolean shouldRestoreStock = order.canRestoreStock();
+            
             // 取消订单
             if (order.cancelOrder()) {
-                // 恢复商品库存
-                Optional<Commodity> commodityOpt = commodityRepository.findById(order.getCommodityId());
-                if (commodityOpt.isPresent()) {
-                    Commodity commodity = commodityOpt.get();
-                    boolean stockUpdated = commodity.updateStock(order.getQuantity());
-                    if (stockUpdated) {
-                        commodityRepository.save(commodity);
-                        log.info("订单取消成功，库存已恢复 - orderId: {}, commodityId: {}, quantity: {}", 
-                            orderId, order.getCommodityId(), order.getQuantity());
+                // 只有未发货和未付款的订单取消时才恢复库存
+                if (shouldRestoreStock) {
+                    Optional<Commodity> commodityOpt = commodityRepository.findById(order.getCommodityId());
+                    if (commodityOpt.isPresent()) {
+                        Commodity commodity = commodityOpt.get();
+                        boolean stockUpdated = commodity.updateStock(order.getQuantity());
+                        if (stockUpdated) {
+                            commodityRepository.save(commodity);
+                            log.info("订单取消成功，库存已恢复 - orderId: {}, commodityId: {}, quantity: {}", 
+                                orderId, order.getCommodityId(), order.getQuantity());
+                        } else {
+                            log.warn("订单取消成功，但库存恢复失败 - orderId: {}, commodityId: {}, quantity: {}", 
+                                orderId, order.getCommodityId(), order.getQuantity());
+                        }
                     } else {
-                        log.warn("订单取消成功，但库存恢复失败 - orderId: {}, commodityId: {}, quantity: {}", 
-                            orderId, order.getCommodityId(), order.getQuantity());
+                        log.warn("订单取消成功，但商品不存在 - orderId: {}, commodityId: {}", 
+                            orderId, order.getCommodityId());
                     }
                 } else {
-                    log.warn("订单取消成功，但商品不存在 - orderId: {}, commodityId: {}", 
-                        orderId, order.getCommodityId());
+                    log.info("订单取消成功，但订单状态不允许恢复库存 - orderId: {}, orderStatus: {}", 
+                        orderId, order.getOrderStatus());
                 }
                 
                 orderRepository.save(order);
@@ -587,6 +605,20 @@ public class OrderServiceImpl implements OrderService {
         dto.setReturnRejectionReason(order.getReturnRejectionReason());
         dto.setReturnTrackingNumber(order.getReturnTrackingNumber());
         dto.setReturnCompletionTime(order.getReturnCompletionTime() != null ? order.getReturnCompletionTime().toString() : null);
+        
+        // 商品快照字段
+        dto.setCommoditySnapshotTitle(order.getCommoditySnapshotTitle());
+        dto.setCommoditySnapshotDescription(order.getCommoditySnapshotDescription());
+        dto.setCommoditySnapshotPrice(order.getCommoditySnapshotPrice());
+        dto.setCommoditySnapshotLocation(order.getCommoditySnapshotLocation());
+        dto.setCommoditySnapshotCategory(order.getCommoditySnapshotCategory());
+        dto.setCommoditySnapshotConditionLevel(order.getCommoditySnapshotConditionLevel());
+        dto.setCommoditySnapshotImages(order.getCommoditySnapshotImages());
+        dto.setCommoditySnapshotStatus(order.getCommoditySnapshotStatus());
+        dto.setCommoditySnapshotSellerName(order.getCommoditySnapshotSellerName());
+        dto.setCommoditySnapshotSellerPhone(order.getCommoditySnapshotSellerPhone());
+        dto.setCommoditySnapshotSellerEmail(order.getCommoditySnapshotSellerEmail());
+        dto.setCommoditySnapshotTime(order.getCommoditySnapshotTime() != null ? order.getCommoditySnapshotTime().toString() : null);
         
         return dto;
     }
@@ -1050,6 +1082,196 @@ public class OrderServiceImpl implements OrderService {
     public Integer calcValidVolume(String userId) {
         log.info("计算有效交易量 - userId: {}", userId);
         return 0;
+    }
+
+    @Override
+    public Result queryOriginalCommodity(String orderId) {
+        try {
+            log.info("查询原商品信息 - orderId: {}", orderId);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 查找原订单
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                return Result.fail("原订单不存在");
+            }
+            
+            Order originalOrder = orderOpt.get();
+            
+            // 检查权限：只有买家可以查询
+            if (!originalOrder.getBuyerId().equals(currentUser.getUserId())) {
+                return Result.fail("无权限操作此订单");
+            }
+            
+            // 检查商品快照是否存在
+            if (originalOrder.getCommoditySnapshotTitle() == null) {
+                return Result.fail("商品快照信息不存在");
+            }
+            
+            // 构建商品快照信息
+            Map<String, Object> commodityInfo = new HashMap<>();
+            commodityInfo.put("commodityId", originalOrder.getCommodityId());
+            commodityInfo.put("title", originalOrder.getCommoditySnapshotTitle());
+            commodityInfo.put("description", originalOrder.getCommoditySnapshotDescription());
+            commodityInfo.put("price", originalOrder.getCommoditySnapshotPrice());
+            commodityInfo.put("location", originalOrder.getCommoditySnapshotLocation());
+            commodityInfo.put("category", originalOrder.getCommoditySnapshotCategory());
+            commodityInfo.put("conditionLevel", originalOrder.getCommoditySnapshotConditionLevel());
+            commodityInfo.put("images", originalOrder.getCommoditySnapshotImages());
+            commodityInfo.put("status", originalOrder.getCommoditySnapshotStatus());
+            commodityInfo.put("sellerName", originalOrder.getCommoditySnapshotSellerName());
+            commodityInfo.put("sellerPhone", originalOrder.getCommoditySnapshotSellerPhone());
+            commodityInfo.put("sellerEmail", originalOrder.getCommoditySnapshotSellerEmail());
+            commodityInfo.put("snapshotTime", originalOrder.getCommoditySnapshotTime());
+            
+            // 检查当前商品状态
+            Optional<Commodity> commodityOpt = commodityRepository.findById(originalOrder.getCommodityId());
+            boolean commodityExists = commodityOpt.isPresent();
+            boolean commodityOnShelf = false;
+            int currentStock = 0;
+            double currentPrice = originalOrder.getCommoditySnapshotPrice();
+            
+            if (commodityExists) {
+                Commodity commodity = commodityOpt.get();
+                commodityOnShelf = "ON_SHELF".equals(commodity.getCommodityStatus());
+                currentStock = commodity.getStock();
+                currentPrice = commodity.getPrice();
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("commoditySnapshot", commodityInfo);
+            result.put("commodityExists", commodityExists);
+            result.put("commodityOnShelf", commodityOnShelf);
+            result.put("currentStock", currentStock);
+            result.put("currentPrice", currentPrice);
+            result.put("isOffShelf", originalOrder.isCommoditySnapshotOffShelf());
+            
+            // 设置状态消息
+            String statusMessage;
+            if (!commodityExists) {
+                statusMessage = "商品已被删除或不存在";
+            } else if (!commodityOnShelf) {
+                statusMessage = "商品已下架";
+            } else {
+                statusMessage = "商品正常可购买";
+            }
+            result.put("statusMessage", statusMessage);
+            
+            log.info("查询原商品信息成功 - orderId: {}, commodityExists: {}, commodityOnShelf: {}", 
+                orderId, commodityExists, commodityOnShelf);
+            return Result.ok("查询原商品信息成功", result);
+            
+        } catch (Exception e) {
+            log.error("查询原商品信息失败", e);
+            return Result.fail("查询原商品信息失败：" + e.getMessage());
+        }
+    }
+    
+    @Override
+    public Result createOrderFromSnapshot(String orderId, Map<String, Object> orderData) {
+        try {
+            log.info("基于快照创建新订单 - orderId: {}", orderId);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 查找原订单
+            Optional<Order> orderOpt = orderRepository.findById(orderId);
+            if (orderOpt.isEmpty()) {
+                return Result.fail("原订单不存在");
+            }
+            
+            Order originalOrder = orderOpt.get();
+            
+            // 检查权限：只有买家可以创建订单
+            if (!originalOrder.getBuyerId().equals(currentUser.getUserId())) {
+                return Result.fail("无权限操作此订单");
+            }
+            
+            // 检查商品快照是否存在
+            if (originalOrder.getCommoditySnapshotTitle() == null) {
+                return Result.fail("商品快照信息不存在");
+            }
+            
+            // 检查当前商品状态
+            Optional<Commodity> commodityOpt = commodityRepository.findById(originalOrder.getCommodityId());
+            if (commodityOpt.isEmpty()) {
+                return Result.fail("商品不存在，无法下单");
+            }
+            
+            Commodity commodity = commodityOpt.get();
+            
+            // 检查商品当前状态
+            if (!"ON_SHELF".equals(commodity.getCommodityStatus())) {
+                return Result.fail("商品当前未上架，无法下单");
+            }
+            
+            // 从请求数据中获取用户修改的信息
+            Integer quantity = (Integer) orderData.get("quantity");
+            String shippingAddress = (String) orderData.get("shippingAddress");
+            String remark = (String) orderData.get("remark");
+            
+            // 验证数量
+            if (quantity == null || quantity <= 0) {
+                return Result.fail("购买数量必须大于0");
+            }
+            
+            // 检查库存
+            if (commodity.getStock() < quantity) {
+                return Result.fail("商品库存不足，当前库存：" + commodity.getStock());
+            }
+            
+            // 检查是否购买自己的商品
+            if (commodity.getSellerId().equals(currentUser.getUserId())) {
+                return Result.fail("不能购买自己的商品");
+            }
+            
+            // 计算价格
+            double payAmount = commodity.getPrice() * quantity;
+            
+            // 创建新订单
+            Order newOrder = new Order();
+            newOrder.setOrderId(UUID.randomUUID().toString().replace("-", ""));
+            newOrder.setBuyerId(currentUser.getUserId());
+            newOrder.setSellerId(commodity.getSellerId());
+            newOrder.setCommodityId(commodity.getCommodityId());
+            newOrder.setOrderStatus("CREATED");
+            newOrder.setSellerVisibility(originalOrder.getSellerVisibility());
+            newOrder.setBuyerVisibility(originalOrder.getBuyerVisibility());
+            newOrder.setPayAmount(payAmount);
+            newOrder.setQuantity(quantity);
+            newOrder.setShippingAddress(shippingAddress != null ? shippingAddress : originalOrder.getShippingAddress());
+            newOrder.setRemark(remark != null ? remark : "基于订单快照创建: " + orderId);
+            newOrder.setCreateTime(LocalDateTime.now());
+            
+            // 创建商品快照
+            Optional<User> sellerOpt = userRepository.findById(commodity.getSellerId());
+            if (sellerOpt.isPresent()) {
+                newOrder.createCommoditySnapshot(commodity, sellerOpt.get());
+            }
+            
+            // 保存订单
+            orderRepository.save(newOrder);
+            
+            // 减少商品库存
+            commodity.updateStock(-quantity);
+            commodityRepository.save(commodity);
+            
+            log.info("基于快照创建新订单成功 - 原订单: {}, 新订单: {}", orderId, newOrder.getOrderId());
+            return Result.ok("创建新订单成功", convertToDTO(newOrder));
+            
+        } catch (Exception e) {
+            log.error("基于快照创建新订单失败", e);
+            return Result.fail("创建新订单失败：" + e.getMessage());
+        }
     }
 
     @Override

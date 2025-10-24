@@ -88,6 +88,43 @@ public class Order {
     @Column(name = "quantity", nullable = false)
     private Integer quantity = 1;
     
+    // ========== 商品快照字段 ==========
+    @Column(name = "commodity_snapshot_title", length = 200)
+    private String commoditySnapshotTitle;
+    
+    @Column(name = "commodity_snapshot_description", columnDefinition = "TEXT")
+    private String commoditySnapshotDescription;
+    
+    @Column(name = "commodity_snapshot_price")
+    private Double commoditySnapshotPrice;
+    
+    @Column(name = "commodity_snapshot_location", length = 200)
+    private String commoditySnapshotLocation;
+    
+    @Column(name = "commodity_snapshot_category", length = 50)
+    private String commoditySnapshotCategory;
+    
+    @Column(name = "commodity_snapshot_condition_level", length = 20)
+    private String commoditySnapshotConditionLevel;
+    
+    @Column(name = "commodity_snapshot_images", columnDefinition = "TEXT")
+    private String commoditySnapshotImages; // JSON格式的图片URL列表
+    
+    @Column(name = "commodity_snapshot_status", length = 20)
+    private String commoditySnapshotStatus;
+    
+    @Column(name = "commodity_snapshot_seller_name", length = 100)
+    private String commoditySnapshotSellerName;
+    
+    @Column(name = "commodity_snapshot_seller_phone", length = 20)
+    private String commoditySnapshotSellerPhone;
+    
+    @Column(name = "commodity_snapshot_seller_email", length = 100)
+    private String commoditySnapshotSellerEmail;
+    
+    @Column(name = "commodity_snapshot_time")
+    private LocalDateTime commoditySnapshotTime;
+    
     // 多对一关系：订单属于某个买家
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "buyer_id", insertable = false, updatable = false)
@@ -181,6 +218,80 @@ public class Order {
             return true;
         }
         return false;
+    }
+    
+    /**
+     * 创建商品快照
+     * @param commodity 商品实体
+     * @param seller 卖家用户实体
+     * @return 创建是否成功
+     */
+    public Boolean createCommoditySnapshot(Commodity commodity, User seller) {
+        if (commodity == null || seller == null) {
+            return false;
+        }
+        
+        this.commoditySnapshotTitle = commodity.getTitle();
+        this.commoditySnapshotDescription = commodity.getDescription();
+        this.commoditySnapshotPrice = commodity.getPrice();
+        this.commoditySnapshotLocation = commodity.getLocation();
+        this.commoditySnapshotCategory = commodity.getCategory();
+        this.commoditySnapshotConditionLevel = commodity.getConditionLevel();
+        this.commoditySnapshotImages = commodity.getImages(); // 暂时直接复制，后续可考虑复制图片文件
+        this.commoditySnapshotStatus = commodity.getCommodityStatus();
+        this.commoditySnapshotSellerName = seller.getUsername() != null ? seller.getUsername() : seller.getUserId();
+        this.commoditySnapshotSellerPhone = seller.getPrimaryPhone(); // 使用主要手机号
+        this.commoditySnapshotSellerEmail = null; // 暂时设为null，后续可从ContactInfo获取
+        this.commoditySnapshotTime = LocalDateTime.now();
+        
+        return true;
+    }
+    
+    /**
+     * 创建商品快照（带完整卖家信息）
+     * @param commodity 商品实体
+     * @param sellerName 卖家名称
+     * @param sellerPhone 卖家电话
+     * @param sellerEmail 卖家邮箱
+     * @return 创建是否成功
+     */
+    public Boolean createCommoditySnapshot(Commodity commodity, String sellerName, String sellerPhone, String sellerEmail) {
+        if (commodity == null) {
+            return false;
+        }
+        
+        this.commoditySnapshotTitle = commodity.getTitle();
+        this.commoditySnapshotDescription = commodity.getDescription();
+        this.commoditySnapshotPrice = commodity.getPrice();
+        this.commoditySnapshotLocation = commodity.getLocation();
+        this.commoditySnapshotCategory = commodity.getCategory();
+        this.commoditySnapshotConditionLevel = commodity.getConditionLevel();
+        this.commoditySnapshotImages = commodity.getImages(); // 暂时直接复制，后续可考虑复制图片文件
+        this.commoditySnapshotStatus = commodity.getCommodityStatus();
+        this.commoditySnapshotSellerName = sellerName;
+        this.commoditySnapshotSellerPhone = sellerPhone;
+        this.commoditySnapshotSellerEmail = sellerEmail;
+        this.commoditySnapshotTime = LocalDateTime.now();
+        
+        return true;
+    }
+    
+    /**
+     * 检查订单是否可以恢复库存
+     * 只有未发货和未付款的订单取消时才恢复库存
+     * @return 是否可以恢复库存
+     */
+    public Boolean canRestoreStock() {
+        return "CREATED".equals(this.orderStatus) || "PAID".equals(this.orderStatus);
+    }
+    
+    /**
+     * 检查商品快照是否已下架
+     * @return 是否已下架
+     */
+    public Boolean isCommoditySnapshotOffShelf() {
+        return "OFF_SHELF".equals(this.commoditySnapshotStatus) || 
+               "DRAFT".equals(this.commoditySnapshotStatus);
     }
     
     /**

@@ -18,6 +18,8 @@ import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 商品查询服务实现类
@@ -373,6 +375,38 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         return true;
     }
     
+    /**
+     * 检查商品是否可以被查询（包括下架商品）
+     * 用于"再来一单"等场景，允许查询下架商品但会提示状态
+     * @param commodity 商品实体
+     * @param user 用户实体
+     * @return 是否可以被查询
+     */
+    public boolean canCommodityBeQueried(Commodity commodity, User user) {
+        if (commodity == null) return false;
+        
+        // 如果是商品所有者，可以查询所有状态的商品
+        if (user != null && user.getUserId().equals(commodity.getSellerId())) {
+            return true;
+        }
+        
+        // 其他用户只能查询公开的商品（包括下架商品）
+        return "PUBLIC".equals(commodity.getSellerVisibility()) && 
+               "PUBLIC".equals(commodity.getBuyerVisibility());
+    }
+    
+    /**
+     * 检查商品是否可以下单
+     * @param commodity 商品实体
+     * @return 是否可以下单
+     */
+    public boolean canCommodityBeOrdered(Commodity commodity) {
+        if (commodity == null) return false;
+        
+        // 只有上架状态的商品可以下单
+        return "ON_SHELF".equals(commodity.getCommodityStatus());
+    }
+    
     @Override
     public boolean canUserViewCommodity(Commodity commodity, User user) {
         if (commodity == null) return false;
@@ -392,6 +426,69 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         
         // 只有商品所有者可以编辑
         return user.getUserId().equals(commodity.getSellerId());
+    }
+    
+    /**
+     * 根据商品ID查询商品（包括下架商品）
+     * 用于"再来一单"等场景
+     * @param commodityId 商品ID
+     * @return 查询结果
+     */
+    public Result getCommodityByIdForReorder(String commodityId) {
+        try {
+            log.info("根据ID获取商品详情（支持下架商品） - commodityId: {}", commodityId);
+            
+            // 获取当前用户
+            User currentUser = UserHolder.getUser();
+            
+            Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
+            if (commodity == null) {
+                return Result.fail("商品不存在");
+            }
+            
+            // 检查权限：使用新的查询权限检查
+            if (!canCommodityBeQueried(commodity, currentUser)) {
+                return Result.fail("无权限查看此商品");
+            }
+            
+            // 转换为DTO
+            CommodityDTO commodityDTO = convertToDTO(commodity);
+            
+            // 添加商品状态信息
+            Map<String, Object> result = new HashMap<>();
+            result.put("commodity", commodityDTO);
+            result.put("canOrder", canCommodityBeOrdered(commodity));
+            result.put("isOffShelf", !canCommodityBeOrdered(commodity));
+            result.put("statusMessage", getCommodityStatusMessage(commodity));
+            
+            return Result.ok("获取商品详情成功", result);
+            
+        } catch (Exception e) {
+            log.error("根据ID获取商品详情失败: {}", e.getMessage(), e);
+            return Result.fail("获取商品详情失败");
+        }
+    }
+    
+    /**
+     * 获取商品状态提示信息
+     * @param commodity 商品实体
+     * @return 状态提示信息
+     */
+    private String getCommodityStatusMessage(Commodity commodity) {
+        if (commodity == null) return "商品不存在";
+        
+        switch (commodity.getCommodityStatus()) {
+            case "ON_SHELF":
+                return "商品正常销售中";
+            case "OFF_SHELF":
+                return "商品已下架";
+            case "DRAFT":
+                return "商品为草稿状态";
+            case "PUBLISHED":
+                return "商品已发布但未上架";
+            default:
+                return "商品状态未知";
+        }
     }
     
     // ========== 统计信息实现 ==========

@@ -10,6 +10,7 @@ import MyOrders from '../views/MyOrders.vue'
 import SellerOrders from '../views/SellerOrders.vue'
 import MyCommodities from '../views/MyCommodities.vue'
 import PublishCommodity from '../views/PublishCommodity.vue'
+import CreateOrder from '../views/CreateOrder.vue'
 import LocalStorageDebug from '../views/LocalStorageDebug.vue'
 
 const routes = [
@@ -72,6 +73,12 @@ const routes = [
     path: '/publish',
     name: 'PublishCommodity',
     component: PublishCommodity,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/create-order/:orderId',
+    name: 'CreateOrder',
+    component: CreateOrder,
     meta: { requiresAuth: true }
   },
   {

@@ -6,6 +6,8 @@ import com.njumarket.njumarket.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * 用户订单控制器（买家和卖家功能）
  */
@@ -56,6 +58,22 @@ public class UserOrderController {
     public Result shipOrder(@PathVariable String orderId,
                           @RequestParam(required = false) String trackingNumber) {
         return orderService.shipOrder(orderId, trackingNumber);
+    }
+
+    /**
+     * 查询原商品信息（基于商品快照）
+     */
+    @GetMapping("/{orderId}/query-commodity")
+    public Result queryOriginalCommodity(@PathVariable String orderId) {
+        return orderService.queryOriginalCommodity(orderId);
+    }
+    
+    /**
+     * 基于快照创建新订单
+     */
+    @PostMapping("/{orderId}/create-from-snapshot")
+    public Result createOrderFromSnapshot(@PathVariable String orderId, @RequestBody Map<String, Object> orderData) {
+        return orderService.createOrderFromSnapshot(orderId, orderData);
     }
 
     /**

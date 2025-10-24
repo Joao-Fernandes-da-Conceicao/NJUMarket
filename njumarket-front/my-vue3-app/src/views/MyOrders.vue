@@ -56,19 +56,47 @@
             <div class="order-content">
               <div class="commodity-info">
                 <div class="commodity-image">
+                  <!-- 优先使用商品快照图片，如果没有则使用商品图片 -->
                   <img 
-                    v-if="order.commodity?.images && order.commodity.images.length > 0"
-                    :src="getCommodityImageUrl(order.commodity.images[0])"
-                    :alt="order.commodity?.title"
+                    v-if="getCommoditySnapshotImage(order) || (order.commodity?.images && order.commodity.images.length > 0)"
+                    :src="getCommoditySnapshotImage(order) || getCommodityImageUrl(order.commodity.images[0])"
+                    :alt="getCommoditySnapshotTitle(order) || order.commodity?.title"
                   />
                   <div v-else class="no-image">
                     <span>暂无照片</span>
                   </div>
                 </div>
                 <div class="commodity-details">
-                  <h3 class="commodity-title">{{ order.commodity?.title }}</h3>
+                  <h3 class="commodity-title">
+                    {{ getCommoditySnapshotTitle(order) || order.commodity?.title }}
+                    <!-- 显示商品快照状态提示 -->
+                    <el-tag 
+                      v-if="isCommoditySnapshotOffShelf(order)" 
+                      type="warning" 
+                      size="small"
+                      style="margin-left: 8px;"
+                    >
+                      已下架
+                    </el-tag>
+                  </h3>
                   <p class="commodity-price">¥{{ order.payAmount }}</p>
                   <p class="commodity-quantity">数量：{{ order.quantity }}</p>
+                  <!-- 显示商品快照信息 -->
+                  <p v-if="order.commoditySnapshotLocation" class="commodity-location">
+                    位置：{{ order.commoditySnapshotLocation }}
+                  </p>
+                  <div v-if="order.commoditySnapshotSellerName" class="seller-info">
+                    <p class="seller-name">卖家：{{ order.commoditySnapshotSellerName }}</p>
+                    <p v-if="order.commoditySnapshotSellerPhone" class="seller-contact">
+                      电话：{{ order.commoditySnapshotSellerPhone }}
+                    </p>
+                    <p v-if="order.commoditySnapshotSellerEmail" class="seller-contact">
+                      邮箱：{{ order.commoditySnapshotSellerEmail }}
+                    </p>
+                    <p v-if="order.commoditySnapshotTime" class="snapshot-time">
+                      快照时间：{{ formatTime(order.commoditySnapshotTime) }}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -109,6 +137,22 @@
                     @click="handleRefund(order.orderId)"
                   >
                     重新申请退款
+                  </el-button>
+                  <!-- 查询商品按钮 -->
+                  <el-button
+                    v-if="canQueryCommodity(order)"
+                    @click="handleQueryCommodity(order.orderId)"
+                  >
+                    查询商品
+                  </el-button>
+                  
+                  <!-- 再下一单按钮 -->
+                  <el-button
+                    v-if="canCreateNewOrder(order)"
+                    type="success"
+                    @click="handleCreateNewOrder(order.orderId)"
+                  >
+                    再下一单
                   </el-button>
                   <el-dropdown @command="(command) => handleVisibilityChange(order.orderId, command)">
                     <el-button>
@@ -331,6 +375,66 @@ export default {
       }
     }
     
+    // 查询商品
+    const handleQueryCommodity = async (orderId) => {
+      try {
+        const response = await orderAPI.queryOriginalCommodity(orderId)
+        if (response.success) {
+          const data = response.data
+          const commoditySnapshot = data.commoditySnapshot
+          
+          // 构建商品信息显示
+          let message = `商品信息：\n`
+          message += `标题：${commoditySnapshot.title}\n`
+          message += `价格：¥${commoditySnapshot.price}\n`
+          message += `位置：${commoditySnapshot.location}\n`
+          message += `分类：${commoditySnapshot.category}\n`
+          message += `成色：${commoditySnapshot.conditionLevel}\n`
+          message += `卖家：${commoditySnapshot.sellerName}\n`
+          
+          // 显示联系方式信息
+          if (commoditySnapshot.sellerPhone) {
+            message += `卖家电话：${commoditySnapshot.sellerPhone}\n`
+          }
+          if (commoditySnapshot.sellerEmail) {
+            message += `卖家邮箱：${commoditySnapshot.sellerEmail}\n`
+          }
+          
+          // 显示快照时间
+          if (commoditySnapshot.snapshotTime) {
+            const snapshotDate = new Date(commoditySnapshot.snapshotTime).toLocaleString()
+            message += `快照时间：${snapshotDate}\n`
+          }
+          
+          message += `\n当前状态：${data.statusMessage}`
+          
+          if (data.commodityExists && data.commodityOnShelf) {
+            message += `\n当前库存：${data.currentStock}\n`
+            message += `当前价格：¥${data.currentPrice}`
+            
+            // 显示价格变化
+            if (data.currentPrice !== commoditySnapshot.price) {
+              const priceChange = data.currentPrice - commoditySnapshot.price
+              const changeText = priceChange > 0 ? `上涨¥${priceChange.toFixed(2)}` : `下降¥${Math.abs(priceChange).toFixed(2)}`
+              message += `\n价格变化：${changeText}`
+            }
+          }
+          
+          alert(message)
+        } else {
+          ElMessage.error(response.errorMsg || '查询商品失败')
+        }
+      } catch (error) {
+        ElMessage.error('查询商品失败')
+      }
+    }
+    
+    // 再下一单
+    const handleCreateNewOrder = (orderId) => {
+      // 跳转到下单页面，传递订单ID
+      router.push(`/create-order/${orderId}`)
+    }
+    
     // 查看订单详情
     const viewOrderDetail = () => {
       // 这里可以打开订单详情对话框或跳转到详情页面
@@ -440,6 +544,51 @@ export default {
       return imageAPI.getCommodityImage(fileName)
     }
     
+    // 获取商品快照标题
+    const getCommoditySnapshotTitle = (order) => {
+      return order.commoditySnapshotTitle || order.commodity?.title
+    }
+    
+    // 获取商品快照图片
+    const getCommoditySnapshotImage = (order) => {
+      if (!order.commoditySnapshotImages) return null
+      
+      try {
+        // 解析JSON格式的图片URL列表
+        const images = JSON.parse(order.commoditySnapshotImages)
+        if (images && images.length > 0) {
+          return getCommodityImageUrl(images[0])
+        }
+      } catch (error) {
+        // 如果不是JSON格式，直接使用
+        return getCommodityImageUrl(order.commoditySnapshotImages)
+      }
+      
+      return null
+    }
+    
+    // 检查商品快照是否已下架
+    const isCommoditySnapshotOffShelf = (order) => {
+      return order.commoditySnapshotStatus === 'OFF_SHELF' || 
+             order.commoditySnapshotStatus === 'DRAFT'
+    }
+    
+    // 检查是否可以查询商品
+    const canQueryCommodity = (order) => {
+      // 必须有商品快照信息
+      return order.commoditySnapshotTitle != null
+    }
+    
+    // 检查是否可以再下一单
+    const canCreateNewOrder = (order) => {
+      // 必须有商品快照信息
+      if (!order.commoditySnapshotTitle) {
+        return false
+      }
+      
+      return true
+    }
+    
     // 登出
     const handleLogout = async () => {
       try {
@@ -475,6 +624,8 @@ export default {
       handleConfirm,
       handleCancel,
       handleRefund,
+      handleQueryCommodity,
+      handleCreateNewOrder,
       viewOrderDetail,
       handleVisibilityChange,
       getStatusType,
@@ -484,6 +635,11 @@ export default {
       handleEmptyAction,
       formatTime,
       getCommodityImageUrl,
+      getCommoditySnapshotTitle,
+      getCommoditySnapshotImage,
+      isCommoditySnapshotOffShelf,
+      canQueryCommodity,
+      canCreateNewOrder,
       handleLogout
     }
   }
@@ -625,6 +781,36 @@ export default {
 .commodity-quantity {
   font-size: 14px;
   color: #666;
+}
+
+.commodity-location {
+  font-size: 14px;
+  color: #666;
+  margin: 2px 0;
+}
+
+.seller-info {
+  margin: 5px 0;
+}
+
+.seller-name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  margin: 2px 0;
+}
+
+.seller-contact {
+  font-size: 12px;
+  color: #666;
+  margin: 1px 0;
+}
+
+.snapshot-time {
+  font-size: 11px;
+  color: #999;
+  margin: 1px 0;
+  font-style: italic;
 }
 
 .order-actions {
