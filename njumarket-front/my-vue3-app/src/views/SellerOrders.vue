@@ -4,8 +4,11 @@
     <div class="orders-content">
       <div class="container">
         <div class="page-header">
-          <h1>我的订单（卖家）</h1>
+          <h1>卖家订单</h1>
           <div class="header-actions">
+            <el-button type="info" @click="$router.push('/orders')">
+              买家订单
+            </el-button>
             <el-button type="primary" @click="$router.push('/commodities')">
               管理商品
             </el-button>

@@ -21,7 +21,7 @@
             v-if="isLoggedIn" 
             to="/orders" 
             class="nav-link" 
-            :class="{ active: $route.path.startsWith('/orders') }"
+            :class="{ active: $route.path.startsWith('/orders') || $route.path.startsWith('/seller-orders') }"
           >
             我的订单
           </router-link>

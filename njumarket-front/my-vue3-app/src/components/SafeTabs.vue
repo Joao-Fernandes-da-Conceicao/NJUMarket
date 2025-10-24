@@ -9,7 +9,7 @@
 </template>
 
 <script>
-import { ref, watch, nextTick } from 'vue'
+import { ref } from 'vue'
 
 export default {
   name: 'SafeTabs',
@@ -27,15 +27,6 @@ export default {
       emit('update:modelValue', tabName)
       emit('tab-change', tabName)
     }
-    
-    // 监听modelValue变化，必要时重新创建组件
-    watch(() => props.modelValue, (newVal, oldVal) => {
-      if (newVal !== oldVal) {
-        nextTick(() => {
-          tabsKey.value = `safe-tabs-${Date.now()}-${newVal}`
-        })
-      }
-    })
     
     return {
       tabsKey,
