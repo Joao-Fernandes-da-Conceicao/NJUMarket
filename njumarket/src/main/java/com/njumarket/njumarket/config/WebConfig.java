@@ -24,9 +24,9 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 用户拦截器 - 只拦截用户相关路径
+        // 用户拦截器 - 拦截用户相关路径和联系功能路径
         registry.addInterceptor(loginInterceptor)
-                .addPathPatterns("/api/user/**")
+                .addPathPatterns("/api/user/**", "/api/contact/**")
                 .excludePathPatterns(
                     // 用户认证相关接口不需要拦截
                     "/api/user/auth/login",

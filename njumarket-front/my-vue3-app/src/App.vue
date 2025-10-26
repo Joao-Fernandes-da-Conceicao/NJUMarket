@@ -43,7 +43,7 @@ export default {
 }
 
 #app {
-  font-family: 'PingFang SC', 'Helvetica Neue', Helvetica, 'Microsoft YaHei', Arial, sans-serif;
+  font-family: 'Tw Cen MT', '等线', 'DengXian', 'Microsoft YaHei', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #333;
@@ -67,9 +67,9 @@ export default {
 
 /* 通用样式 */
 .container {
-  max-width: 1200px;
+  max-width: 1400px; /* 增加最大宽度以更好利用宽屏空间 */
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 24px; /* 增加左右内边距 */
 }
 
 .btn-primary {
@@ -126,6 +126,13 @@ export default {
 }
 
 /* 响应式设计 */
+@media (min-width: 1600px) {
+  .container {
+    max-width: 1600px; /* 超宽屏使用更大的容器 */
+    padding: 0 32px;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 0 15px;

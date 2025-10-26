@@ -506,7 +506,7 @@ export default {
 }
 
 .publish-content {
-  padding: 30px 0;
+  padding: 40px 0; /* 增加间距以匹配主页设计 */
 }
 
 .page-header {
@@ -518,16 +518,17 @@ export default {
 
 .page-header h1 {
   font-size: 28px;
-  font-weight: bold;
+  font-weight: normal;
   color: #333;
   margin: 0;
 }
 
 .publish-form-wrapper {
   background: white;
-  border-radius: 8px;
+  border-radius: 16px; /* 使用主页的圆角设计 */
   padding: 40px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none; /* 移除边框 */
+  box-shadow: none; /* 移除阴影，使用无框设计 */
 }
 
 .form-section {
@@ -536,7 +537,7 @@ export default {
 
 .section-title {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: normal;
   color: #333;
   margin-bottom: 20px;
   padding-bottom: 10px;

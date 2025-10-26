@@ -80,8 +80,8 @@ const handleEmptyAction = () => {
 <style scoped>
 .commodity-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
   padding: 20px 0;
 }
 
@@ -100,27 +100,30 @@ const handleEmptyAction = () => {
 .loading-state {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
 }
 
 .skeleton-card {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
   overflow: hidden;
+  border: none;
+  box-shadow: none;
 }
 
 .skeleton-image {
   width: 100%;
-  height: 200px;
+  height: 160px;
   background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
+  border-radius: 12px;
+  margin-bottom: 12px;
 }
 
 .skeleton-content {
-  padding: 16px;
+  padding: 0 4px 12px 4px;
 }
 
 .skeleton-title {
@@ -129,7 +132,7 @@ const handleEmptyAction = () => {
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
   border-radius: 4px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .skeleton-price {
@@ -139,7 +142,7 @@ const handleEmptyAction = () => {
   background-size: 200% 100%;
   animation: loading 1.5s infinite;
   border-radius: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .skeleton-location {
@@ -161,16 +164,28 @@ const handleEmptyAction = () => {
 }
 
 /* 响应式设计 */
+@media (min-width: 1600px) {
+  .commodity-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+  }
+  
+  .loading-state {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 24px;
+  }
+}
+
 @media (max-width: 768px) {
   .commodity-grid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 16px;
+    gap: 12px;
     padding: 16px 0;
   }
   
   .loading-state {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 16px;
+    gap: 12px;
   }
   
   .skeleton-image {
@@ -181,12 +196,12 @@ const handleEmptyAction = () => {
 @media (max-width: 480px) {
   .commodity-grid {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 8px;
   }
   
   .loading-state {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 8px;
   }
 }
 </style>

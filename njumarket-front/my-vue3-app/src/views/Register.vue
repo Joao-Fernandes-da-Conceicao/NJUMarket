@@ -236,9 +236,9 @@ export default {
 
 .register-form-wrapper {
   background: white;
-  border-radius: 12px;
+  border-radius: 16px; /* 使用主页的圆角设计 */
   padding: 40px;
-  box-shadow: 0 8px 32px rgba(106, 1, 94, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); /* 使用主页的阴影设计 */
 }
 
 .form-header {
@@ -248,7 +248,7 @@ export default {
 
 .form-header h2 {
   font-size: 28px;
-  font-weight: bold;
+  font-weight: normal;
   margin-bottom: 10px;
 }
 
@@ -264,7 +264,8 @@ export default {
   width: 100%;
   height: 48px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
+  border-radius: 24px; /* 药丸形状设计 */
 }
 
 .form-footer {
@@ -277,7 +278,7 @@ export default {
 
 .login-link a {
   text-decoration: none;
-  font-weight: 500;
+  font-weight: normal;
 }
 
 .code-input-group {

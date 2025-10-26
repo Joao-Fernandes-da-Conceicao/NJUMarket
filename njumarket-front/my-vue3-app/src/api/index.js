@@ -30,16 +30,16 @@ api.interceptors.response.use(
   },
   error => {
     if (error.response?.status === 401) {
-      // 如果是在浏览器环境中，更新Pinia状态并跳转
+      // 如果是在浏览器环境中，更新Pinia状态但不自动跳转
       if (typeof window !== 'undefined') {
         // 动态导入Pinia store以避免循环依赖
         import('../stores/user').then(({ useUserStore }) => {
           const userStore = useUserStore()
-          userStore.clearUserData() // 使用新的clearUserData方法
+          userStore.clearUserData() // 清除用户数据
         })
         
-        // 跳转到登录页
-        window.location.href = '/login'
+        // 移除自动跳转逻辑，让页面自己处理未登录状态
+        // window.location.href = '/login'
       }
     }
     return Promise.reject(error)
@@ -311,5 +311,8 @@ export const imageAPI = {
     })
   }
 }
+
+// 导入并导出contactAPI
+export { contactAPI } from './contact'
 
 export default api

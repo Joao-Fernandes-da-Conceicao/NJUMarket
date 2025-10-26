@@ -12,6 +12,7 @@ import MyCommodities from '../views/MyCommodities.vue'
 import PublishCommodity from '../views/PublishCommodity.vue'
 import CreateOrder from '../views/CreateOrder.vue'
 import OrderDetail from '../views/OrderDetail.vue'
+import Messages from '../views/Messages.vue'
 import LocalStorageDebug from '../views/LocalStorageDebug.vue'
 
 const routes = [
@@ -45,6 +46,12 @@ const routes = [
     name: 'UserProfile',
     component: UserProfile,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/profile/:id',
+    name: 'UserProfileDetail',
+    component: UserProfile,
+    meta: { requiresAuth: false }
   },
   {
     path: '/user-menu',
@@ -89,6 +96,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/messages',
+    name: 'Messages',
+    component: Messages,
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/debug/localStorage',
     name: 'LocalStorageDebug',
     component: LocalStorageDebug
@@ -111,12 +124,6 @@ router.beforeEach(async (to, from, next) => {
     userStore.initUser()
   }
   
-  // 检查是否需要认证
-  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
-    next('/login')
-    return
-  }
-  
   // 如果已登录用户访问登录/注册页面，重定向到首页
   if ((to.name === 'Login' || to.name === 'Register') && userStore.isLoggedIn) {
     next('/')
@@ -128,6 +135,10 @@ router.beforeEach(async (to, from, next) => {
     next('/login')
     return
   }
+  
+  // 移除自动重定向到登录页面的逻辑
+  // 让用户可以在未登录状态下浏览公开页面
+  // 只有在用户主动点击需要登录的功能时才提示登录
   
   next()
 })

@@ -42,7 +42,7 @@
                 </div>
               </div>
               <div class="register-time">
-                注册时间：{{ formatTime(profileData?.registerTime) }}
+                注册时间：{{ formatTime(profileData?.userInfo?.registerTime) }}
               </div>
             </div>
             
@@ -480,7 +480,7 @@ export default {
 
 .username {
   font-size: 32px;
-  font-weight: bold;
+  font-weight: normal;
   margin-bottom: 20px;
   color: #333;
 }
@@ -505,7 +505,7 @@ export default {
 
 .stat-value {
   color: var(--primary-color);
-  font-weight: 600;
+  font-weight: normal;
   font-size: 16px;
 }
 
@@ -532,9 +532,10 @@ export default {
 
 .stat-card {
   background: white;
-  border-radius: 8px;
+  border-radius: 16px; /* 使用主页的圆角设计 */
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none; /* 移除边框 */
+  box-shadow: none; /* 移除阴影，使用无框设计 */
   display: flex;
   align-items: center;
   gap: 15px;
@@ -557,7 +558,7 @@ export default {
 
 .stat-number {
   font-size: 24px;
-  font-weight: bold;
+  font-weight: normal;
   color: var(--primary-color);
   margin-bottom: 5px;
 }
@@ -569,14 +570,15 @@ export default {
 
 .activity-section {
   background: white;
-  border-radius: 8px;
+  border-radius: 16px; /* 使用主页的圆角设计 */
   padding: 30px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none; /* 移除边框 */
+  box-shadow: none; /* 移除阴影，使用无框设计 */
 }
 
 .activity-section h2 {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 20px;
   color: #333;
 }

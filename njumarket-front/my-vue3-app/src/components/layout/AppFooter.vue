@@ -67,14 +67,14 @@
 
 .footer-title {
   font-size: 24px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 8px;
   color: #ecf0f1;
 }
 
 .footer-subtitle {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 16px;
   color: #bdc3c7;
 }

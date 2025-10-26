@@ -328,6 +328,9 @@ public class OrderServiceImpl implements OrderService {
             order.setReturnReason(reason);
             order.setReturnRequestTime(LocalDateTime.now());
             
+            // 设置卖家可见性为可见，确保卖家能够看到退款申请
+            order.setSellerVisibility("PUBLIC");
+            
             orderRepository.save(order);
             
             log.info("退款/退货申请成功 - orderId: {}", orderId);
@@ -361,15 +364,20 @@ public class OrderServiceImpl implements OrderService {
                 orderPage = orderRepository.findByBuyerId(currentUser.getUserId(), pageable);
             }
             
+            // 过滤掉买家不可见的订单（HIDDEN状态的订单）
+            List<Order> visibleOrders = orderPage.getContent().stream()
+                    .filter(order -> !"HIDDEN".equals(order.getBuyerVisibility()))
+                    .collect(Collectors.toList());
+            
             // 转换为DTO
-            List<OrderDTO> orderDTOs = orderPage.getContent().stream()
+            List<OrderDTO> orderDTOs = visibleOrders.stream()
                     .map(this::convertToDTO)
                     .collect(Collectors.toList());
             
             Map<String, Object> result = new HashMap<>();
             result.put("orders", orderDTOs);
-            result.put("total", orderPage.getTotalElements());
-            result.put("pages", orderPage.getTotalPages());
+            result.put("total", (long) visibleOrders.size()); // 使用过滤后的总数
+            result.put("pages", (int) Math.ceil((double) visibleOrders.size() / size));
             result.put("current", page);
             result.put("size", size);
             
@@ -463,6 +471,9 @@ public class OrderServiceImpl implements OrderService {
                 order.setOrderStatus("REFUND_APPROVED");
                 order.setReturnApprovalTime(LocalDateTime.now());
                 
+                // 设置买家可见性为可见，确保买家能够看到处理结果
+                order.setBuyerVisibility("PUBLIC");
+                
                 // 恢复商品库存
                 Optional<Commodity> commodityOpt = commodityRepository.findById(order.getCommodityId());
                 if (commodityOpt.isPresent()) {
@@ -487,6 +498,10 @@ public class OrderServiceImpl implements OrderService {
                 order.setOrderStatus("REFUND_REJECTED");
                 order.setReturnRejectionReason(remark);
                 order.setReturnApprovalTime(LocalDateTime.now());
+                
+                // 设置买家可见性为可见，确保买家能够看到处理结果
+                order.setBuyerVisibility("PUBLIC");
+                
                 log.info("退款/退货申请已拒绝 - orderId: {}", orderId);
             } else {
                 return Result.fail("无效的处理决定");
@@ -524,15 +539,20 @@ public class OrderServiceImpl implements OrderService {
                 orderPage = orderRepository.findBySellerId(currentUser.getUserId(), pageable);
             }
             
+            // 过滤掉卖家不可见的订单（HIDDEN状态的订单）
+            List<Order> visibleOrders = orderPage.getContent().stream()
+                    .filter(order -> !"HIDDEN".equals(order.getSellerVisibility()))
+                    .collect(Collectors.toList());
+            
             // 转换为DTO
-            List<OrderDTO> orderDTOs = orderPage.getContent().stream()
+            List<OrderDTO> orderDTOs = visibleOrders.stream()
                     .map(this::convertToDTO)
                     .collect(Collectors.toList());
             
             Map<String, Object> result = new HashMap<>();
             result.put("orders", orderDTOs);
-            result.put("total", orderPage.getTotalElements());
-            result.put("pages", orderPage.getTotalPages());
+            result.put("total", (long) visibleOrders.size()); // 使用过滤后的总数
+            result.put("pages", (int) Math.ceil((double) visibleOrders.size() / size));
             result.put("current", page);
             result.put("size", size);
             

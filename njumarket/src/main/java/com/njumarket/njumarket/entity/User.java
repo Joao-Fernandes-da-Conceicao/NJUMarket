@@ -57,12 +57,14 @@ public class User {
     private List<Order> sellerOrders;
     
     // 一对多关系：用户发送的消息
-    @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Message> sentMessages;
+    // 注释掉以避免映射错误，实际通过MessageRepository查询
+    // @OneToMany(mappedBy = "sender", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    // private List<Message> sentMessages;
     
     // 一对多关系：用户接收的消息
-    @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Message> receivedMessages;
+    // 注释掉以避免映射错误，实际通过MessageRepository查询
+    // @OneToMany(mappedBy = "receiver", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    // private List<Message> receivedMessages;
     
     // 一对多关系：用户提交的投诉
     @OneToMany(mappedBy = "complainant", cascade = CascadeType.ALL, fetch = FetchType.LAZY)

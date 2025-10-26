@@ -158,7 +158,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { commodityAPI, orderAPI, imageAPI } from '../api'
+import { commodityAPI, orderAPI, imageAPI, contactAPI } from '../api'
 import { ElMessage } from 'element-plus'
 
 export default {
@@ -297,8 +297,35 @@ export default {
     }
     
     // 联系卖家
-    const handleContact = () => {
-      ElMessage.info('联系卖家功能开发中...')
+    const handleContact = async () => {
+      if (!isLoggedIn.value) {
+        ElMessage.warning('请先登录')
+        router.push('/login')
+        return
+      }
+      
+      if (commodity.value.sellerId === user.value?.userId) {
+        ElMessage.info('这是你自己的商品')
+        return
+      }
+      
+      try {
+        const response = await contactAPI.createConversation(
+          commodity.value.sellerId,
+          commodity.value.commodityId,
+          null
+        )
+        
+        if (response.success) {
+          router.push({
+            path: '/messages',
+            query: { conversationId: response.data.conversationId }
+          })
+        }
+      } catch (error) {
+        console.error('创建对话失败:', error)
+        ElMessage.error('创建对话失败')
+      }
     }
     
     // 查看卖家资料
@@ -429,7 +456,7 @@ export default {
 
 .commodity-title {
   font-size: 28px;
-  font-weight: bold;
+  font-weight: normal;
   margin-bottom: 20px;
   color: #333;
 }
@@ -440,7 +467,7 @@ export default {
 
 .price {
   font-size: 32px;
-  font-weight: bold;
+  font-weight: normal;
   margin-right: 15px;
 }
 
@@ -460,7 +487,7 @@ export default {
 }
 
 .label {
-  font-weight: 500;
+  font-weight: normal;
   color: #666;
   width: 80px;
 }
@@ -475,7 +502,7 @@ export default {
 
 .description-section h3 {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 15px;
   color: #333;
 }
@@ -494,7 +521,7 @@ export default {
   flex: 1;
   height: 50px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
 }
 
 .contact-btn {
@@ -526,7 +553,7 @@ export default {
 .seller-details h3 {
   margin: 0 0 10px 0;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: normal;
 }
 
 .seller-stats {
@@ -544,7 +571,7 @@ export default {
 
 .stat-value {
   color: var(--primary-color);
-  font-weight: 600;
+  font-weight: normal;
 }
 
 .seller-actions {
@@ -554,7 +581,7 @@ export default {
 
 .related-section h2 {
   font-size: 24px;
-  font-weight: bold;
+  font-weight: normal;
   margin-bottom: 20px;
   color: #333;
 }
@@ -596,7 +623,7 @@ export default {
 
 .related-info h4 {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 8px;
   color: #333;
   display: -webkit-box;
@@ -607,7 +634,7 @@ export default {
 
 .related-price {
   font-size: 16px;
-  font-weight: bold;
+  font-weight: normal;
 }
 
 .buy-dialog-content {
@@ -633,12 +660,12 @@ export default {
 .buy-info h3 {
   margin: 0 0 10px 0;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
 }
 
 .buy-info .price {
   font-size: 18px;
-  font-weight: bold;
+  font-weight: normal;
   color: var(--primary-color);
 }
 
@@ -656,7 +683,7 @@ export default {
 
 .summary-item.total {
   font-size: 18px;
-  font-weight: bold;
+  font-weight: normal;
   padding-top: 10px;
   border-top: 1px solid #e0e0e0;
 }

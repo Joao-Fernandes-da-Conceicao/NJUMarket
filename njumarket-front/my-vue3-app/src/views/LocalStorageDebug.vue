@@ -131,17 +131,17 @@ onMounted(() => {
 
 .status-valid {
   color: #28a745;
-  font-weight: bold;
+  font-weight: normal;
 }
 
 .status-invalid {
   color: #dc3545;
-  font-weight: bold;
+  font-weight: normal;
 }
 
 .status-missing {
   color: #6c757d;
-  font-weight: bold;
+  font-weight: normal;
 }
 
 .button-group {

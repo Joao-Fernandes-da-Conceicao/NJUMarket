@@ -44,15 +44,11 @@
 
           <div v-for="order in orders" :key="order.orderId" class="order-card">
             <div class="order-header">
-              <div class="order-info">
-                <span class="order-id">订单号：{{ order.orderId }}</span>
-                <span class="order-time">{{ formatTime(order.createTime) }}</span>
-              </div>
-              <div class="order-status">
-                <el-tag :type="getStatusType(order.orderStatus)">
-                  {{ getStatusText(order.orderStatus) }}
-                </el-tag>
-              </div>
+              <span class="order-id-pill">订单号：{{ order.orderId }}</span>
+              <span class="order-time">{{ formatTime(order.createTime) }}</span>
+              <span class="status-pill" :class="'status-' + order.orderStatus">
+                {{ getStatusText(order.orderStatus) }}
+              </span>
             </div>
 
             <div class="order-content">
@@ -144,19 +140,13 @@
                   <el-button @click="viewOrderDetail(order.orderId)">
                     查看详情
                   </el-button>
-                  
-                  <el-dropdown @command="(command) => handleVisibilityChange(order.orderId, command)">
-                    <el-button>
-                      可见性<el-icon><ArrowDown /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="PUBLIC">完全可见</el-dropdown-item>
-                        <el-dropdown-item command="PRIVATE">仅卖家可见</el-dropdown-item>
-                        <el-dropdown-item command="HIDDEN">隐藏</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                  <el-button
+                    v-if="canDeleteOrder(order)"
+                    type="danger"
+                    @click="handleDelete(order.orderId)"
+                  >
+                    删除
+                  </el-button>
                 </div>
               </div>
             </div>
@@ -375,6 +365,57 @@ export default {
       }
     }
     
+    // 删除订单（软删除，通过设置可见性为HIDDEN）
+    const handleDelete = async (orderId) => {
+      try {
+        // 找到要删除的订单
+        const order = orders.value.find(o => o.orderId === orderId)
+        if (!order) {
+          ElMessage.error('订单不存在')
+          return
+        }
+        
+        // 检查订单是否有重要事件（如退款申请中）
+        const hasImportantEvents = ['REFUND_REQUESTED', 'REFUND_APPROVED', 'REFUND_REJECTED'].includes(order.orderStatus)
+        
+        let confirmMessage = '确定要删除这个订单吗？删除后可以在历史记录中恢复'
+        
+        if (hasImportantEvents) {
+          confirmMessage = '该订单存在退款等重要事件，删除后当卖家处理退款时，订单会重新可见。确定要继续吗？'
+        }
+        
+        const confirmed = confirm(confirmMessage)
+        if (!confirmed) {
+          return
+        }
+        
+        // 软删除：只设置卖家可见性为HIDDEN
+        // 如果买家也删除了，则订单完全隐藏
+        // 如果买家未删除，退款时，订单会重新可见
+        const response = await orderAPI.updateSellerVisibility(orderId, 'HIDDEN')
+        if (response.success) {
+          ElMessage.success('订单已删除')
+          fetchOrders()
+        } else {
+          // 如果后端拒绝修改可见性，说明订单状态不允许删除
+          if (response.errorMsg && response.errorMsg.includes('不允许')) {
+            ElMessage.warning('该订单状态不允许删除（可能存在退款等重要事件）')
+          } else {
+            ElMessage.error(response.errorMsg || '删除失败')
+          }
+        }
+      } catch (error) {
+        ElMessage.error('删除失败')
+      }
+    }
+    
+    // 检查是否可以删除订单
+    const canDeleteOrder = (order) => {
+      // 允许删除的状态：已取消、已完成、退款完成
+      const deletableStatuses = ['CANCELLED', 'COMPLETED', 'REFUND_APPROVED']
+      return deletableStatuses.includes(order.orderStatus)
+    }
+    
     // 获取状态类型
     const getStatusType = (status) => {
       const statusMap = {
@@ -504,6 +545,8 @@ export default {
       handleApproveRefund,
       handleRejectRefund,
       handleVisibilityChange,
+      handleDelete,
+      canDeleteOrder,
       viewOrderDetail,
       getStatusType,
       getStatusText,
@@ -527,13 +570,7 @@ export default {
 }
 
 .orders-content {
-  padding: 30px 0;
-}
-
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
+  padding: 40px 0; /* 增加间距以匹配主页设计 */
 }
 
 .page-header {
@@ -545,12 +582,75 @@ export default {
 
 .page-header h1 {
   margin: 0;
-  color: #333;
+  color: var(--primary-color); /* 主题色标题 */
   font-size: 28px;
+  font-weight: normal;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.header-actions .el-button {
+  border-radius: 20px; /* 药丸形按钮 */
+  font-weight: normal;
 }
 
 .order-tabs {
-  margin-bottom: 30px;
+  background: transparent; /* 透明背景 */
+  border-radius: 16px;
+  padding: 0;
+  margin-bottom: 24px;
+  border: none;
+  box-shadow: none;
+}
+
+.order-tabs :deep(.el-tabs__header) {
+  background: white;
+  border-radius: 28.3px; /* 与买家订单一致的药丸形头部 */
+  padding: 8px;
+  border: 1px solid var(--primary-color);
+  margin-bottom: 0;
+}
+
+.order-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none; /* 隐藏底部边框线 */
+}
+
+.order-tabs :deep(.el-tabs__item) {
+  border-radius: 20px; /* 药丸形标签页项 */
+  font-weight: normal;
+  color: var(--primary-color);
+  border: none;
+  padding: 8px 20px !important; /* 使用!important确保padding生效 */
+  margin: 0 5px; /* 添加左右5px的间距 */
+  transition: all 0.3s ease;
+}
+
+.order-tabs :deep(.el-tabs__item:first-child) {
+  padding: 8px 20px !important; /* 确保第一个标签的padding */
+  margin-left: 0; /* 第一个标签左边无间距 */
+  margin-right: 5px; /* 右边保持5px间距 */
+}
+
+.order-tabs :deep(.el-tabs__item:last-child) {
+  padding: 8px 20px !important; /* 确保最后一个标签的padding */
+  margin-left: 5px; /* 左边保持5px间距 */
+  margin-right: 0; /* 最后一个标签右边无间距 */
+}
+
+.order-tabs :deep(.el-tabs__item:hover) {
+  background-color: rgba(106, 1, 94, 0.1);
+}
+
+.order-tabs :deep(.el-tabs__item.is-active) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.order-tabs :deep(.el-tabs__active-bar) {
+  display: none; /* 隐藏默认的活动指示条 */
 }
 
 .orders-list {
@@ -563,39 +663,93 @@ export default {
 }
 
 .order-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: transparent; /* 透明外层卡片 */
+  padding: 0; /* 移除padding */
+  margin-bottom: 24px;
+  border: none; /* 移除边框 */
+  box-shadow: none; /* 移除阴影 */
+  overflow: visible;
+  transition: all 0.3s ease;
+}
+
+.order-card:hover {
+  transform: translateY(-2px);
 }
 
 .order-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #eee;
+  padding: 12px 20px;
+  background: transparent; /* 透明背景 */
 }
 
-.order-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+.order-id-pill {
+  background-color: transparent; /* 透明背景 */
+  color: var(--primary-color); /* 主题色文字 */
+  border: 1px solid var(--primary-color); /* 主题色边框 */
+  padding: 6px 16px;
+  border-radius: 20px; /* 药丸形 */
+  font-size: 14px;
+  font-weight: normal;
+  transition: all 0.3s ease;
 }
 
-.order-id {
-  font-weight: 600;
-  color: #333;
+.order-id-pill:hover {
+  background-color: rgba(106, 1, 94, 0.05); /* 悬停时轻微填充 */
 }
 
 .order-time {
-  color: #666;
+  color: var(--primary-color);
   font-size: 14px;
+  font-weight: normal;
+}
+
+.status-pill {
+  background-color: #f0f0f0;
+  color: #666;
+  padding: 6px 16px;
+  border-radius: 20px; /* 药丸形状态标签 */
+  font-size: 14px;
+  font-weight: normal;
+}
+
+/* 不同状态的颜色 */
+.status-pill.status-CREATED {
+  background-color: #fef0f0;
+  color: #f56c6c;
+}
+
+.status-pill.status-PAID {
+  background-color: #f0f9ff;
+  color: #409eff;
+}
+
+.status-pill.status-SHIPPED {
+  background-color: #f0f9ff;
+  color: #409eff;
+}
+
+.status-pill.status-COMPLETED {
+  background-color: #f0f9ff;
+  color: #67c23a;
+}
+
+.status-pill.status-CANCELLED {
+  background-color: #f5f5f5;
+  color: #909399;
+}
+
+.status-pill.status-REFUND_REQUESTED,
+.status-pill.status-REFUND_APPROVED,
+.status-pill.status-REFUND_REJECTED {
+  background-color: #fdf6ec;
+  color: #e6a23c;
 }
 
 .order-content {
+  padding: 20px;
+  background: transparent; /* 透明背景 */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -609,11 +763,12 @@ export default {
 }
 
 .commodity-image {
-  width: 80px;
-  height: 80px;
-  border-radius: 6px;
+  width: 100px;
+  height: 100px;
+  border-radius: 12px; /* 圆角图片 */
   overflow: hidden;
   background-color: #f5f5f5;
+  flex-shrink: 0;
 }
 
 .commodity-image img {
@@ -639,14 +794,14 @@ export default {
 .commodity-title {
   margin: 0 0 8px 0;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
   color: #333;
 }
 
 .commodity-price {
   margin: 0 0 5px 0;
   color: #e74c3c;
-  font-weight: 600;
+  font-weight: normal;
   font-size: 18px;
 }
 
@@ -669,7 +824,7 @@ export default {
 .seller-name {
   font-size: 14px;
   color: #333;
-  font-weight: 500;
+  font-weight: normal;
   margin: 2px 0;
 }
 
@@ -700,7 +855,7 @@ export default {
 .total-price {
   margin: 0;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: normal;
   color: #e74c3c;
 }
 
@@ -708,6 +863,14 @@ export default {
   display: flex;
   gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.action-buttons .el-button {
+  border-radius: 20px; /* 药丸形按钮 */
+  font-weight: normal;
+  margin-left: 0 !important; /* 删除左边距 */
 }
 
 .pagination-wrapper {

@@ -2,7 +2,9 @@ package com.njumarket.njumarket.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.UserDTO;
+import com.njumarket.njumarket.dto.PublicUserDTO;
 import com.njumarket.njumarket.dto.UserProfileDTO;
+import com.njumarket.njumarket.dto.PublicUserProfileDTO;
 import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
 import com.njumarket.njumarket.dto.ImageUploadDTO;
 import com.njumarket.njumarket.entity.User;
@@ -43,8 +45,34 @@ public class UserProfileServiceImpl implements UserProfileService {
             return Result.fail("用户档案不存在");
         }
 
-        UserProfileDTO profileDTO = convertToDTO(profileOpt.get());
-        return Result.ok(profileDTO);
+        // 检查是否是查看自己的资料
+        User currentUser = UserHolder.getUser();
+        boolean isSelf = currentUser != null && currentUser.getUserId().equals(userId);
+        
+        if (isSelf) {
+            // 查看自己的资料，返回完整信息
+            UserProfileDTO profileDTO = convertToDTO(profileOpt.get());
+            return Result.ok(profileDTO);
+        } else {
+            // 查看他人资料，返回公开信息（不含敏感数据）
+            PublicUserProfileDTO publicDTO = convertToPublicDTO(profileOpt.get());
+            return Result.ok(publicDTO);
+        }
+    }
+    
+    @Override
+    public Result getPublicUserProfile(String userId) {
+        if (userId == null || userId.trim().isEmpty()) {
+            return Result.fail("用户ID不能为空");
+        }
+
+        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
+        if (profileOpt.isEmpty()) {
+            return Result.fail("用户档案不存在");
+        }
+
+        PublicUserProfileDTO publicDTO = convertToPublicDTO(profileOpt.get());
+        return Result.ok(publicDTO);
     }
 
     @Override
@@ -467,6 +495,42 @@ public class UserProfileServiceImpl implements UserProfileService {
             userDTO.setAccountStatus(user.getAccountStatus());
             userDTO.setRegisterTime(user.getRegisterTime());
             dto.setUserInfo(userDTO);
+        }
+        
+        return dto;
+    }
+    
+    /**
+     * 转换为公开DTO（不包含敏感信息）
+     */
+    private PublicUserProfileDTO convertToPublicDTO(UserProfile profile) {
+        PublicUserProfileDTO dto = new PublicUserProfileDTO();
+        dto.setProfileId(profile.getProfileId());
+        dto.setUserId(profile.getUserId());
+        dto.setNickname(profile.getNickname());
+        dto.setAvatar(profile.getAvatar());
+        dto.setCreditScore(profile.getCreditScore());
+        dto.setBuyerRating(profile.getBuyerRating());
+        dto.setSellerRating(profile.getSellerRating());
+        dto.setTotalSales(profile.getTotalSales());
+        dto.setTotalPurchases(profile.getTotalPurchases());
+        dto.setVipLevel(profile.getVipLevel());
+        
+        // 获取用户基本信息（不含敏感数据）
+        Optional<User> userOpt = userRepository.findById(profile.getUserId());
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            PublicUserDTO publicUserDTO = new PublicUserDTO();
+            publicUserDTO.setUserId(user.getUserId());
+            publicUserDTO.setAccountStatus(user.getAccountStatus());
+            publicUserDTO.setRegisterTime(user.getRegisterTime());
+            publicUserDTO.setNickname(profile.getNickname());
+            publicUserDTO.setAvatar(profile.getAvatar());
+            publicUserDTO.setCreditScore(profile.getCreditScore());
+            publicUserDTO.setBuyerRating(profile.getBuyerRating());
+            publicUserDTO.setSellerRating(profile.getSellerRating());
+            publicUserDTO.setVipLevel(profile.getVipLevel());
+            dto.setUserInfo(publicUserDTO);
         }
         
         return dto;

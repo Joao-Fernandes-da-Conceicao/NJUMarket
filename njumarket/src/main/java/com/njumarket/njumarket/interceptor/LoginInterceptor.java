@@ -67,7 +67,10 @@ public class LoginInterceptor implements HandlerInterceptor {
         // 6. 保存用户信息到ThreadLocal
         UserHolder.saveUser(user);
         
-        // 7. 放行
+        // 7. 设置userId到request attribute（供Controller使用）
+        request.setAttribute("userId", userId);
+        
+        // 8. 放行
         return true;
     }
 

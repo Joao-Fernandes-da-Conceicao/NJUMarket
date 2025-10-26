@@ -250,7 +250,9 @@ export const useUserStore = defineStore('user', {
     
     // 检查并修复用户数据
     async checkAndFixUserData() {
+      // 只有在已登录状态下才检查用户数据
       if (!this.isLoggedIn || !this.user) {
+        console.log('用户未登录，跳过用户数据检查')
         return
       }
       
@@ -263,6 +265,8 @@ export const useUserStore = defineStore('user', {
           await this.refreshUserInfo()
         } catch (error) {
           console.error('刷新用户数据失败:', error)
+          // 如果刷新失败，可能是token过期，清除用户数据
+          this.clearUserData()
         }
       }
     },

@@ -1,7 +1,29 @@
 <template>
   <div class="orders-page">
-    <!-- 订单内容 -->
-    <div class="orders-content">
+    <!-- 未登录状态提示 -->
+    <div v-if="!isLoggedIn" class="login-prompt">
+      <div class="container">
+        <div class="prompt-content">
+          <el-icon size="64" class="prompt-icon"><User /></el-icon>
+          <h2>请先登录</h2>
+          <p>您需要登录后才能查看订单信息</p>
+          <div class="prompt-actions">
+            <el-button type="primary" @click="$router.push('/login')">
+              立即登录
+            </el-button>
+            <el-button @click="$router.push('/register')">
+              注册账号
+            </el-button>
+            <el-button @click="$router.push('/')">
+              返回首页
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 已登录状态 - 订单内容 -->
+    <div v-else class="orders-content">
       <div class="container">
         <div class="page-header">
           <h1>买家订单</h1>
@@ -45,15 +67,11 @@
 
           <div v-for="order in orders" :key="order.orderId" class="order-card">
             <div class="order-header">
-              <div class="order-info">
-                <span class="order-id">订单号：{{ order.orderId }}</span>
-                <span class="order-time">{{ formatTime(order.createTime) }}</span>
-              </div>
-              <div class="order-status">
-                <el-tag :type="getStatusType(order.orderStatus)">
-                  {{ getStatusText(order.orderStatus) }}
-                </el-tag>
-              </div>
+              <span class="order-id-pill">订单号：{{ order.orderId }}</span>
+              <span class="order-time">{{ formatTime(order.createTime) }}</span>
+              <span class="status-pill" :class="'status-' + order.orderStatus">
+                {{ getStatusText(order.orderStatus) }}
+              </span>
             </div>
 
             <div class="order-content">
@@ -157,21 +175,15 @@
                   >
                     再下一单
                   </el-button>
-                  <el-dropdown @command="(command) => handleVisibilityChange(order.orderId, command)">
-                    <el-button>
-                      可见性<el-icon><ArrowDown /></el-icon>
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="VISIBLE">完全可见</el-dropdown-item>
-                        <el-dropdown-item command="SELLER_ONLY">仅卖家可见</el-dropdown-item>
-                        <el-dropdown-item command="BUYER_ONLY">仅买家可见</el-dropdown-item>
-                        <el-dropdown-item command="HIDDEN">隐藏</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
                   <el-button @click="viewOrderDetail(order.orderId)">
                     查看详情
+                  </el-button>
+                  <el-button
+                    v-if="canDeleteOrder(order)"
+                    type="danger"
+                    @click="handleDelete(order.orderId)"
+                  >
+                    删除
                   </el-button>
                 </div>
               </div>
@@ -181,15 +193,71 @@
 
         <!-- 分页 -->
         <div class="pagination-wrapper" v-if="total > 0">
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :page-sizes="[10, 20, 50]"
-            :total="total"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handleSizeChange"
-            @current-change="handleCurrentChange"
-          />
+          <div class="pagination-content">
+            <!-- 总数显示 -->
+            <span class="pagination-total">共 {{ total }} 条</span>
+            
+            <!-- 每页显示数量选择器 -->
+            <div class="custom-page-size-select" @click.stop="togglePageSizeSelect">
+              <span class="select-label">每页</span>
+              <span class="select-value">{{ pageSize }} 条</span>
+              <el-icon class="select-icon"><ArrowDown /></el-icon>
+              
+              <!-- 弹出式选择器 -->
+              <div v-if="showPageSizeSelect" class="select-popup">
+                <div class="popup-option" @click="selectPageSize(10)">10 条/页</div>
+                <div class="popup-option" @click="selectPageSize(20)">20 条/页</div>
+                <div class="popup-option" @click="selectPageSize(50)">50 条/页</div>
+              </div>
+            </div>
+            
+            <!-- 翻页按钮 -->
+            <div class="pagination-buttons">
+              <button 
+                class="page-btn" 
+                :disabled="currentPage <= 1"
+                @click="handleCurrentChange(currentPage - 1)"
+              >
+                上一页
+              </button>
+              
+              <div class="page-numbers">
+                <button 
+                  v-for="page in getPageNumbers()" 
+                  :key="page"
+                  class="page-number"
+                  :class="{ active: page === currentPage }"
+                  @click="page !== '...' && handleCurrentChange(page)"
+                  :disabled="page === '...'"
+                >
+                  {{ page }}
+                </button>
+              </div>
+              
+              <button 
+                class="page-btn" 
+                :disabled="currentPage >= getTotalPages()"
+                @click="handleCurrentChange(currentPage + 1)"
+              >
+                下一页
+              </button>
+            </div>
+            
+            <!-- 跳转输入框 -->
+            <div class="page-jumper" @click.stop>
+              <span class="jumper-label">跳至</span>
+              <input 
+                v-model="jumpPage" 
+                type="number" 
+                class="jumper-input"
+                :min="1" 
+                :max="getTotalPages()"
+                @keyup.enter="handleJump"
+                @click.stop
+              />
+              <span class="jumper-label">页</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -202,6 +270,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { orderAPI, imageAPI } from '../api'
 import { ElMessage } from 'element-plus'
+//import { ArrowDown } from '@element-plus/icons-vue'
 import SafeTabs from '../components/SafeTabs.vue'
 
 export default {
@@ -221,7 +290,12 @@ export default {
     const activeTab = ref('all')
     const isMounted = ref(false)
     
+    // 翻页器相关
+    const showPageSizeSelect = ref(false)
+    const jumpPage = ref('')
+    
     const user = ref(userStore.user)
+    const isLoggedIn = ref(userStore.isLoggedIn)
     
     // 获取订单列表
     const fetchOrders = async () => {
@@ -285,6 +359,84 @@ export default {
     const handleCurrentChange = (val) => {
       currentPage.value = val
       fetchOrders()
+    }
+    
+    // 翻页器相关方法
+    const togglePageSizeSelect = () => {
+      showPageSizeSelect.value = !showPageSizeSelect.value
+    }
+    
+    const selectPageSize = (size) => {
+      pageSize.value = size
+      currentPage.value = 1
+      showPageSizeSelect.value = false
+      fetchOrders()
+    }
+    
+    const getTotalPages = () => {
+      return Math.ceil(total.value / pageSize.value)
+    }
+    
+    const getPageNumbers = () => {
+      const totalPages = getTotalPages()
+      const current = currentPage.value
+      const pages = []
+      
+      if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i)
+        }
+      } else {
+        if (current <= 4) {
+          for (let i = 1; i <= 5; i++) {
+            pages.push(i)
+          }
+          pages.push('...')
+          pages.push(totalPages)
+        } else if (current >= totalPages - 3) {
+          pages.push(1)
+          pages.push('...')
+          for (let i = totalPages - 4; i <= totalPages; i++) {
+            pages.push(i)
+          }
+        } else {
+          pages.push(1)
+          pages.push('...')
+          for (let i = current - 1; i <= current + 1; i++) {
+            pages.push(i)
+          }
+          pages.push('...')
+          pages.push(totalPages)
+        }
+      }
+      
+      return pages
+    }
+    
+    const handleJump = () => {
+      const page = parseInt(jumpPage.value)
+      const totalPages = getTotalPages()
+      
+      if (!jumpPage.value || isNaN(page)) {
+        ElMessage.warning('请输入有效的页码')
+        jumpPage.value = ''
+        return
+      }
+      
+      if (page < 1) {
+        ElMessage.warning('页码不能小于1')
+        jumpPage.value = ''
+        return
+      }
+      
+      if (page > totalPages) {
+        ElMessage.warning(`页码不能大于总页数 ${totalPages}`)
+        jumpPage.value = ''
+        return
+      }
+      
+      handleCurrentChange(page)
+      jumpPage.value = ''
     }
     
     // 支付订单
@@ -458,6 +610,50 @@ export default {
       }
     }
     
+    // 删除订单（软删除，通过设置可见性为HIDDEN）
+    const handleDelete = async (orderId) => {
+      try {
+        // 找到要删除的订单
+        const order = orders.value.find(o => o.orderId === orderId)
+        if (!order) {
+          ElMessage.error('订单不存在')
+          return
+        }
+        
+        // 检查订单是否有重要事件（如退款申请中）
+        const hasImportantEvents = ['REFUND_REQUESTED', 'REFUND_APPROVED', 'REFUND_REJECTED'].includes(order.orderStatus)
+        
+        let confirmMessage = '确定要删除这个订单吗？删除后可以在历史记录中恢复'
+        
+        if (hasImportantEvents) {
+          confirmMessage = '该订单存在退款等重要事件，删除后当买家操作退款时，订单会重新可见。确定要继续吗？'
+        }
+        
+        const confirmed = confirm(confirmMessage)
+        if (!confirmed) {
+          return
+        }
+        
+        // 软删除：只设置买家可见性为HIDDEN
+        // 如果卖家也删除了，则订单完全隐藏
+        // 如果卖家未删除，退款时，订单会重新可见
+        const response = await orderAPI.updateBuyerVisibility(orderId, 'HIDDEN')
+        if (response.success) {
+          ElMessage.success('订单已删除')
+          fetchOrders()
+        } else {
+          // 如果后端拒绝修改可见性，说明订单状态不允许删除
+          if (response.errorMsg && response.errorMsg.includes('不允许')) {
+            ElMessage.warning('该订单状态不允许删除（可能存在退款等重要事件）')
+          } else {
+            ElMessage.error(response.errorMsg || '删除失败')
+          }
+        }
+      } catch (error) {
+        ElMessage.error('删除失败')
+      }
+    }
+    
     // 获取状态类型
     const getStatusType = (status) => {
       const statusMap = {
@@ -591,6 +787,13 @@ export default {
       return true
     }
     
+    // 检查是否可以删除订单
+    const canDeleteOrder = (order) => {
+      // 允许删除的状态：已取消、已完成、退款完成
+      const deletableStatuses = ['CANCELLED', 'COMPLETED', 'REFUND_APPROVED']
+      return deletableStatuses.includes(order.orderStatus)
+    }
+    
     // 登出
     const handleLogout = async () => {
       try {
@@ -618,18 +821,28 @@ export default {
       currentPage,
       pageSize,
       activeTab,
+      showPageSizeSelect,
+      jumpPage,
       user,
+      isLoggedIn,
       handleTabChange,
       handleSizeChange,
       handleCurrentChange,
+      togglePageSizeSelect,
+      selectPageSize,
+      getTotalPages,
+      getPageNumbers,
+      handleJump,
       handlePay,
       handleConfirm,
       handleCancel,
       handleRefund,
       handleQueryCommodity,
       handleCreateNewOrder,
+      canDeleteOrder,
       viewOrderDetail,
       handleVisibilityChange,
+      handleDelete,
       getStatusType,
       getStatusText,
       getEmptyDescription,
@@ -654,8 +867,72 @@ export default {
   background-color: #f5f5f5;
 }
 
+/* 登录提示样式 */
+.login-prompt {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.prompt-content {
+  background: white;
+  border-radius: 16px; /* 使用主页的圆角设计 */
+  padding: 60px 40px;
+  text-align: center;
+  border: none; /* 移除边框 */
+  box-shadow: none; /* 移除阴影，使用无框设计 */
+  max-width: 500px;
+  width: 100%;
+}
+
+.prompt-icon {
+  color: var(--primary-color);
+  margin-bottom: 20px;
+}
+
+.prompt-content h2 {
+  font-size: 28px;
+  font-weight: normal;
+  color: var(--primary-color);
+  margin-bottom: 16px;
+}
+
+.prompt-content p {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+.prompt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.prompt-actions .el-button {
+  border-radius: 24px; /* 药丸形状设计 */
+  height: 48px;
+  font-size: 16px;
+  font-weight: normal;
+}
+
+@media (min-width: 768px) {
+  .prompt-actions {
+    flex-direction: row;
+    justify-content: center;
+    gap: 16px;
+  }
+  
+  .prompt-actions .el-button {
+    min-width: 120px;
+  }
+}
+
 .orders-content {
-  padding: 30px 0;
+  padding: 40px 0; /* 增加间距以匹配主页设计 */
 }
 
 .page-header {
@@ -667,62 +944,165 @@ export default {
 
 .page-header h1 {
   font-size: 28px;
-  font-weight: bold;
-  color: #333;
+  font-weight: normal;
+  color: var(--primary-color); /* 主题色标题 */
   margin: 0;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.header-actions .el-button {
+  border-radius: 20px; /* 药丸形按钮 */
+  font-weight: normal;
+}
+
 .order-tabs {
+  background: transparent; /* 透明背景 */
+  border-radius: 16px;
+  padding: 0;
+  margin-bottom: 24px;
+  border: none;
+  box-shadow: none;
+}
+
+.order-tabs :deep(.el-tabs__header) {
   background: white;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 28.3px; /* 药丸形标签页头部 */
+  padding: 8px;
+  border: 1px solid var(--primary-color);
+  margin-bottom: 0;
 }
 
-.orders-list {
-  margin-bottom: 30px;
+.order-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none; /* 隐藏底部边框线 */
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 0;
+.order-tabs :deep(.el-tabs__item) {
+  border-radius: 20px; /* 药丸形标签页项 */
+  font-weight: normal;
+  color: var(--primary-color);
+  border: none;
+  padding: 8px 20px !important; /* 使用!important确保padding生效 */
+  margin: 0 5px; /* 添加左右5px的间距 */
+  transition: all 0.3s ease;
+}
+
+.order-tabs :deep(.el-tabs__item:first-child) {
+  padding: 8px 20px !important; /* 确保第一个标签的padding */
+  margin-left: 0; /* 第一个标签左边无间距 */
+  margin-right: 5px; /* 右边保持5px间距 */
+}
+
+.order-tabs :deep(.el-tabs__item:last-child) {
+  padding: 8px 20px !important; /* 确保最后一个标签的padding */
+  margin-left: 5px; /* 左边保持5px间距 */
+  margin-right: 0; /* 最后一个标签右边无间距 */
+}
+
+.order-tabs :deep(.el-tabs__item:hover) {
+  background-color: rgba(106, 1, 94, 0.1);
+}
+
+.order-tabs :deep(.el-tabs__item.is-active) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.order-tabs :deep(.el-tabs__active-bar) {
+  display: none; /* 隐藏默认的活动指示条 */
 }
 
 .order-card {
-  background: white;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  background: transparent; /* 透明外层卡片 */
+  margin-bottom: 24px;
+  border: none; /* 移除边框 */
+  box-shadow: none; /* 移除阴影 */
+  overflow: visible;
+  transition: all 0.3s ease;
+  padding: 0; /* 移除padding */
+}
+
+.order-card:hover {
+  transform: translateY(-2px);
 }
 
 .order-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 15px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 20px;
+  background: transparent; /* 透明背景 */
 }
 
-.order-info {
-  display: flex;
-  gap: 20px;
+.order-id-pill {
+  background-color: transparent; /* 透明背景 */
+  color: var(--primary-color); /* 主题色文字 */
+  border: 1px solid var(--primary-color); /* 主题色边框 */
+  padding: 6px 16px;
+  border-radius: 20px; /* 药丸形 */
+  font-size: 14px;
+  font-weight: normal;
+  transition: all 0.3s ease;
 }
 
-.order-id {
-  font-weight: 600;
-  color: #333;
+.order-id-pill:hover {
+  background-color: rgba(106, 1, 94, 0.05); /* 悬停时轻微填充 */
 }
 
 .order-time {
-  color: #999;
+  color: var(--primary-color);
   font-size: 14px;
+  font-weight: normal;
+}
+
+.status-pill {
+  background-color: #f0f0f0;
+  color: #666;
+  padding: 6px 16px;
+  border-radius: 20px; /* 药丸形状态标签 */
+  font-size: 14px;
+  font-weight: normal;
+}
+
+/* 不同状态的颜色 */
+.status-pill.status-CREATED {
+  background-color: #fef0f0;
+  color: #f56c6c;
+}
+
+.status-pill.status-PAID {
+  background-color: #f0f9ff;
+  color: #409eff;
+}
+
+.status-pill.status-SHIPPED {
+  background-color: #f0f9ff;
+  color: #409eff;
+}
+
+.status-pill.status-COMPLETED {
+  background-color: #f0f9ff;
+  color: #67c23a;
+}
+
+.status-pill.status-CANCELLED {
+  background-color: #f5f5f5;
+  color: #909399;
+}
+
+.status-pill.status-REFUND_REQUESTED,
+.status-pill.status-REFUND_APPROVED,
+.status-pill.status-REFUND_REJECTED {
+  background-color: #fdf6ec;
+  color: #e6a23c;
 }
 
 .order-content {
   padding: 20px;
+  background: transparent; /* 透明背景 */
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -735,14 +1115,15 @@ export default {
 }
 
 .commodity-image {
-  width: 80px;
-  height: 80px;
-  border-radius: 6px;
+  width: 100px;
+  height: 100px;
+  border-radius: 12px; /* 圆角图片 */
   overflow: hidden;
   background: #f5f5f5;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .commodity-image img {
@@ -768,14 +1149,14 @@ export default {
 
 .commodity-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 8px;
   color: #333;
 }
 
 .commodity-price {
   font-size: 18px;
-  font-weight: bold;
+  font-weight: normal;
   color: var(--primary-color);
   margin-bottom: 5px;
 }
@@ -798,7 +1179,7 @@ export default {
 .seller-name {
   font-size: 14px;
   color: #333;
-  font-weight: 500;
+  font-weight: normal;
   margin: 2px 0;
 }
 
@@ -828,7 +1209,7 @@ export default {
 
 .total-price {
   font-size: 18px;
-  font-weight: bold;
+  font-weight: normal;
   color: var(--primary-color);
   margin: 0;
 }
@@ -836,11 +1217,212 @@ export default {
 .action-buttons {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.action-buttons .el-button {
+  border-radius: 20px; /* 药丸形按钮 */
+  font-weight: normal;
+  margin-left: 0 !important; /* 删除左边距 */
 }
 
 .pagination-wrapper {
   display: flex;
   justify-content: center;
+  margin-top: 40px;
+}
+
+.pagination-content {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.pagination-total {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: normal;
+}
+
+/* 每页显示数量选择器 */
+.custom-page-size-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid var(--primary-color);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.custom-page-size-select:hover {
+  box-shadow: 0 4px 12px rgba(106, 1, 94, 0.15);
+}
+
+.custom-page-size-select .select-label {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: normal;
+  margin-right: 8px;
+}
+
+.custom-page-size-select .select-value {
+  flex: 1;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.custom-page-size-select .select-icon {
+  color: var(--primary-color);
+  font-size: 12px;
+  margin-left: 8px;
+  transition: transform 0.3s ease;
+}
+
+.custom-page-size-select:hover .select-icon {
+  transform: rotate(180deg);
+}
+
+/* 弹出式选择器 */
+.select-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--primary-color);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(106, 1, 94, 0.2);
+  z-index: 1000;
+  margin-top: 4px;
+  padding: 8px;
+}
+
+.popup-option {
+  padding: 8px 12px;
+  margin: 2px 0;
+  border-radius: 20px;
+  color: var(--primary-color);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.popup-option:hover {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+/* 翻页按钮组 */
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-btn {
+  background-color: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: normal;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 80px;
+}
+
+.page-btn:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.page-btn:disabled {
+  background-color: transparent;
+  color: #ccc;
+  border-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* 页码按钮 */
+.page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-number {
+  background-color: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: 20px;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  font-weight: normal;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-number:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.page-number.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.page-number:disabled {
+  border-color: transparent;
+  color: #999;
+  cursor: default;
+}
+
+/* 跳转输入框 */
+.page-jumper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jumper-label {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.jumper-input {
+  background-color: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: 20px;
+  padding: 8px 12px;
+  width: 60px;
+  height: 32px;
+  font-size: 14px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.jumper-input:hover,
+.jumper-input:focus {
+  background-color: var(--primary-color);
+  color: white;
+  outline: none;
 }
 
 @media (max-width: 768px) {

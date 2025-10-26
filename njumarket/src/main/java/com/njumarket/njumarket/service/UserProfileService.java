@@ -13,9 +13,14 @@ import java.util.List;
 public interface UserProfileService {
     
     /**
-     * 获取用户档案
+     * 获取用户档案（根据当前登录用户决定返回完整或公开信息）
      */
     Result getUserProfile(String userId);
+    
+    /**
+     * 获取公开用户档案（仅包含公开信息，不含敏感数据）
+     */
+    Result getPublicUserProfile(String userId);
     
     /**
      * 获取当前用户档案

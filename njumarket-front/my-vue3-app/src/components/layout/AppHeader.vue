@@ -5,7 +5,7 @@
         <!-- Logo -->
         <div class="logo">
           <router-link to="/" class="logo-link">
-            <h2 class="text-primary">南大市场</h2>
+            <h2 class="text-primary">NJUMarket 南大市场</h2>
           </router-link>
         </div>
         
@@ -33,6 +33,16 @@
           >
             我的商品
           </router-link>
+          <router-link 
+            v-if="isLoggedIn" 
+            to="/messages" 
+            class="nav-link" 
+            :class="{ active: $route.path.startsWith('/messages') }"
+          >
+            <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99">
+              消息
+            </el-badge>
+          </router-link>
         </nav>
         
         <!-- 用户操作区 -->
@@ -40,7 +50,7 @@
           <template v-if="isLoggedIn">
             <el-dropdown @command="handleCommand" trigger="click">
               <div class="user-info">
-                <el-avatar :size="32" :src="getAvatarUrl(getUserAvatar)">
+                <el-avatar :size="24" :src="getAvatarUrl(getUserAvatar)">
                   {{ getUserDisplayName.charAt(0) }}
                 </el-avatar>
                 <span class="username">{{ getUserDisplayName }}</span>
@@ -93,11 +103,12 @@
 </template>
 
 <script setup>
-// import { computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../../stores/user'
 import { createSafeUserState } from '../../utils/userUtils'
 import { getAvatarUrl } from '../../utils/imageUtils'
+import { contactAPI } from '../../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -105,6 +116,40 @@ const userStore = useUserStore()
 
 // 使用安全的用户状态
 const { isLoggedIn, getUserDisplayName, getUserAvatar } = createSafeUserState(userStore)
+
+// 未读消息数
+const unreadCount = ref(0)
+
+// 获取未读消息数
+const fetchUnreadCount = async () => {
+  if (!isLoggedIn.value) {
+    unreadCount.value = 0
+    return
+  }
+  
+  try {
+    const response = await contactAPI.getUnreadCount()
+    if (response.success) {
+      unreadCount.value = response.data || 0
+    }
+  } catch (error) {
+    console.error('获取未读数失败:', error)
+  }
+}
+
+// 定时刷新未读数（每30秒）
+let unreadInterval = null
+
+onMounted(() => {
+  fetchUnreadCount()
+  unreadInterval = setInterval(fetchUnreadCount, 30000)
+})
+
+onUnmounted(() => {
+  if (unreadInterval) {
+    clearInterval(unreadInterval)
+  }
+})
 
 // 处理下拉菜单命令
 const handleCommand = async (command) => {
@@ -151,9 +196,8 @@ const handleCommand = async (command) => {
   left: 0;
   right: 0;
   z-index: 1000;
-  background: white;
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(106, 1, 94, 0.2);
 }
 
 .nav-content {
@@ -171,7 +215,8 @@ const handleCommand = async (command) => {
 .logo h2 {
   margin: 0;
   font-size: 24px;
-  font-weight: 600;
+  font-weight: normal;
+  color: white;
 }
 
 .nav-menu {
@@ -182,26 +227,24 @@ const handleCommand = async (command) => {
 
 .nav-link {
   text-decoration: none;
-  color: var(--text-secondary);
-  font-weight: 500;
-  padding: 8px 0;
-  position: relative;
-  transition: color 0.3s ease;
-}
-
-.nav-link:hover,
-.nav-link.active {
-  color: var(--text-primary);
-}
-
-.nav-link.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 2px;
+  color: white;
+  font-weight: normal;
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid white;
   background-color: var(--primary-color);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.nav-link.active {
+  color: var(--primary-color);
+  background-color: white;
+  border: 1px solid white;
 }
 
 .nav-actions {
@@ -213,25 +256,59 @@ const handleCommand = async (command) => {
 .user-info {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid white;
+  background-color: var(--primary-color);
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.3s ease;
+  min-width: fit-content;
+  white-space: nowrap;
 }
 
 .user-info:hover {
-  background-color: #f5f5f5;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .username {
-  font-weight: 500;
-  color: var(--text-primary);
+  font-weight: normal;
+  color: white;
+  font-size: 14px;
 }
 
 .dropdown-icon {
   font-size: 12px;
-  color: var(--text-light);
+  color: white;
+}
+
+/* 登录和注册按钮药丸形状设计 */
+.nav-actions .el-button {
+  border-radius: 20px; /* 药丸形状 */
+  font-weight: normal;
+  transition: all 0.3s ease;
+}
+
+.nav-actions .el-button--primary {
+  background-color: white;
+  color: var(--primary-color);
+  border: 1px solid white;
+}
+
+.nav-actions .el-button--primary:hover {
+  background-color: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.nav-actions .el-button:not(.el-button--primary) {
+  background-color: transparent;
+  color: white;
+  border: 1px solid white;
+}
+
+.nav-actions .el-button:not(.el-button--primary):hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
 }
 
 /* 响应式设计 */

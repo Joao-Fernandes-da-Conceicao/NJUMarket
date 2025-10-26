@@ -252,7 +252,7 @@ export default {
 
 .user-name {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 4px;
 }
 
@@ -303,7 +303,7 @@ export default {
 
 .menu-content h4 {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
   color: #333;
   margin-bottom: 4px;
 }

@@ -7,18 +7,19 @@
       <section class="search-section">
         <div class="container">
           <div class="search-box">
-            <h1 class="search-title">发现好物，分享生活</h1>
+            <h1 class="search-title">Welcome To NJU Market<br>欢迎来到南大集市</h1>
             <div class="search-form">
-              <el-input
-                v-model="searchKeyword"
-                placeholder="搜索商品..."
-                size="large"
-                class="search-input"
-              >
-                <template #append>
-                  <el-button type="primary" @click="handleSearch">搜索</el-button>
-                </template>
-              </el-input>
+              <div class="fake-search-box">
+                <input
+                  v-model="searchKeyword"
+                  placeholder="搜索商品..."
+                  class="transparent-input"
+                  @keyup.enter="handleSearch"
+                />
+                <button class="search-button" @click="handleSearch">
+                  <el-icon><Search /></el-icon>
+                </button>
+              </div>
             </div>
             <div class="quick-links">
               <span class="quick-link" @click="searchByCategory('电子产品')">电子产品</span>
@@ -37,6 +38,7 @@
           <CommodityGrid 
             :commodities="hotCommodities"
             :loading="hotLoading"
+            :show-seller-info="true"
             empty-text="暂无热门商品"
             :show-empty-action="true"
             empty-action-text="浏览所有商品"
@@ -53,6 +55,7 @@
           <CommodityGrid 
             :commodities="latestCommodities"
             :loading="latestLoading"
+            :show-seller-info="true"
             empty-text="暂无最新商品"
             :show-empty-action="true"
             empty-action-text="浏览所有商品"
@@ -70,6 +73,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCommodityStore } from '../stores/commodity'
 import CommodityGrid from '../components/commodity/CommodityGrid.vue'
+import { Search } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const commodityStore = useCommodityStore()
@@ -152,17 +156,17 @@ onMounted(() => {
 }
 
 .search-section {
-  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
-  color: white;
-  padding: 80px 0;
+  background: white;
+  color: var(--text-primary);
+  padding: 100px 0; /* 增加上下内边距以更好利用宽屏空间 */
   text-align: center;
 }
 
 .search-title {
   font-size: 48px;
-  font-weight: 700;
+  font-weight: normal;
   margin-bottom: 24px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: var(--primary-color);
 }
 
 .search-form {
@@ -174,12 +178,59 @@ onMounted(() => {
   width: 100%;
 }
 
-.search-input :deep(.el-input__wrapper) {
-  border-radius: 8px 0 0 8px;
+.fake-search-box {
+  position: relative;
+  width: 100%;
+  height: 50px;
+  background: white;
+  border: 1px solid var(--primary-color);
+  border-radius: 25px;
+  display: flex;
+  align-items: center;
+  padding: 0 25px;
+  box-shadow: 0 2px 8px rgba(106, 1, 94, 0.1);
 }
 
-.search-input :deep(.el-input-group__append) {
-  border-radius: 0 8px 8px 0;
+.transparent-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 16px;
+  color: var(--text-primary);
+  padding: 0;
+  margin: 0;
+  margin-right: 50px;
+}
+
+.transparent-input::placeholder {
+  color: var(--text-light);
+}
+
+.search-button {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 50%;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.search-button:hover {
+  background: var(--primary-light);
+}
+
+.search-button:active {
+  transform: translateY(-50%) scale(0.95);
 }
 
 .quick-links {
@@ -191,21 +242,24 @@ onMounted(() => {
 
 .quick-link {
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.2);
+  background: white;
+  border: 1px solid var(--primary-color);
   border-radius: 20px;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-weight: 500;
+  font-weight: normal;
+  color: var(--primary-color);
 }
 
 .quick-link:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--primary-color);
+  color: white;
   transform: translateY(-2px);
 }
 
 .hot-section,
 .latest-section {
-  padding: 60px 0;
+  padding: 80px 0; /* 增加上下内边距以更好利用宽屏空间 */
   background: white;
 }
 
@@ -215,13 +269,32 @@ onMounted(() => {
 
 .section-title {
   font-size: 32px;
-  font-weight: 600;
+  font-weight: normal;
   text-align: center;
   margin-bottom: 40px;
   color: var(--text-primary);
 }
 
 /* 响应式设计 */
+@media (min-width: 1600px) {
+  .search-section {
+    padding: 120px 0; /* 超宽屏使用更大的间距 */
+  }
+  
+  .search-title {
+    font-size: 56px; /* 超宽屏使用更大的标题 */
+  }
+  
+  .hot-section,
+  .latest-section {
+    padding: 100px 0; /* 超宽屏使用更大的间距 */
+  }
+  
+  .section-title {
+    font-size: 40px; /* 超宽屏使用更大的标题 */
+  }
+}
+
 @media (max-width: 768px) {
   .search-section {
     padding: 60px 0;

@@ -476,7 +476,7 @@ export default {
 }
 
 .commodities-content {
-  padding: 30px 0;
+  padding: 40px 0; /* 增加间距以匹配主页设计 */
 }
 
 .page-header {
@@ -488,17 +488,70 @@ export default {
 
 .page-header h1 {
   font-size: 28px;
-  font-weight: bold;
-  color: #333;
+  font-weight: normal;
+  color: var(--primary-color); /* 主题色标题 */
   margin: 0;
 }
 
+.header-actions .el-button {
+  border-radius: 20px; /* 药丸形按钮 */
+  font-weight: normal;
+}
+
 .commodity-tabs {
+  background: transparent; /* 透明背景 */
+  border-radius: 16px;
+  padding: 0;
+  margin-bottom: 24px;
+  border: none;
+  box-shadow: none;
+}
+
+.commodity-tabs :deep(.el-tabs__header) {
   background: white;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 28.3px; /* 药丸形标签页头部 */
+  padding: 8px;
+  border: 1px solid var(--primary-color);
+  margin-bottom: 0;
+}
+
+.commodity-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none; /* 隐藏底部边框线 */
+}
+
+.commodity-tabs :deep(.el-tabs__item) {
+  border-radius: 20px; /* 药丸形标签页项 */
+  font-weight: normal;
+  color: var(--primary-color);
+  border: none;
+  padding: 8px 20px !important; /* 使用!important确保padding生效 */
+  margin: 0 5px; /* 添加左右5px的间距 */
+  transition: all 0.3s ease;
+}
+
+.commodity-tabs :deep(.el-tabs__item:first-child) {
+  padding: 8px 20px !important; /* 确保第一个标签的padding */
+  margin-left: 0; /* 第一个标签左边无间距 */
+  margin-right: 5px; /* 右边保持5px间距 */
+}
+
+.commodity-tabs :deep(.el-tabs__item:last-child) {
+  padding: 8px 20px !important; /* 确保最后一个标签的padding */
+  margin-left: 5px; /* 左边保持5px间距 */
+  margin-right: 0; /* 最后一个标签右边无间距 */
+}
+
+.commodity-tabs :deep(.el-tabs__item:hover) {
+  background-color: rgba(106, 1, 94, 0.1);
+}
+
+.commodity-tabs :deep(.el-tabs__item.is-active) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.commodity-tabs :deep(.el-tabs__active-bar) {
+  display: none; /* 隐藏默认的活动指示条 */
 }
 
 .commodities-list {
@@ -511,21 +564,27 @@ export default {
 }
 
 .commodity-card {
-  background: white;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  background: transparent; /* 透明外层卡片 */
+  border-radius: 16px; /* 使用主页的圆角设计 */
+  margin-bottom: 24px;
+  border: none; /* 移除边框 */
+  box-shadow: none; /* 移除阴影，使用无框设计 */
+  overflow: visible;
   display: flex;
   align-items: center;
   padding: 20px;
   gap: 20px;
+  transition: all 0.3s ease;
+}
+
+.commodity-card:hover {
+  transform: translateY(-2px); /* 使用主页的悬停效果 */
 }
 
 .commodity-image {
   width: 120px;
   height: 120px;
-  border-radius: 8px;
+  border-radius: 12px; /* 使用主页的圆角设计 */
   overflow: hidden;
   cursor: pointer;
   background: #f5f5f5;
@@ -557,7 +616,7 @@ export default {
 
 .commodity-title {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: normal;
   margin-bottom: 8px;
   color: #333;
   cursor: pointer;
@@ -588,7 +647,7 @@ export default {
 
 .price {
   font-size: 16px;
-  font-weight: bold;
+  font-weight: normal;
 }
 
 .stock {
@@ -620,6 +679,11 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.action-buttons .el-button {
+  border-radius: 20px; /* 药丸形按钮 */
+  font-weight: normal;
 }
 
 .pagination-wrapper {

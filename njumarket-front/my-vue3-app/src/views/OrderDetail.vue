@@ -257,7 +257,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { orderAPI, imageAPI } from '../api'
+import { orderAPI, imageAPI, contactAPI } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 export default {
@@ -270,6 +270,7 @@ export default {
     const loading = ref(false)
     const order = ref(null)
     
+    const isLoggedIn = computed(() => userStore.isLoggedIn)
     const user = computed(() => userStore.user)
     const isBuyer = computed(() => order.value && user.value && order.value.buyerId === user.value.userId)
     const isSeller = computed(() => order.value && user.value && order.value.sellerId === user.value.userId)
@@ -546,12 +547,64 @@ export default {
     }
     
     // 联系功能
-    const contactSeller = () => {
-      ElMessage.info('联系卖家功能开发中...')
+    const contactSeller = async () => {
+      if (!isLoggedIn.value) {
+        ElMessage.warning('请先登录')
+        router.push('/login')
+        return
+      }
+      
+      // 判断当前用户是买家还是卖家
+      const isBuyer = order.value.buyerId === user.value?.userId
+      const contactUserId = isBuyer ? order.value.sellerId : order.value.buyerId
+      
+      try {
+        const response = await contactAPI.createConversation(
+          contactUserId,
+          null,
+          order.value.orderId
+        )
+        
+        if (response.success) {
+          router.push({
+            path: '/messages',
+            query: { conversationId: response.data.conversationId }
+          })
+        }
+      } catch (error) {
+        console.error('创建对话失败:', error)
+        ElMessage.error('创建对话失败')
+      }
     }
     
-    const contactBuyer = () => {
-      ElMessage.info('联系买家功能开发中...')
+    const contactBuyer = async () => {
+      if (!isLoggedIn.value) {
+        ElMessage.warning('请先登录')
+        router.push('/login')
+        return
+      }
+      
+      // 判断当前用户是买家还是卖家
+      const isBuyer = order.value.buyerId === user.value?.userId
+      const contactUserId = isBuyer ? order.value.sellerId : order.value.buyerId
+      
+      try {
+        const response = await contactAPI.createConversation(
+          contactUserId,
+          null,
+          order.value.orderId
+        )
+        
+        if (response.success) {
+          router.push({
+            path: '/messages',
+            query: { conversationId: response.data.conversationId }
+          })
+        }
+      } catch (error) {
+        console.error('创建对话失败:', error)
+        ElMessage.error('创建对话失败')
+      }
     }
     
     const viewSellerProfile = () => {
@@ -673,7 +726,7 @@ export default {
 }
 
 .info-item label {
-  font-weight: 500;
+  font-weight: normal;
   color: #606266;
   margin-right: 10px;
   min-width: 100px;
@@ -685,7 +738,7 @@ export default {
 
 .total-amount {
   font-size: 18px;
-  font-weight: bold;
+  font-weight: normal;
   color: #e74c3c;
 }
 
@@ -743,7 +796,7 @@ export default {
 }
 
 .commodity-description label {
-  font-weight: 500;
+  font-weight: normal;
   color: #606266;
 }
 
@@ -788,7 +841,7 @@ export default {
   align-items: center;
   justify-content: center;
   font-size: 24px;
-  font-weight: bold;
+  font-weight: normal;
 }
 
 .seller-details,

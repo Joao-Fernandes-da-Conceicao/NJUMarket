@@ -354,7 +354,7 @@ export default {
 
 .page-header h1 {
   font-size: 28px;
-  font-weight: bold;
+  font-weight: normal;
   color: #333;
   margin: 0;
 }
@@ -374,7 +374,7 @@ export default {
 .commodity-section h2,
 .order-section h2 {
   font-size: 20px;
-  font-weight: 600;
+  font-weight: normal;
   color: #333;
   margin-bottom: 20px;
   padding-bottom: 10px;
@@ -423,14 +423,14 @@ export default {
 
 .commodity-details h3 {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: normal;
   color: #333;
   margin-bottom: 10px;
 }
 
 .commodity-price {
   font-size: 20px;
-  font-weight: bold;
+  font-weight: normal;
   color: #e74c3c;
   margin-bottom: 8px;
 }
@@ -450,7 +450,7 @@ export default {
 .seller-name {
   font-size: 14px;
   color: #333;
-  font-weight: 500;
+  font-weight: normal;
   margin: 2px 0;
 }
 
@@ -477,7 +477,7 @@ export default {
   font-size: 12px;
   color: #e74c3c;
   margin-left: 10px;
-  font-weight: bold;
+  font-weight: normal;
 }
 
 .total-amount {
@@ -488,7 +488,7 @@ export default {
 
 .amount-label {
   font-size: 24px;
-  font-weight: bold;
+  font-weight: normal;
   color: #e74c3c;
 }
 

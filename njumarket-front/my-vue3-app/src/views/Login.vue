@@ -283,9 +283,9 @@ export default {
 
 .login-form-wrapper {
   background: white;
-  border-radius: 12px;
+  border-radius: 16px; /* 使用主页的圆角设计 */
   padding: 40px;
-  box-shadow: 0 8px 32px rgba(106, 1, 94, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); /* 使用主页的阴影设计 */
 }
 
 .form-header {
@@ -295,7 +295,7 @@ export default {
 
 .form-header h2 {
   font-size: 28px;
-  font-weight: bold;
+  font-weight: normal;
   margin-bottom: 10px;
 }
 
@@ -307,11 +307,40 @@ export default {
   margin-bottom: 20px;
 }
 
+/* 输入框药丸形状设计 */
+.login-form :deep(.el-input__wrapper) {
+  border-radius: 24px; /* 药丸形状 */
+  border: 1px solid var(--primary-color);
+  box-shadow: 0 2px 8px rgba(106, 1, 94, 0.1);
+  transition: all 0.3s ease;
+}
+
+.login-form :deep(.el-input__wrapper:hover) {
+  border-color: var(--primary-light);
+  box-shadow: 0 4px 12px rgba(106, 1, 94, 0.15);
+}
+
+.login-form :deep(.el-input__wrapper.is-focus) {
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(106, 1, 94, 0.2);
+}
+
+/* 修复图标覆盖光标的问题 */
+.login-form :deep(.el-input__prefix) {
+  padding-left: 12px; /* 增加左侧内边距 */
+}
+
+.login-form :deep(.el-input__inner) {
+  border-radius: 24px; /* 确保内部输入框也是药丸形状 */
+  padding-left: 12px; /* 为图标预留空间，避免与光标重叠 */
+}
+
 .login-btn {
   width: 100%;
   height: 48px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: normal;
+  border-radius: 24px; /* 药丸形状设计 */
 }
 
 .form-footer {
@@ -328,7 +357,7 @@ export default {
 
 .register-link a {
   text-decoration: none;
-  font-weight: 500;
+  font-weight: normal;
 }
 
 .code-input-group {
@@ -342,6 +371,35 @@ export default {
 
 .code-input-group .el-button {
   white-space: nowrap;
+  border-radius: 24px; /* 验证码按钮也使用药丸形状 */
+}
+
+/* 验证码登录对话框中的输入框药丸形状设计 */
+:deep(.el-dialog .el-input__wrapper) {
+  border-radius: 24px; /* 药丸形状 */
+  border: 1px solid var(--primary-color);
+  box-shadow: 0 2px 8px rgba(106, 1, 94, 0.1);
+  transition: all 0.3s ease;
+}
+
+:deep(.el-dialog .el-input__wrapper:hover) {
+  border-color: var(--primary-light);
+  box-shadow: 0 4px 12px rgba(106, 1, 94, 0.15);
+}
+
+:deep(.el-dialog .el-input__wrapper.is-focus) {
+  border-color: var(--primary-color);
+  box-shadow: 0 4px 12px rgba(106, 1, 94, 0.2);
+}
+
+/* 修复验证码对话框中的图标覆盖光标问题 */
+:deep(.el-dialog .el-input__prefix) {
+  padding-left: 12px; /* 增加左侧内边距 */
+}
+
+:deep(.el-dialog .el-input__inner) {
+  border-radius: 24px; /* 确保内部输入框也是药丸形状 */
+  padding-left: 12px; /* 为图标预留空间，避免与光标重叠 */
 }
 
 @media (max-width: 480px) {
