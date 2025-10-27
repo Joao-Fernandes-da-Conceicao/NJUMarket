@@ -51,6 +51,9 @@ public class Order {
     @Column(name = "create_time", nullable = false)
     private LocalDateTime createTime;
     
+    @Column(name = "pay_time")
+    private LocalDateTime payTime;
+    
     @Column(name = "shipping_time")
     private LocalDateTime shippingTime;
     
@@ -187,6 +190,7 @@ public class Order {
     public Boolean payOrder() {
         if ("CREATED".equals(this.orderStatus)) {
             this.orderStatus = "PAID";
+            this.payTime = LocalDateTime.now();
             return true;
         }
         return false;
@@ -221,6 +225,25 @@ public class Order {
     }
     
     /**
+     * 获取第一张图片（从逗号分隔的字符串中提取）
+     * @param imagesStr 逗号分隔的图片URL列表，例如："image1.jpg,image2.jpg,image3.jpg"
+     * @return 第一张图片的URL，如果没有则返回空字符串
+     */
+    private String getFirstImage(String imagesStr) {
+        if (imagesStr == null || imagesStr.isEmpty()) {
+            return "";
+        }
+        
+        // 按逗号分割，取第一张图片
+        String[] images = imagesStr.split(",");
+        if (images.length > 0) {
+            return images[0].trim(); // 去掉首尾空格
+        }
+        
+        return "";
+    }
+    
+    /**
      * 创建商品快照
      * @param commodity 商品实体
      * @param seller 卖家用户实体
@@ -237,7 +260,8 @@ public class Order {
         this.commoditySnapshotLocation = commodity.getLocation();
         this.commoditySnapshotCategory = commodity.getCategory();
         this.commoditySnapshotConditionLevel = commodity.getConditionLevel();
-        this.commoditySnapshotImages = commodity.getImages(); // 暂时直接复制，后续可考虑复制图片文件
+        // 只保存第一张图片
+        this.commoditySnapshotImages = getFirstImage(commodity.getImages());
         this.commoditySnapshotStatus = commodity.getCommodityStatus();
         this.commoditySnapshotSellerName = seller.getUsername() != null ? seller.getUsername() : seller.getUserId();
         this.commoditySnapshotSellerPhone = seller.getPrimaryPhone(); // 使用主要手机号
@@ -266,7 +290,8 @@ public class Order {
         this.commoditySnapshotLocation = commodity.getLocation();
         this.commoditySnapshotCategory = commodity.getCategory();
         this.commoditySnapshotConditionLevel = commodity.getConditionLevel();
-        this.commoditySnapshotImages = commodity.getImages(); // 暂时直接复制，后续可考虑复制图片文件
+        // 只保存第一张图片
+        this.commoditySnapshotImages = getFirstImage(commodity.getImages());
         this.commoditySnapshotStatus = commodity.getCommodityStatus();
         this.commoditySnapshotSellerName = sellerName;
         this.commoditySnapshotSellerPhone = sellerPhone;

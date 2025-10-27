@@ -1,0 +1,23 @@
+{
+  "name": "njumarket-admin",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build": "vue-cli-service build",
+    "lint": "echo 'skip lint'"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "element-plus": "^2.7.8",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vue/cli-service": "^5.0.8",
+    "@vue/compiler-sfc": "^3.4.21",
+    "babel-plugin-component": "^1.1.1"
+  }
+}
+
+

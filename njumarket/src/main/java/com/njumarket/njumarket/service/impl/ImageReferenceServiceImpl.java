@@ -3,6 +3,8 @@ package com.njumarket.njumarket.service.impl;
 import com.njumarket.njumarket.entity.ImageReference;
 import com.njumarket.njumarket.repository.ImageReferenceRepository;
 import com.njumarket.njumarket.service.ImageReferenceService;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,10 +22,10 @@ import java.util.Optional;
 @Slf4j
 @Service
 @Transactional
+@RequiredArgsConstructor
 public class ImageReferenceServiceImpl implements ImageReferenceService {
     
-    @Autowired
-    private ImageReferenceRepository imageReferenceRepository;
+    private final ImageReferenceRepository imageReferenceRepository;
     
     private static final String UPLOAD_BASE_PATH = "uploads/";
     

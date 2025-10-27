@@ -4,6 +4,12 @@ import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.AdminLoginDTO;
 import com.njumarket.njumarket.entity.Admin;
 import com.njumarket.njumarket.repository.AdminRepository;
+import com.njumarket.njumarket.repository.UserRepository;
+import com.njumarket.njumarket.repository.CommodityRepository;
+import com.njumarket.njumarket.repository.OrderRepository;
+import com.njumarket.njumarket.repository.ConversationRepository;
+import com.njumarket.njumarket.repository.MessageRepository;
+import com.njumarket.njumarket.repository.UserProfileRepository;
 import com.njumarket.njumarket.service.AdminService;
 import com.njumarket.njumarket.service.PasswordService;
 import com.njumarket.njumarket.utils.JwtUtils;
@@ -33,6 +39,12 @@ public class AdminServiceImpl implements AdminService {
     private final AdminRepository adminRepository;
     private final PasswordService passwordService;
     private final JwtUtils jwtUtils;
+    private final UserRepository userRepository;
+    private final CommodityRepository commodityRepository;
+    private final OrderRepository orderRepository;
+    private final ConversationRepository conversationRepository;
+    private final MessageRepository messageRepository;
+    private final UserProfileRepository userProfileRepository;
 
     @Override
     public Result login(AdminLoginDTO loginDTO, HttpSession session) {
@@ -484,4 +496,654 @@ public class AdminServiceImpl implements AdminService {
         return result;
     }
 
+    // ===================== 管理端最小CRUD：用户 =====================
+    @Override
+    public Result listUsers(Integer page, Integer size, String keyword, String accountStatus, String sortProp, String sortOrder) {
+        try {
+            String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+            org.springframework.data.jpa.domain.Specification<com.njumarket.njumarket.entity.User> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+                if (!kw.isEmpty()) {
+                    jakarta.persistence.criteria.Expression<String> uname = cb.lower(root.get("username"));
+                    jakarta.persistence.criteria.Expression<String> phone = cb.lower(root.get("primaryPhone"));
+                    predicates.add(cb.or(cb.like(uname, "%" + kw + "%"), cb.like(phone, "%" + kw + "%")));
+                }
+                if (org.springframework.util.StringUtils.hasText(accountStatus)) {
+                    String v = accountStatus.trim().toLowerCase();
+                    predicates.add(cb.equal(cb.lower(root.get("accountStatus")), v));
+                }
+                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+            // 排序
+            Sort sort = Sort.by(Sort.Direction.DESC, "registerTime");
+            if (org.springframework.util.StringUtils.hasText(sortProp)) {
+                String sp = sortProp.trim();
+                Sort.Direction dir = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+                if ("registerTime".equals(sp) || "username".equals(sp) || "primaryPhone".equals(sp)) {
+                    sort = Sort.by(dir, sp);
+                }
+            }
+            Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, sort);
+            Page<com.njumarket.njumarket.entity.User> userPage = userRepository.findAll(spec, pageable);
+            List<Map<String, Object>> simpleList = new ArrayList<>();
+            for (com.njumarket.njumarket.entity.User u : userPage.getContent()) {
+                simpleList.add(toSimpleUser(u));
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("list", simpleList);
+            result.put("total", userPage.getTotalElements());
+            result.put("pages", userPage.getTotalPages());
+            result.put("current", page);
+            result.put("size", size);
+            return Result.ok(result);
+        } catch (Exception e) {
+            log.error("获取用户列表异常: {}", e.getMessage());
+            return Result.fail("获取用户列表失败");
+        }
+    }
+
+    @Override
+    public Result getUserById(String userId) {
+        try {
+            Optional<com.njumarket.njumarket.entity.User> userOpt = userRepository.findById(userId);
+            if (userOpt.isEmpty()) {
+                return Result.fail("用户不存在");
+            }
+            com.njumarket.njumarket.entity.User user = userOpt.get();
+            return Result.ok(toSimpleUser(user));
+        } catch (Exception e) {
+            log.error("获取用户信息异常: userId={}, error={}", userId, e.getMessage());
+            return Result.fail("获取用户信息失败");
+        }
+    }
+
+    @Override
+    public Result updateUserStatus(String userId, String status) {
+        try {
+            Optional<com.njumarket.njumarket.entity.User> userOpt = userRepository.findById(userId);
+            if (userOpt.isEmpty()) {
+                return Result.fail("用户不存在");
+            }
+            com.njumarket.njumarket.entity.User user = userOpt.get();
+            // 校验账户状态
+            if (status == null) return Result.fail("状态不能为空");
+            String newStatus = status.trim();
+            java.util.Set<String> allowed = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE","SUSPENDED","BANNED"));
+            if (!allowed.contains(newStatus)) {
+                return Result.fail("非法的账户状态");
+            }
+            user.setAccountStatus(newStatus);
+            userRepository.save(user);
+            return Result.ok("用户状态更新成功");
+        } catch (Exception e) {
+            log.error("更新用户状态异常: userId={}, status={}, error={}", userId, status, e.getMessage());
+            return Result.fail("更新用户状态失败");
+        }
+    }
+
+    @Override
+    public Result updateUserBasic(String userId, String nickname, String phone, String email) {
+        try {
+            Optional<com.njumarket.njumarket.entity.User> userOpt = userRepository.findById(userId);
+            if (userOpt.isEmpty()) {
+                return Result.fail("用户不存在");
+            }
+            com.njumarket.njumarket.entity.User user = userOpt.get();
+            if (org.springframework.util.StringUtils.hasText(phone)) {
+                user.setPrimaryPhone(phone.trim());
+            }
+            // 更新昵称到UserProfile（若存在）
+            if (user.getUserProfile() != null && org.springframework.util.StringUtils.hasText(nickname)) {
+                user.getUserProfile().setNickname(nickname.trim());
+            }
+            // 目前未建统一email字段，暂不处理email，保留扩展点
+            userRepository.save(user);
+            return Result.ok("用户信息更新成功");
+        } catch (Exception e) {
+            log.error("更新用户基础信息异常: userId={}, error={}", userId, e.getMessage());
+            return Result.fail("更新用户信息失败");
+        }
+    }
+
+    @Override
+    public Result deleteUser(String userId) {
+        try {
+            if (!userRepository.existsById(userId)) {
+                return Result.fail("用户不存在");
+            }
+            // 优先软删：将账户状态置为DELETED
+            com.njumarket.njumarket.entity.User user = userRepository.findById(userId).orElse(null);
+            if (user != null) {
+                user.setAccountStatus("DELETED");
+                userRepository.save(user);
+            }
+            return Result.ok("用户删除成功");
+        } catch (Exception e) {
+            log.error("删除用户异常: userId={}, error={}", userId, e.getMessage());
+            return Result.fail("删除用户失败");
+        }
+    }
+
+    @Override
+    public Result updateUserFull(String userId, Map<String, Object> payload) {
+        try {
+            Optional<com.njumarket.njumarket.entity.User> userOpt = userRepository.findById(userId);
+            if (userOpt.isEmpty()) {
+                return Result.fail("用户不存在");
+            }
+            com.njumarket.njumarket.entity.User user = userOpt.get();
+            // 基本字段
+            Object username = payload.get("username");
+            if (username instanceof String && StringUtils.hasText((String) username)) {
+                user.setUsername(((String) username).trim());
+            }
+            Object primaryPhone = payload.get("primaryPhone");
+            if (primaryPhone instanceof String && StringUtils.hasText((String) primaryPhone)) {
+                user.setPrimaryPhone(((String) primaryPhone).trim());
+            }
+            Object accountStatus = payload.get("accountStatus");
+            if (accountStatus instanceof String && StringUtils.hasText((String) accountStatus)) {
+                String newStatus = ((String) accountStatus).trim();
+                java.util.Set<String> allowed = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE","SUSPENDED","BANNED"));
+                if (!allowed.contains(newStatus)) {
+                    return Result.fail("非法的账户状态");
+                }
+                user.setAccountStatus(newStatus);
+            }
+
+            // 档案字段
+            com.njumarket.njumarket.entity.UserProfile profile = user.getUserProfile();
+            if (profile == null) {
+                profile = new com.njumarket.njumarket.entity.UserProfile();
+                profile.setProfileId("PROFILE_" + System.currentTimeMillis());
+                profile.setUserId(user.getUserId());
+            }
+            Object nickname = payload.get("nickname");
+            if (nickname instanceof String) profile.setNickname(((String) nickname).trim());
+            Object avatar = payload.get("avatar");
+            if (avatar instanceof String) profile.setAvatar(((String) avatar).trim());
+            Object creditScore = payload.get("creditScore");
+            if (creditScore instanceof Number) profile.setCreditScore(((Number) creditScore).intValue());
+            Object buyerRating = payload.get("buyerRating");
+            if (buyerRating instanceof Number) profile.setBuyerRating(((Number) buyerRating).doubleValue());
+            Object sellerRating = payload.get("sellerRating");
+            if (sellerRating instanceof Number) profile.setSellerRating(((Number) sellerRating).doubleValue());
+            Object totalSales = payload.get("totalSales");
+            if (totalSales instanceof Number) profile.setTotalSales(((Number) totalSales).intValue());
+            Object totalPurchases = payload.get("totalPurchases");
+            if (totalPurchases instanceof Number) profile.setTotalPurchases(((Number) totalPurchases).intValue());
+            Object vipLevel = payload.get("vipLevel");
+            if (vipLevel instanceof String) {
+                String lvl = ((String) vipLevel).trim();
+                java.util.Set<String> allowedLvl = new java.util.HashSet<>(java.util.Arrays.asList("NORMAL","BRONZE","SILVER","GOLD","PLATINUM"));
+                if (!allowedLvl.contains(lvl)) {
+                    return Result.fail("非法的会员等级");
+                }
+                profile.setVipLevel(lvl);
+            }
+
+            userRepository.save(user);
+            userProfileRepository.save(profile);
+
+            return Result.ok("更新成功", toSimpleUser(user));
+        } catch (Exception e) {
+            log.error("完整更新用户异常: userId={}, error={}", userId, e.getMessage());
+            return Result.fail("更新失败");
+        }
+    }
+
+    // ===================== 管理端最小CRUD：商品 =====================
+    @Override
+    public Result listCommodities(Integer page, Integer size, String keyword, String category, String conditionLevel, String status, String sellerVisibility, String buyerVisibility, String sortProp, String sortOrder) {
+        try {
+            String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+            org.springframework.data.jpa.domain.Specification<com.njumarket.njumarket.entity.Commodity> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+                if (!kw.isEmpty()) {
+                    jakarta.persistence.criteria.Expression<String> title = cb.lower(root.get("title"));
+                    jakarta.persistence.criteria.Expression<String> sellerIdExp = cb.lower(root.get("sellerId"));
+                    // 子查询：按卖家昵称（UserProfile.nickname）模糊匹配
+                    jakarta.persistence.criteria.Subquery<com.njumarket.njumarket.entity.User> sq = query.subquery(com.njumarket.njumarket.entity.User.class);
+                    jakarta.persistence.criteria.Root<com.njumarket.njumarket.entity.User> ur = sq.from(com.njumarket.njumarket.entity.User.class);
+                    // LEFT JOIN userProfile
+                    jakarta.persistence.criteria.Join<com.njumarket.njumarket.entity.User, com.njumarket.njumarket.entity.UserProfile> profileJoin = ur.join("userProfile", jakarta.persistence.criteria.JoinType.LEFT);
+                    jakarta.persistence.criteria.Predicate sellerMatch = cb.equal(ur.get("userId"), root.get("sellerId"));
+                    jakarta.persistence.criteria.Predicate nickLike = cb.like(cb.lower(profileJoin.get("nickname")), "%" + kw + "%");
+                    sq.select(ur).where(cb.and(sellerMatch, nickLike));
+
+                    predicates.add(cb.or(
+                        cb.like(title, "%" + kw + "%"),
+                        cb.like(sellerIdExp, "%" + kw + "%"),
+                        cb.exists(sq)
+                    ));
+                }
+                if (org.springframework.util.StringUtils.hasText(category)) {
+                    predicates.add(cb.equal(root.get("category"), category.trim()));
+                }
+                if (org.springframework.util.StringUtils.hasText(conditionLevel)) {
+                    predicates.add(cb.equal(root.get("conditionLevel"), conditionLevel.trim()));
+                }
+                if (org.springframework.util.StringUtils.hasText(status)) {
+                    predicates.add(cb.equal(root.get("commodityStatus"), status.trim()));
+                }
+                if (org.springframework.util.StringUtils.hasText(sellerVisibility)) {
+                    predicates.add(cb.equal(root.get("sellerVisibility"), sellerVisibility.trim()));
+                }
+                if (org.springframework.util.StringUtils.hasText(buyerVisibility)) {
+                    predicates.add(cb.equal(root.get("buyerVisibility"), buyerVisibility.trim()));
+                }
+                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+            // 排序
+            Sort sort = Sort.by(Sort.Direction.DESC, "publishTime");
+            if (org.springframework.util.StringUtils.hasText(sortProp)) {
+                String sp = sortProp.trim();
+                Sort.Direction dir = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+                if ("publishTime".equals(sp) || "clickCount".equals(sp) || "price".equals(sp)) {
+                    sort = Sort.by(dir, sp);
+                }
+            }
+            Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, sort);
+            Page<com.njumarket.njumarket.entity.Commodity> p = commodityRepository.findAll(spec, pageable);
+            List<Map<String, Object>> simpleList = new ArrayList<>();
+            for (com.njumarket.njumarket.entity.Commodity c : p.getContent()) {
+                simpleList.add(toSimpleCommodity(c));
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("list", simpleList);
+            result.put("total", p.getTotalElements());
+            result.put("pages", p.getTotalPages());
+            result.put("current", page);
+            result.put("size", size);
+            return Result.ok(result);
+        } catch (Exception e) {
+            log.error("获取商品列表异常: {}", e.getMessage());
+            return Result.fail("获取商品列表失败");
+        }
+    }
+
+    @Override
+    public Result getCommodityById(String commodityId) {
+        try {
+            return commodityRepository.findById(commodityId)
+                    .<Result>map(c -> Result.ok(toSimpleCommodity(c)))
+                    .orElseGet(() -> Result.fail("商品不存在"));
+        } catch (Exception e) {
+            log.error("获取商品信息异常: commodityId={}, error={}", commodityId, e.getMessage());
+            return Result.fail("获取商品信息失败");
+        }
+    }
+
+    @Override
+    public Result updateCommodityStatus(String commodityId, String status) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Commodity> opt = commodityRepository.findById(commodityId);
+            if (opt.isEmpty()) {
+                return Result.fail("商品不存在");
+            }
+            com.njumarket.njumarket.entity.Commodity c = opt.get();
+            c.setCommodityStatus(status);
+            commodityRepository.save(c);
+            return Result.ok("商品状态更新成功");
+        } catch (Exception e) {
+            log.error("更新商品状态异常: commodityId={}, status={}, error={}", commodityId, status, e.getMessage());
+            return Result.fail("更新商品状态失败");
+        }
+    }
+
+    @Override
+    public Result deleteCommodity(String commodityId) {
+        try {
+            if (!commodityRepository.existsById(commodityId)) {
+                return Result.fail("商品不存在");
+            }
+            commodityRepository.deleteById(commodityId);
+            return Result.ok("商品删除成功");
+        } catch (Exception e) {
+            log.error("删除商品异常: commodityId={}, error={}", commodityId, e.getMessage());
+            return Result.fail("删除商品失败");
+        }
+    }
+
+    // ===================== 管理端最小CRUD：订单 =====================
+    @Override
+    public Result listOrders(Integer page, Integer size, String keyword, String status, String sortProp, String sortOrder) {
+        try {
+            String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+            org.springframework.data.jpa.domain.Specification<com.njumarket.njumarket.entity.Order> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+                if (!kw.isEmpty()) {
+                    jakarta.persistence.criteria.Expression<String> buyerId = cb.lower(root.get("buyerId"));
+                    jakarta.persistence.criteria.Expression<String> sellerId = cb.lower(root.get("sellerId"));
+                    jakarta.persistence.criteria.Expression<String> snapTitle = cb.lower(root.get("commoditySnapshotTitle"));
+                    predicates.add(cb.or(cb.like(buyerId, "%" + kw + "%"), cb.like(sellerId, "%" + kw + "%"), cb.like(snapTitle, "%" + kw + "%")));
+                }
+                if (org.springframework.util.StringUtils.hasText(status)) {
+                    predicates.add(cb.equal(root.get("orderStatus"), status.trim()));
+                }
+                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+            // 排序（默认 createTime desc）
+            Sort sort = Sort.by(Sort.Direction.DESC, "createTime");
+            if (org.springframework.util.StringUtils.hasText(sortProp)) {
+                String sp = sortProp.trim();
+                Sort.Direction dir = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+                if ("createTime".equals(sp) || "payAmount".equals(sp)) {
+                    sort = Sort.by(dir, sp);
+                }
+            }
+            Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, sort);
+            Page<com.njumarket.njumarket.entity.Order> p = orderRepository.findAll(spec, pageable);
+            List<Map<String, Object>> simpleList = new ArrayList<>();
+            for (com.njumarket.njumarket.entity.Order o : p.getContent()) {
+                simpleList.add(toSimpleOrder(o));
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("list", simpleList);
+            result.put("total", p.getTotalElements());
+            result.put("pages", p.getTotalPages());
+            result.put("current", page);
+            result.put("size", size);
+            return Result.ok(result);
+        } catch (Exception e) {
+            log.error("获取订单列表异常: {}", e.getMessage());
+            return Result.fail("获取订单列表失败");
+        }
+    }
+
+    @Override
+    public Result getOrderById(String orderId) {
+        try {
+            return orderRepository.findById(orderId)
+                    .<Result>map(o -> Result.ok(toSimpleOrder(o)))
+                    .orElseGet(() -> Result.fail("订单不存在"));
+        } catch (Exception e) {
+            log.error("获取订单信息异常: orderId={}, error={}", orderId, e.getMessage());
+            return Result.fail("获取订单信息失败");
+        }
+    }
+
+    @Override
+    public Result updateOrderFields(String orderId, String status, String trackingNumber, String remark) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Order> opt = orderRepository.findById(orderId);
+            if (opt.isEmpty()) {
+                return Result.fail("订单不存在");
+            }
+            com.njumarket.njumarket.entity.Order order = opt.get();
+            if (org.springframework.util.StringUtils.hasText(status)) {
+                order.setOrderStatus(status);
+            }
+            if (org.springframework.util.StringUtils.hasText(trackingNumber)) {
+                order.setTrackingNumber(trackingNumber.trim());
+            }
+            // remark 字段可能在DTO中，实体未必有；此处仅预留
+            orderRepository.save(order);
+            return Result.ok("订单更新成功");
+        } catch (Exception e) {
+            log.error("更新订单异常: orderId={}, error={}", orderId, e.getMessage());
+            return Result.fail("更新订单失败");
+        }
+    }
+
+    @Override
+    public Result deleteOrder(String orderId) {
+        try {
+            if (!orderRepository.existsById(orderId)) {
+                return Result.fail("订单不存在");
+            }
+            orderRepository.deleteById(orderId);
+            return Result.ok("订单删除成功");
+        } catch (Exception e) {
+            log.error("删除订单异常: orderId={}, error={}", orderId, e.getMessage());
+            return Result.fail("删除订单失败");
+        }
+    }
+
+    // ===================== 管理端最小CRUD：会话/消息 =====================
+    @Override
+    public Result listConversations(Integer page, Integer size, String keyword) {
+        try {
+            Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "lastMessageTime"));
+            Page<com.njumarket.njumarket.entity.Conversation> p = conversationRepository.findAll(pageable);
+            List<Map<String, Object>> simpleList = new ArrayList<>();
+            for (com.njumarket.njumarket.entity.Conversation c : p.getContent()) {
+                simpleList.add(toSimpleConversation(c));
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("list", simpleList);
+            result.put("total", p.getTotalElements());
+            result.put("pages", p.getTotalPages());
+            result.put("current", page);
+            result.put("size", size);
+            return Result.ok(result);
+        } catch (Exception e) {
+            log.error("获取会话列表异常: {}", e.getMessage());
+            return Result.fail("获取会话列表失败");
+        }
+    }
+
+    @Override
+    public Result deleteConversation(String conversationId) {
+        try {
+            if (!conversationRepository.existsById(conversationId)) {
+                return Result.fail("会话不存在");
+            }
+            conversationRepository.deleteById(conversationId);
+            return Result.ok("会话删除成功");
+        } catch (Exception e) {
+            log.error("删除会话异常: conversationId={}, error={}", conversationId, e.getMessage());
+            return Result.fail("删除会话失败");
+        }
+    }
+
+    @Override
+    public Result listMessages(String conversationId, Integer page, Integer size) {
+        try {
+            Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            Page<com.njumarket.njumarket.entity.Message> p = messageRepository.findByConversationId(conversationId, pageable);
+            List<Map<String, Object>> simpleList = new ArrayList<>();
+            for (com.njumarket.njumarket.entity.Message m : p.getContent()) {
+                simpleList.add(toSimpleMessage(m));
+            }
+            Map<String, Object> result = new HashMap<>();
+            result.put("list", simpleList);
+            result.put("total", p.getTotalElements());
+            result.put("pages", p.getTotalPages());
+            result.put("current", page);
+            result.put("size", size);
+            return Result.ok(result);
+        } catch (Exception e) {
+            log.error("获取消息列表异常: conversationId={}, error={}", conversationId, e.getMessage());
+            return Result.fail("获取消息列表失败");
+        }
+    }
+
+    // ===================== 简化映射，避免循环引用 =====================
+    private Map<String, Object> toSimpleUser(com.njumarket.njumarket.entity.User u) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("userId", u.getUserId());
+        m.put("primaryPhone", u.getPrimaryPhone());
+        m.put("username", u.getUsername());
+        m.put("accountStatus", u.getAccountStatus());
+        m.put("registerTime", u.getRegisterTime());
+        if (u.getUserProfile() != null) {
+            Map<String, Object> p = new HashMap<>();
+            p.put("nickname", u.getUserProfile().getNickname());
+            p.put("avatar", u.getUserProfile().getAvatar());
+            p.put("creditScore", u.getUserProfile().getCreditScore());
+            p.put("buyerRating", u.getUserProfile().getBuyerRating());
+            p.put("sellerRating", u.getUserProfile().getSellerRating());
+            p.put("totalSales", u.getUserProfile().getTotalSales());
+            p.put("totalPurchases", u.getUserProfile().getTotalPurchases());
+            p.put("vipLevel", u.getUserProfile().getVipLevel());
+            m.put("profile", p);
+        }
+        return m;
+    }
+
+    private Map<String, Object> toSimpleCommodity(com.njumarket.njumarket.entity.Commodity c) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("commodityId", c.getCommodityId());
+        m.put("sellerId", c.getSellerId());
+        m.put("title", c.getTitle());
+        m.put("price", c.getPrice());
+        m.put("stock", c.getStock());
+        m.put("location", c.getLocation());
+        m.put("commodityStatus", c.getCommodityStatus());
+        m.put("publishTime", c.getPublishTime());
+        m.put("category", c.getCategory());
+        m.put("conditionLevel", c.getConditionLevel());
+        m.put("description", c.getDescription());
+        m.put("clickCount", c.getClickCount());
+        m.put("reportCount", c.getReportCount());
+        m.put("sellerVisibility", c.getSellerVisibility());
+        m.put("buyerVisibility", c.getBuyerVisibility());
+        m.put("images", c.getImages());
+        return m;
+    }
+
+    @Override
+    public Result updateCommodityFull(String commodityId, Map<String, Object> payload) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Commodity> opt = commodityRepository.findById(commodityId);
+            if (opt.isEmpty()) return Result.fail("商品不存在");
+            com.njumarket.njumarket.entity.Commodity c = opt.get();
+            Object title = payload.get("title"); if (title instanceof String) c.setTitle(((String) title).trim());
+            Object description = payload.get("description"); if (description instanceof String) c.setDescription(((String) description).trim());
+            Object price = payload.get("price"); if (price instanceof Number) c.setPrice(((Number) price).doubleValue());
+            Object stock = payload.get("stock"); if (stock instanceof Number) c.setStock(((Number) stock).intValue());
+            Object location = payload.get("location"); if (location instanceof String) c.setLocation(((String) location).trim());
+            Object category = payload.get("category"); if (category instanceof String) c.setCategory(((String) category).trim());
+            Object conditionLevel = payload.get("conditionLevel");
+            if (conditionLevel instanceof String) {
+                String lvl = ((String) conditionLevel).trim();
+                java.util.Set<String> allowedLvl = new java.util.HashSet<>(java.util.Arrays.asList(
+                    "全新","九成新","八成新","七成新","六成新","五成新"
+                ));
+                if (!allowedLvl.contains(lvl)) return Result.fail("非法的成色等级");
+                c.setConditionLevel(lvl);
+            }
+            Object commodityStatus = payload.get("commodityStatus");
+            if (commodityStatus instanceof String) {
+                String st = ((String) commodityStatus).trim();
+                java.util.Set<String> allowedStatus = new java.util.HashSet<>(java.util.Arrays.asList("DRAFT","PUBLISHED","ON_SHELF","OFF_SHELF"));
+                if (!allowedStatus.contains(st)) return Result.fail("非法的商品状态");
+                c.setCommodityStatus(st);
+            }
+            Object images = payload.get("images"); if (images instanceof String) c.setImages(((String) images).trim());
+            Object clickCount = payload.get("clickCount"); if (clickCount instanceof Number) c.setClickCount(((Number) clickCount).intValue());
+            // 分类校验（示例白名单，可根据业务扩展或改为从数据库/配置读取）
+            if (category instanceof String) {
+                String cat = ((String) category).trim();
+                java.util.Set<String> allowedCat = new java.util.HashSet<>(java.util.Arrays.asList(
+                    "电子产品","服装配饰","图书文具","生活用品","运动户外","美妆护肤","其他"
+                ));
+                if (!allowedCat.contains(cat)) return Result.fail("非法的商品分类");
+                c.setCategory(cat);
+            }
+            // 可见性（允许编辑）
+            Object sellerVisibility = payload.get("sellerVisibility");
+            if (sellerVisibility instanceof String) {
+                String vis = ((String) sellerVisibility).trim();
+                java.util.Set<String> allowedVis = new java.util.HashSet<>(java.util.Arrays.asList("PUBLIC","PRIVATE","HIDDEN"));
+                if (!allowedVis.contains(vis)) return Result.fail("非法的卖家可见性");
+                c.setSellerVisibility(vis);
+            }
+            Object buyerVisibility = payload.get("buyerVisibility");
+            if (buyerVisibility instanceof String) {
+                String vis = ((String) buyerVisibility).trim();
+                java.util.Set<String> allowedVis = new java.util.HashSet<>(java.util.Arrays.asList("PUBLIC","PRIVATE","HIDDEN"));
+                if (!allowedVis.contains(vis)) return Result.fail("非法的买家可见性");
+                c.setBuyerVisibility(vis);
+            }
+            // 不允许编辑：publish_time、report_count、seller_id、commodity_id
+            commodityRepository.save(c);
+            return Result.ok("更新成功", toSimpleCommodity(c));
+        } catch (Exception e) {
+            log.error("完整更新商品异常: commodityId={}, error={}", commodityId, e.getMessage());
+            return Result.fail("更新失败");
+        }
+    }
+
+    private Map<String, Object> toSimpleOrder(com.njumarket.njumarket.entity.Order o) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("orderId", o.getOrderId());
+        m.put("buyerId", o.getBuyerId());
+        m.put("sellerId", o.getSellerId());
+        m.put("commodityId", o.getCommodityId());
+        m.put("orderStatus", o.getOrderStatus());
+        m.put("payAmount", o.getPayAmount());
+        m.put("createTime", o.getCreateTime());
+        m.put("payTime", o.getPayTime());
+        m.put("shippingTime", o.getShippingTime());
+        m.put("deliveryTime", o.getDeliveryTime());
+        m.put("trackingNumber", o.getTrackingNumber());
+        // 可见性与地址/备注
+        m.put("sellerVisibility", o.getSellerVisibility());
+        m.put("buyerVisibility", o.getBuyerVisibility());
+        m.put("shippingAddress", o.getShippingAddress());
+        m.put("remark", o.getRemark());
+        // 退货/退款相关
+        m.put("returnReason", o.getReturnReason());
+        m.put("returnRequestTime", o.getReturnRequestTime());
+        m.put("returnApprovalTime", o.getReturnApprovalTime());
+        m.put("returnRejectionReason", o.getReturnRejectionReason());
+        m.put("returnTrackingNumber", o.getReturnTrackingNumber());
+        m.put("returnCompletionTime", o.getReturnCompletionTime());
+        // 数量
+        m.put("quantity", o.getQuantity());
+        // 商品快照
+        m.put("commoditySnapshotTitle", o.getCommoditySnapshotTitle());
+        m.put("commoditySnapshotDescription", o.getCommoditySnapshotDescription());
+        m.put("commoditySnapshotPrice", o.getCommoditySnapshotPrice());
+        m.put("commoditySnapshotLocation", o.getCommoditySnapshotLocation());
+        m.put("commoditySnapshotCategory", o.getCommoditySnapshotCategory());
+        m.put("commoditySnapshotConditionLevel", o.getCommoditySnapshotConditionLevel());
+        m.put("commoditySnapshotImages", o.getCommoditySnapshotImages());
+        m.put("commoditySnapshotStatus", o.getCommoditySnapshotStatus());
+        m.put("commoditySnapshotSellerName", o.getCommoditySnapshotSellerName());
+        m.put("commoditySnapshotSellerPhone", o.getCommoditySnapshotSellerPhone());
+        m.put("commoditySnapshotSellerEmail", o.getCommoditySnapshotSellerEmail());
+        m.put("commoditySnapshotTime", o.getCommoditySnapshotTime());
+        return m;
+    }
+
+    private Map<String, Object> toSimpleConversation(com.njumarket.njumarket.entity.Conversation c) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("conversationId", c.getConversationId());
+        m.put("buyerId", c.getBuyerId());
+        m.put("sellerId", c.getSellerId());
+        m.put("commodityId", c.getCommodityId());
+        m.put("lastMessageContent", c.getLastMessageContent());
+        m.put("lastMessageTime", c.getLastMessageTime());
+        m.put("status", c.getStatus());
+        return m;
+    }
+
+    private Map<String, Object> toSimpleMessage(com.njumarket.njumarket.entity.Message m0) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("messageId", m0.getMessageId());
+        m.put("conversationId", m0.getConversationId());
+        m.put("senderId", m0.getSenderId());
+        m.put("receiverId", m0.getReceiverId());
+        m.put("content", m0.getContent());
+        m.put("createdAt", m0.getCreatedAt());
+        m.put("isRead", m0.getIsRead());
+        return m;
+    }
+
+    @Override
+    public Result deleteMessage(String messageId) {
+        try {
+            if (!messageRepository.existsById(messageId)) {
+                return Result.fail("消息不存在");
+            }
+            messageRepository.deleteById(messageId);
+            return Result.ok("消息删除成功");
+        } catch (Exception e) {
+            log.error("删除消息异常: messageId={}, error={}", messageId, e.getMessage());
+            return Result.fail("删除消息失败");
+        }
+    }
 }

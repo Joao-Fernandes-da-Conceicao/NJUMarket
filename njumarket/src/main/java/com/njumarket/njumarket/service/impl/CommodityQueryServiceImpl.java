@@ -20,6 +20,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Collections;
 
 /**
  * 商品查询服务实现类
@@ -254,16 +255,43 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     // ========== 用户相关查询实现 ==========
     
     @Override
-    public Result getUserCommodities(User user, String sellerId, Integer page, Integer size) {
+    public Result getUserCommodities(User user, String sellerId, String status, Integer page, Integer size) {
         try {
-            log.info("获取用户商品 - user: {}, sellerId: {}, page: {}, size: {}", 
-                    user != null ? user.getUserId() : "anonymous", sellerId, page, size);
+            // 如果 sellerId 为 null，则使用当前用户的 ID
+            String targetSellerId = sellerId;
+            if (targetSellerId == null && user != null) {
+                targetSellerId = user.getUserId();
+            }
+            
+            if (targetSellerId == null) {
+                return Result.fail("卖家ID不能为空");
+            }
+            
+            boolean isOwnCommodities = user != null && user.getUserId().equals(targetSellerId);
+            
+            log.info("获取用户商品 - user: {}, sellerId: {}, isOwn: {}, status: {}, page: {}, size: {}", 
+                    user != null ? user.getUserId() : "anonymous", targetSellerId, isOwnCommodities, status, page, size);
             
             Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "publishTime"));
+            Page<Commodity> commodityPage;
             
-            // 如果用户查看自己的商品，显示所有状态
-            if (user != null && user.getUserId().equals(sellerId)) {
-                Page<Commodity> commodityPage = commodityRepository.findBySellerId(sellerId, pageable);
+            // 标准化状态参数
+            String normalizedStatus = (status == null || status.trim().isEmpty()) ? "all" : status;
+            
+            // 如果是查看其他用户的商品，不能查看草稿状态
+            if (!isOwnCommodities && "DRAFT".equals(normalizedStatus)) {
+                return Result.fail("无法查看其他用户的草稿商品");
+            }
+            
+            // 如果是自己的商品，直接查询并返回
+            if (isOwnCommodities) {
+                // 查询商品
+                if ("all".equals(normalizedStatus)) {
+                    commodityPage = commodityRepository.findBySellerId(targetSellerId, pageable);
+                } else {
+                    commodityPage = commodityRepository.findBySellerIdAndCommodityStatus(targetSellerId, normalizedStatus, pageable);
+                }
+                
                 List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
                         .map(this::convertToDTO)
                         .collect(Collectors.toList());
@@ -278,21 +306,60 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                 return Result.ok("获取用户商品成功", result);
             }
             
-            // 查看其他用户的商品，只显示公开且上架的商品
-            Page<Commodity> commodityPage = commodityRepository.findBySellerIdAndCommodityStatus(sellerId, "ON_SHELF", pageable);
-            List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
-                    .filter(commodity -> isCommodityVisibleToUser(commodity, user))
-                    .map(this::convertToDTO)
-                    .collect(Collectors.toList());
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("commodities", commodityDTOs);
-            result.put("total", commodityPage.getTotalElements());
-            result.put("pages", commodityPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
-            
-            return Result.ok("获取用户商品成功", result);
+            // 查看其他用户的商品，需要过滤草稿和不可见商品
+            if ("all".equals(normalizedStatus)) {
+                // 查询所有非草稿状态的商品
+                Pageable allPageable = PageRequest.of(0, Integer.MAX_VALUE, Sort.by(Sort.Direction.DESC, "publishTime"));
+                Page<Commodity> allCommoditiesPage = commodityRepository.findBySellerId(targetSellerId, allPageable);
+                
+                // 过滤掉草稿和不可见的商品
+                List<Commodity> filteredCommodities = allCommoditiesPage.getContent().stream()
+                        .filter(c -> !"DRAFT".equals(c.getCommodityStatus()))
+                        .filter(c -> isCommodityVisibleToUser(c, user))
+                        .collect(Collectors.toList());
+                
+                // 手动分页
+                int start = (int) pageable.getOffset();
+                int end = Math.min(start + size, filteredCommodities.size());
+                List<Commodity> pagedList = start < filteredCommodities.size() 
+                        ? filteredCommodities.subList(start, end) 
+                        : Collections.emptyList();
+                
+                List<CommodityDTO> commodityDTOs = pagedList.stream()
+                        .map(this::convertToDTO)
+                        .collect(Collectors.toList());
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("commodities", commodityDTOs);
+                result.put("total", (long) filteredCommodities.size());
+                result.put("pages", (int) Math.ceil((double) filteredCommodities.size() / size));
+                result.put("current", page);
+                result.put("size", size);
+                
+                return Result.ok("获取用户商品成功", result);
+            } else {
+                // 按状态查询（只支持 ON_SHELF 和 OFF_SHELF）
+                if (!"ON_SHELF".equals(normalizedStatus) && !"OFF_SHELF".equals(normalizedStatus) && !"PUBLISHED".equals(normalizedStatus)) {
+                    return Result.fail("不支持的状态筛选，只支持 ON_SHELF、OFF_SHELF 和 PUBLISHED");
+                }
+                
+                commodityPage = commodityRepository.findBySellerIdAndCommodityStatus(targetSellerId, normalizedStatus, pageable);
+                
+                // 过滤可见性
+                List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
+                        .filter(commodity -> isCommodityVisibleToUser(commodity, user))
+                        .map(this::convertToDTO)
+                        .collect(Collectors.toList());
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("commodities", commodityDTOs);
+                result.put("total", commodityPage.getTotalElements());
+                result.put("pages", commodityPage.getTotalPages());
+                result.put("current", page);
+                result.put("size", size);
+                
+                return Result.ok("获取用户商品成功", result);
+            }
             
         } catch (Exception e) {
             log.error("获取用户商品失败: {}", e.getMessage(), e);
@@ -300,61 +367,6 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         }
     }
     
-    @Override
-    public Result getMyCommodities(User user, Integer page, Integer size) {
-        try {
-            log.info("获取我的商品 - userId: {}, page: {}, size: {}", 
-                    user.getUserId(), page, size);
-            
-            Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "publishTime"));
-            Page<Commodity> commodityPage = commodityRepository.findBySellerId(user.getUserId(), pageable);
-            
-            List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
-                    .map(this::convertToDTO)
-                    .collect(Collectors.toList());
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("commodities", commodityDTOs);
-            result.put("total", commodityPage.getTotalElements());
-            result.put("pages", commodityPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
-            
-            return Result.ok("获取我的商品成功", result);
-            
-        } catch (Exception e) {
-            log.error("获取我的商品失败: {}", e.getMessage(), e);
-            return Result.fail("获取我的商品失败");
-        }
-    }
-    
-    @Override
-    public Result getMyCommoditiesByStatus(User user, String status, Integer page, Integer size) {
-        try {
-            log.info("根据状态获取我的商品 - userId: {}, status: {}, page: {}, size: {}", 
-                    user.getUserId(), status, page, size);
-            
-            Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "publishTime"));
-            Page<Commodity> commodityPage = commodityRepository.findBySellerIdAndCommodityStatus(user.getUserId(), status, pageable);
-            
-            List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
-                    .map(this::convertToDTO)
-                    .collect(Collectors.toList());
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("commodities", commodityDTOs);
-            result.put("total", commodityPage.getTotalElements());
-            result.put("pages", commodityPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
-            
-            return Result.ok("根据状态获取我的商品成功", result);
-            
-        } catch (Exception e) {
-            log.error("根据状态获取我的商品失败: {}", e.getMessage(), e);
-            return Result.fail("获取我的商品失败");
-        }
-    }
     
     // ========== 权限检查实现 ==========
     

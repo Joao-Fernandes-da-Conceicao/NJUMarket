@@ -678,11 +678,8 @@ public class CommodityServiceImpl implements CommodityService {
                 return Result.fail("用户未登录");
             }
             
-            if (StringUtils.hasText(status)) {
-                return commodityQueryService.getMyCommoditiesByStatus(currentUser, status, page, size);
-            } else {
-                return commodityQueryService.getMyCommodities(currentUser, page, size);
-            }
+            // 统一使用 getUserCommodities 方法，sellerId 为 null 表示查询自己的商品
+            return commodityQueryService.getUserCommodities(currentUser, null, status, page, size);
             
         } catch (Exception e) {
             log.error("获取我的商品失败: {}", e.getMessage(), e);

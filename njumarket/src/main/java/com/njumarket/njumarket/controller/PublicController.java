@@ -88,4 +88,15 @@ public class PublicController {
                            @RequestParam(required = false) String sessionId) {
         return commodityQueryService.recordView(commodityId, sessionId);
     }
+
+    @Operation(summary = "获取指定卖家的商品列表", description = "获取指定卖家的商品列表（公开可见，排除草稿），支持状态筛选")
+    @GetMapping("/commodity/seller/{sellerId}")
+    public Result getSellerCommodities(
+            @Parameter(description = "卖家ID", required = true) @PathVariable String sellerId,
+            @Parameter(description = "商品状态", example = "all") @RequestParam(required = false, defaultValue = "all") String status,
+            @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
+            @Parameter(description = "每页数量", example = "10") @RequestParam(defaultValue = "10") Integer size) {
+        // 公共接口，user 参数为 null
+        return commodityQueryService.getUserCommodities(null, sellerId, status, page, size);
+    }
 }

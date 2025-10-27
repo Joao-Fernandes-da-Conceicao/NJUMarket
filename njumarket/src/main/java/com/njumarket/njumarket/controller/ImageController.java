@@ -1,5 +1,10 @@
 package com.njumarket.njumarket.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,9 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/**
- * 图片访问控制器
- */
+@Tag(name = "图片访问", description = "头像和商品图片访问接口")
 @Slf4j
 @RestController
 @RequestMapping("/api/images")
@@ -30,19 +33,23 @@ public class ImageController {
     @Value("${app.upload.commodity-path:uploads/commodities}")
     private String commodityUploadPath;
 
-    /**
-     * 获取头像图片
-     */
+    @Operation(summary = "获取头像图片", description = "根据文件名获取用户头像")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "获取成功"),
+        @ApiResponse(responseCode = "404", description = "图片不存在")
+    })
     @GetMapping("/avatars/{fileName}")
-    public ResponseEntity<Resource> getAvatar(@PathVariable String fileName) {
+    public ResponseEntity<Resource> getAvatar(@Parameter(description = "文件名", required = true) @PathVariable String fileName) {
         return getImage(avatarUploadPath, fileName);
     }
 
-    /**
-     * 获取商品图片
-     */
+    @Operation(summary = "获取商品图片", description = "根据文件名获取商品图片")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "获取成功"),
+        @ApiResponse(responseCode = "404", description = "图片不存在")
+    })
     @GetMapping("/commodities/{fileName}")
-    public ResponseEntity<Resource> getCommodityImage(@PathVariable String fileName) {
+    public ResponseEntity<Resource> getCommodityImage(@Parameter(description = "文件名", required = true) @PathVariable String fileName) {
         return getImage(commodityUploadPath, fileName);
     }
 

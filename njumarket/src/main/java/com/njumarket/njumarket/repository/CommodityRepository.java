@@ -4,6 +4,7 @@ import com.njumarket.njumarket.entity.Commodity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -13,7 +14,7 @@ import java.util.List;
  * 商品数据访问层
  */
 @Repository
-public interface CommodityRepository extends JpaRepository<Commodity, String> {
+public interface CommodityRepository extends JpaRepository<Commodity, String>, JpaSpecificationExecutor<Commodity> {
     
     /**
      * 根据卖家ID查找商品

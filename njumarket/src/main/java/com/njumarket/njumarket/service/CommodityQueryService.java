@@ -89,30 +89,17 @@ public interface CommodityQueryService {
     // ========== 用户相关查询 ==========
     
     /**
-     * 获取用户的商品（根据用户权限）
-     * @param user 当前用户
-     * @param sellerId 卖家ID
-     * @param pageable 分页参数
+     * 获取用户的商品（统一的查询接口）
+     * @param user 当前用户（可为null，用于权限判断）
+     * @param sellerId 卖家ID（如果为null，则查询当前用户的商品）
+     * @param status 商品状态（可选，all/DRAFT/PUBLISHED/ON_SHELF/OFF_SHELF）
+     *                如果user != null 且 sellerId 等于 user.getUserId()，可以查看草稿
+     *                否则只能查看非草稿状态的商品
+     * @param page 页码
+     * @param size 每页数量
      * @return 商品分页结果
      */
-    Result getUserCommodities(User user, String sellerId, Integer page, Integer size);
-    
-    /**
-     * 获取我的商品（包括草稿）
-     * @param user 当前用户
-     * @param pageable 分页参数
-     * @return 商品分页结果
-     */
-    Result getMyCommodities(User user, Integer page, Integer size);
-    
-    /**
-     * 根据状态获取我的商品
-     * @param user 当前用户
-     * @param status 商品状态
-     * @param pageable 分页参数
-     * @return 商品分页结果
-     */
-    Result getMyCommoditiesByStatus(User user, String status, Integer page, Integer size);
+    Result getUserCommodities(User user, String sellerId, String status, Integer page, Integer size);
     
     // ========== 权限检查 ==========
     

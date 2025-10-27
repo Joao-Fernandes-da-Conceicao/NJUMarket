@@ -15,15 +15,17 @@ import java.util.List;
 @Repository
 public interface MessageRepository extends JpaRepository<Message, String> {
     
-    // 获取对话的所有消息
+    // 获取对话的所有消息（过滤双向删除）
     @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
-           "AND m.isDeleted = false ORDER BY m.createdAt DESC")
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
+           "ORDER BY m.createdAt DESC")
     Page<Message> findByConversationId(@Param("conversationId") String conversationId, 
                                        Pageable pageable);
     
     // 获取对话的最新消息
     @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
-           "AND m.isDeleted = false ORDER BY m.createdAt DESC")
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
+           "ORDER BY m.createdAt DESC")
     List<Message> findLatestMessages(@Param("conversationId") String conversationId, 
                                      Pageable pageable);
     
@@ -38,27 +40,35 @@ public interface MessageRepository extends JpaRepository<Message, String> {
     
     // 获取未读消息数量
     @Query("SELECT COUNT(m) FROM Message m WHERE m.conversationId = :conversationId " +
-           "AND m.receiverId = :userId AND m.isRead = false AND m.isDeleted = false")
+           "AND m.receiverId = :userId AND m.isRead = false " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true)")
     int countUnreadMessages(@Param("conversationId") String conversationId, 
                            @Param("userId") String userId);
     
-    // 软删除消息
+    // 双向删除：设置发送方删除标记
     @Modifying
-    @Query("UPDATE Message m SET m.isDeleted = true WHERE m.messageId = :messageId")
-    void softDelete(@Param("messageId") String messageId);
+    @Query("UPDATE Message m SET m.deletedBySender = true WHERE m.messageId = :messageId")
+    void markDeletedBySender(@Param("messageId") String messageId);
+    
+    // 双向删除：设置接收方删除标记
+    @Modifying
+    @Query("UPDATE Message m SET m.deletedByReceiver = true WHERE m.messageId = :messageId")
+    void markDeletedByReceiver(@Param("messageId") String messageId);
     
     // 获取两个用户之间的消息历史
     @Query("SELECT m FROM Message m WHERE " +
            "((m.senderId = :userId1 AND m.receiverId = :userId2) OR " +
            "(m.senderId = :userId2 AND m.receiverId = :userId1)) " +
-           "AND m.isDeleted = false ORDER BY m.createdAt DESC")
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
+           "ORDER BY m.createdAt DESC")
     Page<Message> findMessagesBetweenUsers(@Param("userId1") String userId1, 
                                           @Param("userId2") String userId2,
                                           Pageable pageable);
     
     // 搜索消息内容
     @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
-           "AND m.content LIKE %:keyword% AND m.isDeleted = false " +
+           "AND m.content LIKE %:keyword% " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
            "ORDER BY m.createdAt DESC")
     Page<Message> searchMessages(@Param("conversationId") String conversationId, 
                                 @Param("keyword") String keyword,
@@ -66,13 +76,15 @@ public interface MessageRepository extends JpaRepository<Message, String> {
     
     // 获取特定时间之后的消息
     @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
-           "AND m.createdAt > :afterTime AND m.isDeleted = false " +
+           "AND m.createdAt > :afterTime " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
            "ORDER BY m.createdAt ASC")
     List<Message> findMessagesAfter(@Param("conversationId") String conversationId, 
-                                    @Param("afterTime") LocalDateTime afterTime);
+                                   @Param("afterTime") LocalDateTime afterTime);
     
     // 获取用户发送的最后一条消息
     @Query("SELECT m FROM Message m WHERE m.senderId = :userId " +
-           "AND m.isDeleted = false ORDER BY m.createdAt DESC")
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
+           "ORDER BY m.createdAt DESC")
     List<Message> findLastMessageBySender(@Param("userId") String userId, Pageable pageable);
 }

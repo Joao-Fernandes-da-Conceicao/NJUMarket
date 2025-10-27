@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS conversations (
     INDEX idx_seller_id (seller_id),
     INDEX idx_commodity_id (commodity_id),
     INDEX idx_order_id (order_id),
-    INDEX idx_last_message_time (last_message_time)
+    INDEX idx_last_message_time (last_message_time),
+    -- 联合索引：买家+时间，用于快速查询买家的对话列表
+    INDEX idx_buyer_time (buyer_id, last_message_time),
+    -- 联合索引：卖家+时间，用于快速查询卖家的对话列表
+    INDEX idx_seller_time (seller_id, last_message_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='对话表';
 
 -- 创建消息表（Message）
@@ -39,7 +43,11 @@ CREATE TABLE IF NOT EXISTS messages (
     INDEX idx_sender_id (sender_id),
     INDEX idx_receiver_id (receiver_id),
     INDEX idx_created_at (created_at),
-    INDEX idx_is_read (is_read)
+    INDEX idx_is_read (is_read),
+    -- 联合索引：发送者+时间，用于快速查询发送者的消息
+    INDEX idx_sender_time (sender_id, created_at),
+    -- 联合索引：接收者+时间，用于快速查询接收者的消息
+    INDEX idx_receiver_time (receiver_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消息表';
 
 -- 创建联系人黑名单表（可选功能）

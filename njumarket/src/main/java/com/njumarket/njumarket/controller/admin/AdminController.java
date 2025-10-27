@@ -199,4 +199,134 @@ public class AdminController {
         @RequestBody List<String> permissions) {
         return adminService.updatePermissions(adminId, permissions);
     }
+
+    // ===================== 管理端最小CRUD：用户 =====================
+    @GetMapping("/users")
+    public Result listUsers(@RequestParam(defaultValue = "1") Integer page,
+                            @RequestParam(defaultValue = "10") Integer size,
+                            @RequestParam(required = false) String keyword,
+                            @RequestParam(required = false) String accountStatus,
+                            @RequestParam(required = false) String sortProp,
+                            @RequestParam(required = false) String sortOrder) {
+        return adminService.listUsers(page, size, keyword, accountStatus, sortProp, sortOrder);
+    }
+
+    @GetMapping("/users/{userId}")
+    public Result getUser(@PathVariable String userId) {
+        return adminService.getUserById(userId);
+    }
+
+    @PutMapping("/users/{userId}/status")
+    public Result updateUserStatus(@PathVariable String userId,
+                                   @RequestParam String status) {
+        return adminService.updateUserStatus(userId, status);
+    }
+
+    @PutMapping("/users/{userId}")
+    public Result updateUserBasic(@PathVariable String userId,
+                                  @RequestParam(required = false) String nickname,
+                                  @RequestParam(required = false) String phone,
+                                  @RequestParam(required = false) String email) {
+        return adminService.updateUserBasic(userId, nickname, phone, email);
+    }
+
+    @DeleteMapping("/users/{userId}")
+    public Result deleteUser(@PathVariable String userId) {
+        return adminService.deleteUser(userId);
+    }
+
+    @PutMapping("/users/{userId}/full")
+    public Result updateUserFull(@PathVariable String userId, @RequestBody java.util.Map<String, Object> payload) {
+        return adminService.updateUserFull(userId, payload);
+    }
+
+    // ===================== 管理端最小CRUD：商品 =====================
+    @GetMapping("/commodities")
+    public Result listCommodities(@RequestParam(defaultValue = "1") Integer page,
+                                  @RequestParam(defaultValue = "10") Integer size,
+                                  @RequestParam(required = false) String keyword,
+                                  @RequestParam(required = false) String category,
+                                  @RequestParam(required = false) String conditionLevel,
+                                  @RequestParam(required = false, name = "status") String commodityStatus,
+                                  @RequestParam(required = false) String sellerVisibility,
+                                  @RequestParam(required = false) String buyerVisibility,
+                                  @RequestParam(required = false) String sortProp,
+                                  @RequestParam(required = false) String sortOrder) {
+        return adminService.listCommodities(page, size, keyword, category, conditionLevel, commodityStatus, sellerVisibility, buyerVisibility, sortProp, sortOrder);
+    }
+
+    @GetMapping("/commodities/{commodityId}")
+    public Result getCommodity(@PathVariable String commodityId) {
+        return adminService.getCommodityById(commodityId);
+    }
+
+    @PutMapping("/commodities/{commodityId}/status")
+    public Result updateCommodityStatus(@PathVariable String commodityId,
+                                        @RequestParam String status) {
+        return adminService.updateCommodityStatus(commodityId, status);
+    }
+
+    @DeleteMapping("/commodities/{commodityId}")
+    public Result deleteCommodity(@PathVariable String commodityId) {
+        return adminService.deleteCommodity(commodityId);
+    }
+
+    @PutMapping("/commodities/{commodityId}/full")
+    public Result updateCommodityFull(@PathVariable String commodityId, @RequestBody java.util.Map<String, Object> payload) {
+        return adminService.updateCommodityFull(commodityId, payload);
+    }
+
+    // ===================== 管理端最小CRUD：订单 =====================
+    @GetMapping("/orders")
+    public Result listOrders(@RequestParam(defaultValue = "1") Integer page,
+                             @RequestParam(defaultValue = "10") Integer size,
+                             @RequestParam(required = false) String keyword,
+                             @RequestParam(required = false) String status,
+                             @RequestParam(required = false) String sortProp,
+                             @RequestParam(required = false) String sortOrder) {
+        return adminService.listOrders(page, size, keyword, status, sortProp, sortOrder);
+    }
+
+    @GetMapping("/orders/{orderId}")
+    public Result getOrder(@PathVariable String orderId) {
+        return adminService.getOrderById(orderId);
+    }
+
+    @PutMapping("/orders/{orderId}")
+    public Result updateOrder(@PathVariable String orderId,
+                              @RequestParam(required = false) String status,
+                              @RequestParam(required = false) String trackingNumber,
+                              @RequestParam(required = false) String remark) {
+        return adminService.updateOrderFields(orderId, status, trackingNumber, remark);
+    }
+
+    @DeleteMapping("/orders/{orderId}")
+    public Result deleteOrder(@PathVariable String orderId) {
+        return adminService.deleteOrder(orderId);
+    }
+
+    // ===================== 管理端最小CRUD：会话/消息 =====================
+    @GetMapping("/conversations")
+    public Result listConversations(@RequestParam(defaultValue = "1") Integer page,
+                                    @RequestParam(defaultValue = "10") Integer size,
+                                    @RequestParam(required = false) String keyword) {
+        return adminService.listConversations(page, size, keyword);
+    }
+
+    @DeleteMapping("/conversations/{conversationId}")
+    public Result deleteConversation(@PathVariable String conversationId) {
+        return adminService.deleteConversation(conversationId);
+    }
+
+    @GetMapping("/conversations/{conversationId}/messages")
+    public Result listMessages(@PathVariable String conversationId,
+                               @RequestParam(defaultValue = "1") Integer page,
+                               @RequestParam(defaultValue = "10") Integer size) {
+        return adminService.listMessages(conversationId, page, size);
+    }
+
+    @DeleteMapping("/messages/{messageId}")
+    public Result deleteMessage(@PathVariable String messageId) {
+        return adminService.deleteMessage(messageId);
+    }
 }

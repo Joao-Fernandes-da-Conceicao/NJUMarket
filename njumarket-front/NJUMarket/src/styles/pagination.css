@@ -1,0 +1,215 @@
+/**
+ * 翻页器统一样式
+ * 所有页面共享此样式，避免重复代码
+ */
+
+/* 翻页器容器 */
+.pagination-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--spacing-xl, 40px);
+}
+
+.pagination-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 20px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* 总数显示 */
+.pagination-total {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: normal;
+}
+
+/* 每页显示数量选择器 */
+.custom-page-size-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid var(--primary-color);
+  border-radius: var(--radius-pill, 20px);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.custom-page-size-select:hover {
+  border-color: var(--primary-light);
+  box-shadow: 0 4px 12px rgba(106, 1, 94, 0.15);
+}
+
+.custom-page-size-select .select-label {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: normal;
+  margin-right: var(--spacing-xs, 8px);
+  white-space: nowrap;
+}
+
+.custom-page-size-select .select-value {
+  flex: 1;
+  color: var(--text-primary, #333);
+  font-size: 14px;
+  font-weight: normal;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.custom-page-size-select .select-icon {
+  color: var(--primary-color);
+  font-size: 12px;
+  margin-left: var(--spacing-xs, 8px);
+  transition: transform 0.3s ease;
+}
+
+.custom-page-size-select:hover .select-icon {
+  transform: rotate(180deg);
+}
+
+/* 弹出式选择器 */
+.select-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--primary-color);
+  border-radius: var(--radius-md, 16px);
+  box-shadow: 0 4px 16px rgba(106, 1, 94, 0.2);
+  z-index: 1000;
+  margin-top: 4px;
+  padding: var(--spacing-xs, 8px);
+}
+
+.popup-option {
+  padding: 8px var(--spacing-sm, 12px);
+  margin: 2px 0;
+  border-radius: var(--radius-pill, 20px);
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: normal;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.popup-option:hover {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+/* 翻页按钮组 */
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 8px);
+}
+
+/* 翻页按钮 */
+.page-btn {
+  background-color: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: var(--radius-pill, 20px);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: normal;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 80px;
+}
+
+.page-btn:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.page-btn:disabled {
+  background-color: transparent;
+  color: #ccc;
+  border-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* 页码按钮 */
+.page-numbers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.page-number {
+  background-color: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: var(--radius-pill, 20px);
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  font-weight: normal;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-number:hover:not(:disabled) {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.page-number.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.page-number:disabled {
+  border-color: transparent;
+  color: #999;
+  cursor: default;
+}
+
+/* 跳转输入框 */
+.page-jumper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 8px);
+}
+
+.jumper-label {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.jumper-input {
+  background-color: transparent;
+  border: 1px solid var(--primary-color);
+  color: var(--primary-color);
+  border-radius: var(--radius-pill, 20px);
+  padding: 8px var(--spacing-sm, 12px);
+  width: 60px;
+  height: 32px;
+  font-size: 14px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.jumper-input:hover,
+.jumper-input:focus {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+  outline: none;
+}

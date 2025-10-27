@@ -29,11 +29,11 @@ public class Message {
     @Column(name = "image_url")
     private String imageUrl;
     
-    @Column(name = "commodity_snapshot", columnDefinition = "JSON")
-    private String commoditySnapshot;
+    @Column(name = "commodity_id", length = 50)
+    private String commodityId; // 商品ID（实时查询，用于商品卡片）
     
-    @Column(name = "order_snapshot", columnDefinition = "JSON")
-    private String orderSnapshot;
+    @Column(name = "order_id", length = 50)
+    private String orderId; // 订单ID（实时查询，用于订单卡片）
     
     @Column(name = "is_read")
     private Boolean isRead = false;
@@ -41,8 +41,11 @@ public class Message {
     @Column(name = "read_time")
     private LocalDateTime readTime;
     
-    @Column(name = "is_deleted")
-    private Boolean isDeleted = false;
+    @Column(name = "deleted_by_sender")
+    private Boolean deletedBySender = false;
+    
+    @Column(name = "deleted_by_receiver")
+    private Boolean deletedByReceiver = false;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -65,8 +68,11 @@ public class Message {
         if (isRead == null) {
             isRead = false;
         }
-        if (isDeleted == null) {
-            isDeleted = false;
+        if (deletedBySender == null) {
+            deletedBySender = false;
+        }
+        if (deletedByReceiver == null) {
+            deletedByReceiver = false;
         }
     }
     
@@ -145,20 +151,20 @@ public class Message {
         this.imageUrl = imageUrl;
     }
     
-    public String getCommoditySnapshot() {
-        return commoditySnapshot;
+    public String getCommodityId() {
+        return commodityId;
     }
     
-    public void setCommoditySnapshot(String commoditySnapshot) {
-        this.commoditySnapshot = commoditySnapshot;
+    public void setCommodityId(String commodityId) {
+        this.commodityId = commodityId;
     }
     
-    public String getOrderSnapshot() {
-        return orderSnapshot;
+    public String getOrderId() {
+        return orderId;
     }
     
-    public void setOrderSnapshot(String orderSnapshot) {
-        this.orderSnapshot = orderSnapshot;
+    public void setOrderId(String orderId) {
+        this.orderId = orderId;
     }
     
     public Boolean getIsRead() {
@@ -177,12 +183,20 @@ public class Message {
         this.readTime = readTime;
     }
     
-    public Boolean getIsDeleted() {
-        return isDeleted;
+    public Boolean getDeletedBySender() {
+        return deletedBySender;
     }
     
-    public void setIsDeleted(Boolean isDeleted) {
-        this.isDeleted = isDeleted;
+    public void setDeletedBySender(Boolean deletedBySender) {
+        this.deletedBySender = deletedBySender;
+    }
+    
+    public Boolean getDeletedByReceiver() {
+        return deletedByReceiver;
+    }
+    
+    public void setDeletedByReceiver(Boolean deletedByReceiver) {
+        this.deletedByReceiver = deletedByReceiver;
     }
     
     public LocalDateTime getCreatedAt() {

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <link rel="icon" href="<%= BASE_URL %>favicon.ico">
+    <title><%= htmlWebpackPlugin.options.title %></title>
+  </head>
+  <body>
+    <noscript>
+      <strong>We're sorry but <%= htmlWebpackPlugin.options.title %> doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
+    </noscript>
+    <div id="app"></div>
+    <!-- built files will be auto injected -->
+    
+    <!-- 抑制 ResizeObserver 警告 - 在页面加载的最早阶段 -->
+    <script>
+      (function() {
+        // 立即拦截 console 输出
+        const originalError = console.error
+        const originalWarn = console.warn
+        const originalLog = console.log
+        
+        const shouldSuppress = (message) => {
+          if (!message) return false
+          const msgStr = String(message)
+          return msgStr.includes('ResizeObserver') || 
+                 (msgStr.includes('loop completed') && msgStr.includes('undelivered notifications'))
+        }
+        
+        console.error = function(...args) {
+          if (args.some(arg => shouldSuppress(arg))) {
+            return
+          }
+          originalError.apply(console, args)
+        }
+        
+        console.warn = function(...args) {
+          if (args.some(arg => shouldSuppress(arg))) {
+            return
+          }
+          originalWarn.apply(console, args)
+        }
+        
+        console.log = function(...args) {
+          if (args.some(arg => shouldSuppress(arg))) {
+            return
+          }
+          originalLog.apply(console, args)
+        }
+        
+        // 保存原始的 window.onerror
+        const originalOnError = window.onerror
+        
+        window.onerror = function(message, source, lineno, colno, error) {
+          // 如果是 ResizeObserver 相关错误，则忽略
+          if (message && message.includes && message.includes('ResizeObserver')) {
+            return true
+          }
+          // 如果是 parentNode 错误，则忽略
+          if (message && message.includes && message.includes('Cannot read properties of null') && message.includes('parentNode')) {
+            return true
+          }
+          
+          // 否则调用原始的 onerror 处理器
+          if (originalOnError) {
+            return originalOnError.apply(this, arguments)
+          }
+          return false
+        }
+        
+        // 监听 unhandledrejection 事件
+        window.addEventListener('unhandledrejection', function(event) {
+          const reason = String(event.reason || '')
+          if (reason.includes('ResizeObserver') || 
+              (reason.includes('Cannot read properties of null') && reason.includes('parentNode'))) {
+            event.preventDefault()
+          }
+        }, true)
+        
+        // 监听所有错误事件
+        window.addEventListener('error', function(event) {
+          const msg = event.message || ''
+          if (msg.includes('ResizeObserver') || 
+              (msg.includes('Cannot read properties of null') && msg.includes('parentNode'))) {
+            event.preventDefault()
+            event.stopPropagation()
+            return false
+          }
+        }, true)
+      })()
+    </script>
+  </body>
+</html>

@@ -19,6 +19,10 @@ public class OrderDTO {
     private String shippingAddress;
     private String trackingNumber;
     private String remark;
+    private String createTime; // 订单创建时间
+    private String payTime; // 支付时间
+    private String shippingTime; // 发货时间
+    private String deliveryTime; // 签收时间
     
     // 退货相关字段
     private String returnReason;

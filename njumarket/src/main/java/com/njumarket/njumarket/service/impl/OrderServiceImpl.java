@@ -164,7 +164,7 @@ public class OrderServiceImpl implements OrderService {
             // 支付订单
             if (order.payOrder()) {
                 orderRepository.save(order);
-                log.info("订单支付成功 - orderId: {}", orderId);
+                log.info("订单支付成功 - orderId: {}, payTime: {}", orderId, order.getPayTime());
                 return Result.ok("订单支付成功");
             } else {
                 return Result.fail("订单支付失败");
@@ -209,7 +209,8 @@ public class OrderServiceImpl implements OrderService {
             // 确认收货
             if (order.completeOrder()) {
                 orderRepository.save(order);
-                log.info("订单确认收货成功 - orderId: {}", orderId);
+                log.info("订单确认收货成功 - orderId: {}, deliveryTime: {}", 
+                    orderId, order.getDeliveryTime());
                 return Result.ok("订单确认收货成功");
             } else {
                 return Result.fail("订单确认收货失败");
@@ -423,7 +424,8 @@ public class OrderServiceImpl implements OrderService {
             // 发货
             if (order.shipOrder(trackingNumber)) {
                 orderRepository.save(order);
-                log.info("订单发货成功 - orderId: {}", orderId);
+                log.info("订单发货成功 - orderId: {}, shippingTime: {}, trackingNumber: {}", 
+                    orderId, order.getShippingTime(), trackingNumber);
                 return Result.ok("订单发货成功");
             } else {
                 return Result.fail("订单发货失败");
@@ -696,6 +698,10 @@ public class OrderServiceImpl implements OrderService {
         dto.setShippingAddress(order.getShippingAddress());
         dto.setTrackingNumber(order.getTrackingNumber());
         dto.setRemark(order.getRemark());
+        dto.setCreateTime(order.getCreateTime() != null ? order.getCreateTime().toString() : null);
+        dto.setPayTime(order.getPayTime() != null ? order.getPayTime().toString() : null);
+        dto.setShippingTime(order.getShippingTime() != null ? order.getShippingTime().toString() : null);
+        dto.setDeliveryTime(order.getDeliveryTime() != null ? order.getDeliveryTime().toString() : null);
         
         // 退货相关字段
         dto.setReturnReason(order.getReturnReason());

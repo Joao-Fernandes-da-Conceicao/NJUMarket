@@ -10,8 +10,8 @@ public class MessageDTO {
     private String messageType;
     private String content;
     private String imageUrl;
-    private String commoditySnapshot;
-    private String orderSnapshot;
+    private String commodityId; // 商品ID（实时查询，用于商品卡片）
+    private String orderId; // 订单ID（实时查询，用于订单卡片）
     private Boolean isRead;
     private LocalDateTime readTime;
     private LocalDateTime createdAt;
@@ -80,20 +80,20 @@ public class MessageDTO {
         this.imageUrl = imageUrl;
     }
     
-    public String getCommoditySnapshot() {
-        return commoditySnapshot;
+    public String getCommodityId() {
+        return commodityId;
     }
     
-    public void setCommoditySnapshot(String commoditySnapshot) {
-        this.commoditySnapshot = commoditySnapshot;
+    public void setCommodityId(String commodityId) {
+        this.commodityId = commodityId;
     }
     
-    public String getOrderSnapshot() {
-        return orderSnapshot;
+    public String getOrderId() {
+        return orderId;
     }
     
-    public void setOrderSnapshot(String orderSnapshot) {
-        this.orderSnapshot = orderSnapshot;
+    public void setOrderId(String orderId) {
+        this.orderId = orderId;
     }
     
     public Boolean getIsRead() {

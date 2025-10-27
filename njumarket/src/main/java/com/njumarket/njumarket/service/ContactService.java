@@ -17,8 +17,8 @@ public interface ContactService {
     // 获取对话详情（包含消息历史）
     Result getConversationDetail(String userId, String conversationId, int page, int size);
     
-    // 获取或创建对话
-    Result getOrCreateConversation(String userId, String otherUserId, String commodityId, String orderId);
+    // 获取或创建对话（基于用户对，确保唯一性，不再依赖商品/订单）
+    Result getOrCreateConversation(String userId, String otherUserId);
     
     // 标记对话消息为已读
     Result markConversationAsRead(String userId, String conversationId);
