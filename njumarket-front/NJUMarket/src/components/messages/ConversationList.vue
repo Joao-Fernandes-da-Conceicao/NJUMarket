@@ -2,7 +2,7 @@
   <div class="conversations-panel" :class="{ hidden: hidden }">
     <div class="panel-header">
       <h3>消息</h3>
-      <span class="unread-badge" v-if="totalUnreadCount > 0">{{ totalUnreadCount }}</span>
+      <UnreadBadge :count="totalUnreadCount" type="text" />
     </div>
 
     <div class="conversations-list" v-loading="loading">
@@ -14,10 +14,11 @@
         @click="$emit('select', conversation)"
       >
         <div class="conversation-avatar">
-          <el-avatar :size="48" :src="getAvatarUrl(conversation.otherUserAvatar)">
-            {{ conversation.otherUserNickname?.charAt(0) || 'U' }}
-          </el-avatar>
-          <span v-if="conversation.unreadCount > 0" class="unread-dot"></span>
+          <UnreadBadge :count="conversation.unreadCount" type="dot">
+            <el-avatar :size="48" :src="getAvatarUrl(conversation.otherUserAvatar)">
+              {{ conversation.otherUserNickname?.charAt(0) || 'U' }}
+            </el-avatar>
+          </UnreadBadge>
         </div>
 
         <div class="conversation-info">
@@ -28,8 +29,8 @@
           </div>
           <div class="last-message">
             <span class="message-content">{{ conversation.lastMessageContent || '暂无消息' }}</span>
-            <el-badge v-if="conversation.unreadCount > 0" :value="conversation.unreadCount" class="unread-count" />
           </div>
+          <UnreadBadge :count="conversation.unreadCount" type="number" :max="99" class="conversation-badge" />
         </div>
       </div>
 
@@ -40,6 +41,7 @@
 
 <script setup>
 /* global defineProps, defineEmits */
+import UnreadBadge from '../common/UnreadBadge.vue'
 
 defineProps({
   conversations: { type: Array, required: true },
@@ -79,14 +81,7 @@ defineEmits(['select'])
   margin: 0;
 }
 
-.unread-badge {
-  background-color: #f56c6c;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: normal;
-}
+/* 统一角标样式已由 UnreadBadge 组件管理，这里可以移除或保留作为后备样式 */
 
 .conversations-list {
   flex: 1;
@@ -115,20 +110,28 @@ defineEmits(['select'])
   margin-right: 12px;
 }
 
-.unread-dot {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
-  background-color: #f56c6c;
-  border-radius: 50%;
-  border: 2px solid white;
-}
+/* 点状角标样式已由 UnreadBadge 组件管理 */
 
 .conversation-info {
   flex: 1;
   overflow: hidden;
+  min-width: 0; /* 确保文本可以正确截断 */
+  position: relative; /* 为角标绝对定位提供定位上下文 */
+}
+
+.conversation-badge {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%); /* 垂直居中 */
+  flex-shrink: 0;
+  /* Element Plus el-badge 默认是居中定位，通过 margin-right 调整为靠右边缘 */
+  margin-right: 20px; /* 负边距让角标更靠右，可根据实际显示效果调整 */
+}
+
+/* 确保 el-badge 内部角标内容靠右边缘显示 */
+.conversation-badge :deep(.el-badge__content) {
+  right: 0 !important;
 }
 
 .info-header {
@@ -162,7 +165,7 @@ defineEmits(['select'])
 .last-message {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  padding-right: 50px; /* 为右侧角标预留空间，避免文本被遮挡 */
 }
 
 .message-content {

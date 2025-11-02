@@ -166,7 +166,11 @@ export const commodityAPI = {
   
   // 修改商品买家可见性
   updateBuyerVisibility: (id, buyerVisibility) => 
-    api.put(`/user/commodity/${id}/buyer-visibility`, null, { params: { buyerVisibility } })
+    api.put(`/user/commodity/${id}/buyer-visibility`, null, { params: { buyerVisibility } }),
+  
+  // ✅ 批量查询商品状态（用于聊天界面，轻量级查询）
+  getBatchStatus: (commodityIds) => 
+    api.post('/user/commodity/batch-status', commodityIds)
 }
 
 // 订单相关API
@@ -251,7 +255,11 @@ export const orderAPI = {
   queryOriginalCommodity: (orderId) => api.get(`/user/order/${orderId}/query-commodity`),
   
   // 基于快照创建新订单
-  createOrderFromSnapshot: (orderId, orderData) => api.post(`/user/order/${orderId}/create-from-snapshot`, orderData)
+  createOrderFromSnapshot: (orderId, orderData) => api.post(`/user/order/${orderId}/create-from-snapshot`, orderData),
+  
+  // ✅ 批量查询订单状态（用于聊天界面，轻量级查询）
+  getBatchStatus: (orderIds) => 
+    api.post('/user/order/batch-status', orderIds)
 }
 
 // 用户资料相关API
@@ -318,5 +326,14 @@ export const imageAPI = {
 
 // 导入并导出contactAPI
 export { contactAPI } from './contact'
+
+// ✅ 聊天数据相关API（增量查询）
+export const chatAPI = {
+  // 增量查询商品和订单变更
+  getIncrementalUpdate: (lastPollTimestamp) =>
+    api.get('/user/chat/incremental-update', { 
+      params: { lastPollTimestamp } 
+    })
+}
 
 export default api

@@ -37,6 +37,10 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-thymeleaf</artifactId>
 		</dependency>
 		
@@ -155,6 +159,12 @@
 			<optional>true</optional>
 		</dependency>
 		
+		<!-- 注解API（用于消除注解处理器警告） -->
+		<dependency>
+			<groupId>jakarta.annotation</groupId>
+			<artifactId>jakarta.annotation-api</artifactId>
+		</dependency>
+		
 		<!-- 测试相关 -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -179,6 +189,7 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
+					<parameters>true</parameters>
 					<annotationProcessorPaths>
 						<path>
 							<groupId>org.projectlombok</groupId>
@@ -191,6 +202,10 @@
 							<version>3.2.0</version>
 						</path>
 					</annotationProcessorPaths>
+					<!-- 忽略注解处理器的警告 -->
+					<compilerArgs>
+						<arg>-Xlint:-processing</arg>
+					</compilerArgs>
 				</configuration>
 			</plugin>
 			<plugin>

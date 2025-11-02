@@ -68,11 +68,10 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, ref, onMounted } from 'vue'
+import { defineProps, defineEmits, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCommodityImageUrl, getAvatarUrl } from '../../utils/imageUtils'
 import { formatPrice, formatTime } from '../../utils/formatUtils'
-import { profileAPI } from '../../api/index'
 import UnifiedTag from '../common/UnifiedTag.vue'
 
 const router = useRouter()
@@ -89,10 +88,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['click'])
-
-// 卖家信息
-const sellerInfo = ref(null)
-const sellerLoading = ref(false)
 
 const handleClick = () => {
   emit('click', props.commodity)
@@ -124,25 +119,6 @@ const getStatusText = (status) => {
   return statusMap[status] || '未知'
 }
 
-// 获取卖家信息
-const fetchSellerInfo = async () => {
-  if (!props.showSellerInfo || !props.commodity.sellerId) {
-    return
-  }
-  
-  try {
-    sellerLoading.value = true
-    const response = await profileAPI.getUser(props.commodity.sellerId)
-    if (response.success) {
-      sellerInfo.value = response.data
-    }
-  } catch (error) {
-    console.error('获取卖家信息失败:', error)
-  } finally {
-    sellerLoading.value = false
-  }
-}
-
 // 卖家信息点击跳转
 const handleSellerClick = () => {
   if (props.commodity.sellerId) {
@@ -150,9 +126,19 @@ const handleSellerClick = () => {
   }
 }
 
-onMounted(() => {
-  fetchSellerInfo()
+// ✅ 优化：直接使用后端返回的卖家信息，无需额外查询
+const sellerInfo = computed(() => {
+  if (!props.showSellerInfo || !props.commodity.sellerId) {
+    return null
+  }
+  // 后端已通过批量查询返回 sellerNickname 和 sellerAvatar
+  return {
+    nickname: props.commodity.sellerNickname || '卖家',
+    avatar: props.commodity.sellerAvatar
+  }
 })
+
+const sellerLoading = computed(() => false) // 后端已返回，无需加载
 </script>
 
 <style scoped>

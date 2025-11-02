@@ -41,4 +41,13 @@ public class RedisConstants {
     // 限流相关
     public static final String RATE_LIMIT_KEY = "rate:limit:";
     public static final Long RATE_LIMIT_TTL = 1L; // 限流1分钟
+    
+    // ✅ 增量轮询相关：商品和订单变更记录
+    public static final String COMMODITY_CHANGE_KEY = "chat:commodity:change:"; // 商品变更记录
+    public static final String ORDER_CHANGE_KEY = "chat:order:change:"; // 订单变更记录
+    public static final Long CHANGE_RECORD_TTL = 24 * 60 * 60L; // 变更记录保留24小时（秒）
+    
+    // ✅ WebSocket消息推送重试队列
+    public static final String WEBSOCKET_RETRY_QUEUE_KEY = "websocket:retry:queue"; // WebSocket重试队列
+    public static final Long WEBSOCKET_RETRY_TTL = 30 * 60L; // 重试消息保留30分钟（秒）
 }

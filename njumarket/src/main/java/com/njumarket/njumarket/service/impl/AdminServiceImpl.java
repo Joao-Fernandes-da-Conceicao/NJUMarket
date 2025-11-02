@@ -1112,12 +1112,15 @@ public class AdminServiceImpl implements AdminService {
     private Map<String, Object> toSimpleConversation(com.njumarket.njumarket.entity.Conversation c) {
         Map<String, Object> m = new HashMap<>();
         m.put("conversationId", c.getConversationId());
-        m.put("buyerId", c.getBuyerId());
-        m.put("sellerId", c.getSellerId());
-        m.put("commodityId", c.getCommodityId());
+        m.put("userId1", c.getUserId1());
+        m.put("userId2", c.getUserId2());
+        m.put("user1Count", c.getUser1Count());
+        m.put("user2Count", c.getUser2Count());
         m.put("lastMessageContent", c.getLastMessageContent());
         m.put("lastMessageTime", c.getLastMessageTime());
         m.put("status", c.getStatus());
+        m.put("createdAt", c.getCreatedAt());
+        m.put("updatedAt", c.getUpdatedAt());
         return m;
     }
 

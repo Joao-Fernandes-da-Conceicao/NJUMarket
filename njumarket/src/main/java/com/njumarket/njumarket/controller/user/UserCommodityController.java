@@ -3,11 +3,14 @@ package com.njumarket.njumarket.controller.user;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.CommodityDTO;
 import com.njumarket.njumarket.service.CommodityService;
+import com.njumarket.njumarket.service.CommodityQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 /**
  * 用户商品控制器（卖家功能）
@@ -20,7 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserCommodityController {
 
     private final CommodityService commodityService;
-    // private final CommodityQueryService commodityQueryService;
+    private final CommodityQueryService commodityQueryService;
 
     @Operation(summary = "发布商品", description = "发布新商品")
     @PostMapping("/publish")
@@ -142,5 +145,12 @@ public class UserCommodityController {
     public Result updateCommodityBuyerVisibility(@PathVariable String commodityId,
                                               @RequestParam String buyerVisibility) {
         return commodityService.updateCommodityBuyerVisibility(commodityId, buyerVisibility);
+    }
+    
+    // ✅ 批量查询商品状态（用于聊天界面，轻量级查询）
+    @Operation(summary = "批量查询商品状态", description = "批量查询商品基本信息，用于聊天界面显示，只返回轻量级信息")
+    @PostMapping("/batch-status")
+    public Result getCommoditiesBatchStatus(@RequestBody List<String> commodityIds) {
+        return commodityQueryService.getCommoditiesBatchStatus(commodityIds);
     }
 }

@@ -12,6 +12,8 @@ import java.util.List;
 public class CommodityDTO {
     private String commodityId;
     private String sellerId;
+    private String sellerNickname; // 卖家昵称（批量查询优化）
+    private String sellerAvatar;   // 卖家头像（批量查询优化）
     private String title;
     private String description;
     private Double price;

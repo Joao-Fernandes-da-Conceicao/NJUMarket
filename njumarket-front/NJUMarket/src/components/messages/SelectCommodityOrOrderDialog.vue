@@ -82,7 +82,7 @@
                 </UnifiedTag>
               </div>
               <h4 class="item-title">{{ item.commoditySnapshotTitle || '商品' }}</h4>
-              <div class="item-price">¥{{ formatPrice(item.totalAmount) }}</div>
+              <div class="item-price">¥{{ formatPrice(item.payAmount || item.totalAmount || item.commoditySnapshotPrice || 0) }}</div>
               <div class="item-meta">
                 <span>数量: {{ item.quantity }}</span>
                 <span>{{ formatTime(item.createTime) }}</span>
@@ -132,8 +132,8 @@
 
 <script setup>
 /* global defineProps, defineEmits */
-import { ref, computed, watch } from 'vue'
-import { isMobile as globalIsMobile } from '../../utils/responsive'
+import { ref, computed, watch, inject } from 'vue'
+import { isMobile as globalIsMobile } from '../../config/responsive'
 import { Search, Check } from '@element-plus/icons-vue'
 import { commodityAPI, orderAPI, profileAPI } from '../../api'
 import { imageAPI } from '../../api'
@@ -142,6 +142,9 @@ import UnifiedInput from '../common/UnifiedInput.vue'
 import UnifiedButton from '../common/UnifiedButton.vue'
 import UnifiedTag from '../common/UnifiedTag.vue'
 import { ElMessage } from 'element-plus'
+
+// ✅ 注入父组件（Messages.vue）的增量更新结果
+const incrementalUpdateResult = inject('incrementalUpdateResult', null)
 
 const props = defineProps({
   modelValue: {
@@ -183,6 +186,51 @@ const items = ref([])
 const searchKeyword = ref('')
 const selectedCommodityId = ref(null)
 const selectedOrderId = ref(null)
+
+// ✅ 更新对话框列表中的商品/订单数据（基于增量轮询结果）
+const updateDialogItemsFromPoll = (commodities = [], orders = []) => {
+  let updatedCount = 0
+  
+  if (commodities.length > 0 && props.type === 'commodity') {
+    const commodityMap = new Map(commodities.map(c => [c.commodityId, c]))
+    items.value.forEach((item, index) => {
+      if (commodityMap.has(item.commodityId)) {
+        const updatedCommodity = commodityMap.get(item.commodityId)
+        // 合并更新，保留原有数据但更新变更的字段
+        items.value[index] = {
+          ...item,
+          ...updatedCommodity,
+          // 保留原有的seller信息（如果新的没有）
+          sellerNickname: updatedCommodity.sellerNickname || item.sellerNickname,
+          sellerAvatar: updatedCommodity.sellerAvatar || item.sellerAvatar
+        }
+        updatedCount++
+      }
+    })
+  }
+  
+  if (orders.length > 0 && props.type === 'order') {
+    const orderMap = new Map(orders.map(o => [o.orderId, o]))
+    items.value.forEach((item, index) => {
+      if (orderMap.has(item.orderId)) {
+        const updatedOrder = orderMap.get(item.orderId)
+        // 合并更新，保留原有数据但更新变更的字段
+        items.value[index] = {
+          ...item,
+          ...updatedOrder,
+          // 保留原有的用户信息（如果新的没有）
+          sellerNickname: updatedOrder.sellerNickname || item.sellerNickname,
+          sellerAvatar: updatedOrder.sellerAvatar || item.sellerAvatar,
+          buyerNickname: updatedOrder.buyerNickname || item.buyerNickname,
+          buyerAvatar: updatedOrder.buyerAvatar || item.buyerAvatar
+        }
+        updatedCount++
+      }
+    })
+  }
+  
+  return updatedCount
+}
 
 const filteredItems = computed(() => {
   if (!searchKeyword.value.trim()) {
@@ -427,8 +475,8 @@ const handleCancel = () => {
 }
 
 const handleClose = () => {
-  selectedCommodityId.value = null
-  selectedOrderId.value = null
+  // 不清空选中状态，保留状态以便下次打开时恢复
+  // 只清空搜索关键词
   searchKeyword.value = ''
 }
 
@@ -580,14 +628,49 @@ const getStatusType = (status) => {
   return typeMap[status] || 'info'
 }
 
-// 监听弹窗显示，加载数据
-watch(() => props.modelValue, (visible) => {
+// 监听弹窗显示，加载数据并恢复选中状态
+watch(() => props.modelValue, async (visible) => {
   if (visible) {
     searchKeyword.value = ''
+    
+    // 恢复选中状态（如果有defaultId）
+    if (props.defaultId) {
+      if (props.type === 'commodity') {
+        selectedCommodityId.value = props.defaultId
+      } else {
+        selectedOrderId.value = props.defaultId
+      }
+    }
+    
+    // 加载列表数据
     if (props.type === 'commodity') {
-      fetchCommodities()
+      await fetchCommodities()
     } else {
-      fetchOrders()
+      await fetchOrders()
+    }
+  }
+})
+
+// ✅ 监听父组件（Messages.vue）的增量更新结果，实时更新对话框列表
+if (incrementalUpdateResult) {
+  watch(() => incrementalUpdateResult.timestamp, (newTimestamp) => {
+    // 只有当对话框打开且有时间戳更新时才处理
+    if (props.modelValue && newTimestamp && items.value.length > 0) {
+      updateDialogItemsFromPoll(
+        incrementalUpdateResult.commodities || [],
+        incrementalUpdateResult.orders || []
+      )
+    }
+  })
+}
+
+// 监听defaultId变化，更新选中状态（当对话框打开时）
+watch(() => props.defaultId, (newId) => {
+  if (props.modelValue && newId) {
+    if (props.type === 'commodity') {
+      selectedCommodityId.value = newId
+    } else {
+      selectedOrderId.value = newId
     }
   }
 })
@@ -935,4 +1018,5 @@ watch(() => props.modelValue, (visible) => {
   }
 }
 </style>
+
 

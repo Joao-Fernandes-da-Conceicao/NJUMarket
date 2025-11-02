@@ -19,13 +19,6 @@ public class Conversation {
     @Column(name = "user_id_2", nullable = false, length = 50)
     private String userId2; // 较大的userId
     
-    // 保留buyerId和sellerId作为兼容字段（用于查询，实际存储使用userId1和userId2）
-    @Transient
-    private String buyerId; // 兼容字段，不持久化
-    
-    @Transient
-    private String sellerId; // 兼容字段，不持久化
-    
     @Column(name = "last_message_content", columnDefinition = "TEXT")
     private String lastMessageContent;
     
@@ -174,23 +167,6 @@ public class Conversation {
     
     public void setUserId2(String userId2) {
         this.userId2 = userId2;
-    }
-    
-    // 兼容方法：根据当前用户获取buyerId/sellerId（用于向后兼容）
-    public String getBuyerId() {
-        return buyerId; // 兼容字段
-    }
-    
-    public void setBuyerId(String buyerId) {
-        this.buyerId = buyerId; // 兼容字段，不持久化
-    }
-    
-    public String getSellerId() {
-        return sellerId; // 兼容字段
-    }
-    
-    public void setSellerId(String sellerId) {
-        this.sellerId = sellerId; // 兼容字段，不持久化
     }
     
     public String getLastMessageContent() {

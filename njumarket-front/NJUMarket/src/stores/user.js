@@ -71,6 +71,14 @@ export const useUserStore = defineStore('user', {
             hasProfile: !!(userData.nickname || userData.avatar)
           })
           
+          // 如果已登录，初始化 WebSocket 连接（异步，不阻塞初始化）
+          import('./message').then(({ useMessageStore }) => {
+            const messageStore = useMessageStore()
+            messageStore.initWebSocket()
+          }).catch(err => {
+            console.error('初始化 WebSocket 失败:', err)
+          })
+          
         } catch (error) {
           console.error('解析用户信息失败:', error)
           console.error('原始用户数据:', userStr)
@@ -154,6 +162,12 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('token', this.token)
         localStorage.setItem('user', JSON.stringify(this.user))
         console.log('登录成功，用户数据:', this.user)
+        
+        // 初始化 WebSocket 连接
+        const { useMessageStore } = await import('./message')
+        const messageStore = useMessageStore()
+        messageStore.initWebSocket()
+        
         return response
       } else {
         throw new Error(response.errorMsg)
@@ -170,6 +184,12 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('token', this.token)
         localStorage.setItem('user', JSON.stringify(this.user))
         console.log('验证码登录成功，用户数据:', this.user)
+        
+        // 初始化 WebSocket 连接
+        const { useMessageStore } = await import('./message')
+        const messageStore = useMessageStore()
+        messageStore.initWebSocket()
+        
         return response
       } else {
         throw new Error(response.errorMsg)
@@ -186,6 +206,12 @@ export const useUserStore = defineStore('user', {
         localStorage.setItem('token', this.token)
         localStorage.setItem('user', JSON.stringify(this.user))
         console.log('注册成功，用户数据:', this.user)
+        
+        // 初始化 WebSocket 连接
+        const { useMessageStore } = await import('./message')
+        const messageStore = useMessageStore()
+        messageStore.initWebSocket()
+        
         return response
       } else {
         throw new Error(response.errorMsg)
@@ -199,6 +225,11 @@ export const useUserStore = defineStore('user', {
       } catch (error) {
         console.error('登出请求失败:', error)
       } finally {
+        // 断开 WebSocket 连接
+        const { useMessageStore } = await import('./message')
+        const messageStore = useMessageStore()
+        messageStore.disconnectWebSocket()
+        
         this.clearUserData()
         
         // 跳转到首页

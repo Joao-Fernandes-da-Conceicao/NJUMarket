@@ -153,4 +153,17 @@ public class JwtUtils {
             return null;
         }
     }
+    
+    /**
+     * 检查Token是否已过期
+     */
+    public boolean isTokenExpired(String token) {
+        try {
+            Claims claims = getClaimsFromToken(token);
+            return claims.getExpiration().before(new Date());
+        } catch (Exception e) {
+            log.error("检查Token是否过期失败: {}", e.getMessage());
+            return true; // 解析失败视为已过期
+        }
+    }
 }

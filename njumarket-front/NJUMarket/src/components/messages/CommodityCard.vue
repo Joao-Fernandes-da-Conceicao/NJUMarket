@@ -1,31 +1,33 @@
 <template>
   <div class="commodity-card" @click="handleClick">
     <div class="card-main">
-      <div class="card-image" v-if="commodity.images && commodity.images.length > 0">
-        <img :src="getImageUrl(commodity.images[0])" :alt="commodity.title" />
+      <div class="card-image" v-if="commodityImages.length > 0">
+        <img :src="getImageUrl(commodityImages[0])" :alt="commodity.title" />
       </div>
       <div class="card-content">
         <h4 class="card-title">{{ commodity.title }}</h4>
         <div class="card-price">¥{{ formatPrice(commodity.price) }}</div>
         <div class="card-tags">
-          <UnifiedTag size="small" v-if="commodity.category">{{ commodity.category }}</UnifiedTag>
-          <UnifiedTag size="small" v-if="commodity.conditionLevel">{{ commodity.conditionLevel }}</UnifiedTag>
+          <UnifiedTag size="small" type="info" v-if="commodity.category">{{ commodity.category }}</UnifiedTag>
+          <UnifiedTag size="small" type="warning" v-if="commodity.conditionLevel">{{ commodity.conditionLevel }}</UnifiedTag>
+          <UnifiedTag size="small" type="danger" v-if="commodity.commodityStatus === 'SOLD_OUT'">已售完</UnifiedTag>
+          <UnifiedTag size="small" type="warning" v-if="commodity.commodityStatus === 'OFF_SHELF'">已下架</UnifiedTag>
         </div>
       </div>
     </div>
-    <div class="card-seller" v-if="sellerProfile || commodity.sellerId">
-      <div class="seller-avatar" v-if="sellerProfile?.avatar">
-        <img :src="getAvatarUrl(sellerProfile.avatar)" :alt="sellerProfile.nickname || commodity.sellerId" />
+    <div class="card-seller" v-if="sellerName || commodity.sellerId">
+      <div class="seller-avatar" v-if="sellerAvatar">
+        <img :src="getAvatarUrl(sellerAvatar)" :alt="sellerName" />
       </div>
-      <span class="seller-name">{{ sellerProfile?.nickname || commodity.sellerId }}</span>
+      <span class="seller-name">{{ sellerName }}</span>
     </div>
   </div>
 </template>
 
 <script setup>
 /* global defineProps, defineEmits */
-import { ref, onMounted } from 'vue'
-import { imageAPI, profileAPI } from '../../api'
+import { computed } from 'vue'
+import { imageAPI } from '../../api'
 import { formatPrice } from '../../utils/formatUtils'
 import UnifiedTag from '../common/UnifiedTag.vue'
 
@@ -38,27 +40,26 @@ const props = defineProps({
 
 const emit = defineEmits(['click'])
 
-const sellerProfile = ref(null)
+// ✅ 使用批量查询返回的卖家信息，避免 N+1 查询
+// 批量查询接口已返回 sellerNickname 和 sellerAvatar
+const sellerName = computed(() => {
+  return props.commodity.sellerNickname || props.commodity.sellerId || ''
+})
 
-// 获取卖家 profile 信息
-const fetchSellerProfile = async () => {
-  if (!props.commodity.sellerId) return
-  
-  try {
-    const response = await profileAPI.getUser(props.commodity.sellerId)
-    if (response.success && response.data) {
-      sellerProfile.value = response.data
-    }
-  } catch (error) {
-    console.error('获取卖家profile失败:', error)
-  }
-}
+const sellerAvatar = computed(() => {
+  return props.commodity.sellerAvatar || ''
+})
 
-onMounted(() => {
-  // 始终请求 profile 以获取最新的昵称和头像
-  if (props.commodity.sellerId) {
-    fetchSellerProfile()
+// ✅ 处理图片数组（兼容不同格式）
+const commodityImages = computed(() => {
+  if (Array.isArray(props.commodity.images)) {
+    return props.commodity.images
   }
+  // 兼容旧格式：单个 image 字段
+  if (props.commodity.image) {
+    return [props.commodity.image]
+  }
+  return []
 })
 
 const getImageUrl = (imageUrl) => {

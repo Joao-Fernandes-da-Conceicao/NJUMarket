@@ -1384,4 +1384,74 @@ public class OrderServiceImpl implements OrderService {
         log.info("获取订单历史 - userId: {}", userId);
         return Result.ok("获取订单历史成功");
     }
+    
+    // ========== 批量查询（用于聊天界面） ==========
+    
+    @Override
+    public Result getOrdersBatchStatus(List<String> orderIds) {
+        try {
+            if (orderIds == null || orderIds.isEmpty()) {
+                return Result.ok("批量查询成功", Collections.emptyList());
+            }
+            
+            // 获取当前用户（用于权限检查）
+            User currentUser = UserHolder.getUser();
+            if (currentUser == null) {
+                return Result.fail("用户未登录");
+            }
+            
+            // 去重
+            Set<String> uniqueIds = new HashSet<>(orderIds);
+            
+            // 批量查询订单
+            List<Order> orders = orderRepository.findAllById(uniqueIds);
+            
+            // 转换为轻量级DTO（只包含基本信息，并检查权限）
+            List<Map<String, Object>> result = orders.stream()
+                .filter(order -> {
+                    // 权限检查：订单必须属于当前用户（买家或卖家）
+                    return order.getBuyerId().equals(currentUser.getUserId()) 
+                        || order.getSellerId().equals(currentUser.getUserId());
+                })
+                .map(order -> {
+                    Map<String, Object> item = new HashMap<>();
+                    item.put("orderId", order.getOrderId());
+                    item.put("orderStatus", order.getOrderStatus());
+                    item.put("payAmount", order.getPayAmount());
+                    item.put("quantity", order.getQuantity());
+                    item.put("commodityId", order.getCommodityId());
+                    item.put("buyerId", order.getBuyerId());
+                    item.put("sellerId", order.getSellerId());
+                    item.put("trackingNumber", order.getTrackingNumber());
+                    item.put("createTime", order.getCreateTime() != null ? order.getCreateTime().toString() : null);
+                    item.put("payTime", order.getPayTime() != null ? order.getPayTime().toString() : null);
+                    item.put("shippingTime", order.getShippingTime() != null ? order.getShippingTime().toString() : null);
+                    item.put("deliveryTime", order.getDeliveryTime() != null ? order.getDeliveryTime().toString() : null);
+                    
+                    // ✅ 添加商品快照字段（用于聊天界面显示）
+                    item.put("commoditySnapshotTitle", order.getCommoditySnapshotTitle());
+                    item.put("commoditySnapshotDescription", order.getCommoditySnapshotDescription());
+                    item.put("commoditySnapshotPrice", order.getCommoditySnapshotPrice());
+                    item.put("commoditySnapshotLocation", order.getCommoditySnapshotLocation());
+                    item.put("commoditySnapshotCategory", order.getCommoditySnapshotCategory());
+                    item.put("commoditySnapshotConditionLevel", order.getCommoditySnapshotConditionLevel());
+                    item.put("commoditySnapshotImages", order.getCommoditySnapshotImages());
+                    item.put("commoditySnapshotStatus", order.getCommoditySnapshotStatus());
+                    item.put("commoditySnapshotSellerName", order.getCommoditySnapshotSellerName());
+                    item.put("commoditySnapshotSellerPhone", order.getCommoditySnapshotSellerPhone());
+                    item.put("commoditySnapshotSellerEmail", order.getCommoditySnapshotSellerEmail());
+                    item.put("commoditySnapshotTime", order.getCommoditySnapshotTime() != null ? order.getCommoditySnapshotTime().toString() : null);
+                    
+                    return item;
+                })
+                .collect(Collectors.toList());
+            
+            log.info("批量查询订单状态成功 - 查询{}个，返回{}个", uniqueIds.size(), result.size());
+            return Result.ok("批量查询成功", result);
+            
+        } catch (Exception e) {
+            log.error("批量查询订单状态失败: {}", e.getMessage(), e);
+            return Result.fail("批量查询失败");
+        }
+    }
 }

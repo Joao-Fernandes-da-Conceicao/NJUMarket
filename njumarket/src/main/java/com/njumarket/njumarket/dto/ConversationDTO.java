@@ -5,10 +5,6 @@ import java.util.List;
 
 public class ConversationDTO {
     private String conversationId;
-    private String buyerId;
-    private String sellerId;
-    private String commodityId;
-    private String orderId;
     private String lastMessageContent;
     private LocalDateTime lastMessageTime;
     private Integer unreadCount;
@@ -28,9 +24,6 @@ public class ConversationDTO {
     private String sellerNickname;
     private String sellerAvatar;
     
-    // 关联商品信息（如果有）
-    private CommoditySnapshotDTO commoditySnapshot;
-    
     // 消息列表（用于对话详情）
     private List<MessageDTO> messages;
     private Integer totalMessages;
@@ -45,38 +38,6 @@ public class ConversationDTO {
     
     public void setConversationId(String conversationId) {
         this.conversationId = conversationId;
-    }
-    
-    public String getBuyerId() {
-        return buyerId;
-    }
-    
-    public void setBuyerId(String buyerId) {
-        this.buyerId = buyerId;
-    }
-    
-    public String getSellerId() {
-        return sellerId;
-    }
-    
-    public void setSellerId(String sellerId) {
-        this.sellerId = sellerId;
-    }
-    
-    public String getCommodityId() {
-        return commodityId;
-    }
-    
-    public void setCommodityId(String commodityId) {
-        this.commodityId = commodityId;
-    }
-    
-    public String getOrderId() {
-        return orderId;
-    }
-    
-    public void setOrderId(String orderId) {
-        this.orderId = orderId;
     }
     
     public String getLastMessageContent() {
@@ -175,14 +136,6 @@ public class ConversationDTO {
         this.sellerAvatar = sellerAvatar;
     }
     
-    public CommoditySnapshotDTO getCommoditySnapshot() {
-        return commoditySnapshot;
-    }
-    
-    public void setCommoditySnapshot(CommoditySnapshotDTO commoditySnapshot) {
-        this.commoditySnapshot = commoditySnapshot;
-    }
-    
     public List<MessageDTO> getMessages() {
         return messages;
     }
@@ -213,54 +166,5 @@ public class ConversationDTO {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
-    }
-}
-
-class CommoditySnapshotDTO {
-    private String commodityId;
-    private String title;
-    private String imageUrl;
-    private Double price;
-    private String status;
-    
-    // Getters and Setters
-    public String getCommodityId() {
-        return commodityId;
-    }
-    
-    public void setCommodityId(String commodityId) {
-        this.commodityId = commodityId;
-    }
-    
-    public String getTitle() {
-        return title;
-    }
-    
-    public void setTitle(String title) {
-        this.title = title;
-    }
-    
-    public String getImageUrl() {
-        return imageUrl;
-    }
-    
-    public void setImageUrl(String imageUrl) {
-        this.imageUrl = imageUrl;
-    }
-    
-    public Double getPrice() {
-        return price;
-    }
-    
-    public void setPrice(Double price) {
-        this.price = price;
-    }
-    
-    public String getStatus() {
-        return status;
-    }
-    
-    public void setStatus(String status) {
-        this.status = status;
     }
 }

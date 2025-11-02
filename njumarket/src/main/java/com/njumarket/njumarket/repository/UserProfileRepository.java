@@ -57,4 +57,10 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, String
      */
     @Query("SELECT up.vipLevel, COUNT(up) FROM UserProfile up GROUP BY up.vipLevel")
     List<Object[]> countByVipLevel();
+    
+    /**
+     * 根据用户ID列表批量查询用户档案
+     * 用于优化 N+1 查询问题
+     */
+    List<UserProfile> findByUserIdIn(List<String> userIds);
 }

@@ -4,6 +4,8 @@ import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
 
+import java.util.List;
+
 /**
  * 商品查询服务接口
  * 专门处理商品查询和可见性逻辑
@@ -135,4 +137,12 @@ public interface CommodityQueryService {
      * @return 统计信息
      */
     Result getCommodityStats(User user);
+    
+    /**
+     * 批量查询商品基本信息（用于聊天界面，轻量级查询）
+     * 只返回商品ID、标题、价格、状态等基本信息
+     * @param commodityIds 商品ID列表
+     * @return 商品基本信息列表
+     */
+    Result getCommoditiesBatchStatus(List<String> commodityIds);
 }

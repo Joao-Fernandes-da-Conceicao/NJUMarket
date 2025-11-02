@@ -30,7 +30,10 @@
           />
           
           <!-- 二级窗口：聊天窗口 -->
-          <div class="chat-panel" :class="{ 'hidden': !showChatWindow }">
+          <!-- ✅ 移动端修复：移动端只在选中对话且showChatWindow为true时显示，桌面端只在选中对话时显示 -->
+          <div class="chat-panel" :class="{ 
+            'hidden': isMobile ? (!showChatWindow || !selectedConversationId) : (!selectedConversationId)
+          }">
             <div v-if="!selectedConversationId" class="chat-empty">
               <el-icon class="empty-icon"><ChatDotRound /></el-icon>
               <p>选择一个对话开始聊天</p>
@@ -59,15 +62,15 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, provide, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { useMessageStore } from '../stores/message'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import { formatTime } from '../utils/formatUtils'
-import { isMobile as globalIsMobile, detectMobile } from '../utils/responsive'
-import { commodityAPI, orderAPI } from '../api'
+import { isMobile as globalIsMobile, detectMobile } from '../config/responsive'
+import { commodityAPI, orderAPI, chatAPI } from '../api'
 import UnifiedButton from '../components/common/UnifiedButton.vue'
 import ConversationList from '../components/messages/ConversationList.vue'
 import ChatWindow from '../components/messages/ChatWindow.vue'
@@ -110,8 +113,19 @@ export default {
       set: (val) => { messageStore.showChatWindow = val }
     })
     
+    // ✅ 修复桌面端错误：创建计算属性来访问 globalIsMobile
+    const isMobile = computed(() => globalIsMobile.value)
+    
     const messageContent = ref('')
     const messagesListRef = ref(null)
+    
+    // ✅ 提供增量更新结果给子组件（对话框）
+    const incrementalUpdateResult = reactive({
+      commodities: [],
+      orders: [],
+      timestamp: null
+    })
+    provide('incrementalUpdateResult', incrementalUpdateResult)
     
     // 获取头像URL
     const getAvatarUrl = (avatar) => {
@@ -137,7 +151,7 @@ export default {
       await messageStore.selectConversation(conversation)
       
       // 移动端：显示聊天窗口
-      if (globalIsMobile.value) {
+      if (isMobile.value) {
         messageStore.showChat()
       }
       
@@ -193,43 +207,444 @@ export default {
     const defaultCommodityId = computed(() => route.query.commodityId || null)
     const defaultOrderId = computed(() => route.query.orderId || null)
     
-    // 获取消息的详细信息（商品/订单）
-    const enrichMessages = async (messageList) => {
-      const enrichPromises = messageList.map(async (message) => {
-        // 如果有商品ID，获取商品信息
-        if (message.commodityId && !message.commodity) {
-          try {
-            const response = await commodityAPI.getDetail(message.commodityId)
-            if (response.success) {
-              message.commodity = response.data
-            }
-          } catch (error) {
-            console.error('获取商品信息失败:', error)
-          }
-        }
-        
-        // 如果有订单ID，获取订单信息
-        if (message.orderId && !message.order) {
-          try {
-            const response = await orderAPI.getDetail(message.orderId)
-            if (response.success) {
-              message.order = response.data
-            }
-          } catch (error) {
-            console.error('获取订单信息失败:', error)
-          }
-        }
-        
-        return message
-      })
-      
-      return Promise.all(enrichPromises)
+    // ✅ 时间戳管理（localStorage）
+    const LAST_POLL_TIMESTAMP_KEY = 'chat_last_poll_timestamp'
+    
+    const getLastPollTimestamp = () => {
+      const timestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
+      if (timestamp) {
+        return timestamp
+      }
+      // 如果没有，返回当前时间（首次查询）
+      return new Date().toISOString()
     }
     
-    // 监听消息变化，自动获取详细信息
-    watch(() => messages.value, async (newMessages) => {
+    const updateLastPollTimestamp = () => {
+      localStorage.setItem(LAST_POLL_TIMESTAMP_KEY, new Date().toISOString())
+    }
+    
+    // ✅ 增量更新商品和订单数据（仅更新已存在的消息）
+    const updateCommoditiesAndOrders = (commodities = [], orders = []) => {
+      // 建立 Map
+      const commodityMap = new Map(commodities.map(c => [c.commodityId, c]))
+      const orderMap = new Map(orders.map(o => [o.orderId, o]))
+      
+      // ✅ 详细日志：记录接收到的变更数据
+      if (commodities.length > 0) {
+        console.group('📦 接收到的商品变更数据')
+        commodities.forEach((c, index) => {
+          console.log(`商品 ${index + 1}:`, {
+            commodityId: c.commodityId,
+            title: c.title,
+            price: c.price,
+            status: c.commodityStatus,
+            // 注意：如果后端返回了时间戳，这里也可以记录
+          })
+        })
+        console.groupEnd()
+      }
+      
+      if (orders.length > 0) {
+        console.group('📋 接收到的订单变更数据')
+        orders.forEach((o, index) => {
+          console.log(`订单 ${index + 1}:`, {
+            orderId: o.orderId,
+            orderStatus: o.orderStatus,
+            payAmount: o.payAmount,
+            // 注意：如果后端返回了时间戳，这里也可以记录
+          })
+        })
+        console.groupEnd()
+      }
+      
+      // ✅ 增量更新：只更新已存在的消息中的商品和订单数据
+      let updatedCount = 0
+      const updatedMessages = []
+      
+      messages.value.forEach((message, messageIndex) => {
+        let messageUpdated = false
+        const updateInfo = {
+          messageIndex,
+          messageId: message.messageId,
+          updates: []
+        }
+        
+        if (message.commodityId && commodityMap.has(message.commodityId)) {
+          const oldCommodity = message.commodity ? { ...message.commodity } : null
+          const newCommodity = commodityMap.get(message.commodityId)
+          
+          // 更新商品数据（覆盖旧数据）
+          message.commodity = newCommodity
+          updatedCount++
+          messageUpdated = true
+          
+          updateInfo.updates.push({
+            type: 'commodity',
+            commodityId: message.commodityId,
+            oldPrice: oldCommodity?.price,
+            newPrice: newCommodity?.price,
+            oldStatus: oldCommodity?.commodityStatus,
+            newStatus: newCommodity?.commodityStatus,
+            isNew: !oldCommodity, // 是否是首次加载
+          })
+        }
+        
+        if (message.orderId && orderMap.has(message.orderId)) {
+          const oldOrder = message.order ? { ...message.order } : null
+          const newOrder = orderMap.get(message.orderId)
+          
+          // 更新订单数据（覆盖旧数据）
+          message.order = newOrder
+          updatedCount++
+          messageUpdated = true
+          
+          updateInfo.updates.push({
+            type: 'order',
+            orderId: message.orderId,
+            oldStatus: oldOrder?.orderStatus,
+            newStatus: newOrder?.orderStatus,
+            oldPayAmount: oldOrder?.payAmount,
+            newPayAmount: newOrder?.payAmount,
+            isNew: !oldOrder, // 是否是首次加载
+          })
+        }
+        
+        if (messageUpdated) {
+          updatedMessages.push(updateInfo)
+        }
+      })
+      
+      // ✅ 详细日志：记录更新的消息详情
+      if (updatedCount > 0) {
+        console.group(`✅ 增量更新完成: 更新了${updatedCount}个消息的商品/订单数据`)
+        updatedMessages.forEach(updateInfo => {
+          console.log(`消息 ${updateInfo.messageIndex + 1} (${updateInfo.messageId}):`, updateInfo.updates)
+        })
+        console.groupEnd()
+      }
+      // 注意：如果 updatedCount 为 0，说明变更数据不匹配当前消息，这是正常情况
+      // （可能是其他对话的消息，或者变更数据已过期）
+      
+      return updatedCount
+    }
+    
+    // ✅ 增量轮询：获取变更并更新
+    const incrementalPoll = async (force = false) => {
+          try {
+        const lastTimestamp = getLastPollTimestamp()
+        const pollStartTime = new Date().toISOString()
+        
+        // ✅ 详细日志：轮询开始信息
+        console.group(`🔄 ${force ? '强制' : '定期'}增量轮询开始`)
+        console.log('📅 轮询时间戳信息:', {
+          lastPollTimestamp: lastTimestamp,
+          lastPollTimestampDate: new Date(lastTimestamp).toISOString(),
+          currentTime: pollStartTime,
+          timeDifference: Math.round((new Date(pollStartTime) - new Date(lastTimestamp)) / 1000) + '秒',
+        })
+        console.log('📊 当前消息状态:', {
+          totalMessages: messages.value?.length || 0,
+          messagesWithCommodity: messages.value?.filter(m => m.commodityId)?.length || 0,
+          messagesWithOrder: messages.value?.filter(m => m.orderId)?.length || 0,
+          commodityIds: [...new Set(messages.value?.filter(m => m.commodityId).map(m => m.commodityId) || [])],
+          orderIds: [...new Set(messages.value?.filter(m => m.orderId).map(m => m.orderId) || [])],
+        })
+        console.groupEnd()
+        
+        const response = await chatAPI.getIncrementalUpdate(lastTimestamp)
+        
+        if (response.success && response.data) {
+          const { commodities = [], orders = [] } = response.data
+          
+          // ✅ 详细日志：API响应信息
+          console.group(`📥 API响应: ${commodities.length}个商品, ${orders.length}个订单`)
+          console.log('完整响应数据:', response.data)
+          console.groupEnd()
+          
+          if (commodities.length > 0 || orders.length > 0) {
+            console.log(`📦 增量轮询获取到变更: 商品${commodities.length}个, 订单${orders.length}个`)
+            
+            // 增量更新前端数据
+            const updatedCount = updateCommoditiesAndOrders(commodities, orders)
+            
+            // ✅ 通知子组件（对话框）增量更新结果
+            incrementalUpdateResult.commodities = commodities
+            incrementalUpdateResult.orders = orders
+            incrementalUpdateResult.timestamp = Date.now()
+            
+            // ✅ 如果强制轮询且找不到新数据，可能是时间戳问题
+            if (force && updatedCount === 0) {
+              console.warn('⚠️ 强制轮询未找到新数据，可能需要全量查询')
+              // 可以选择全量查询或提示用户
+            }
+            
+            // ✅ 详细日志：更新前的时间戳状态
+            const beforeUpdateTimestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
+            
+            // 更新轮询时间戳
+            updateLastPollTimestamp()
+            
+            // ✅ 详细日志：更新后的时间戳状态
+            const afterUpdateTimestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
+            
+            console.group('⏰ 时间戳更新')
+            console.log('更新前:', {
+              timestamp: beforeUpdateTimestamp,
+              date: beforeUpdateTimestamp ? new Date(beforeUpdateTimestamp).toISOString() : 'N/A',
+            })
+            console.log('更新后:', {
+              timestamp: afterUpdateTimestamp,
+              date: afterUpdateTimestamp ? new Date(afterUpdateTimestamp).toISOString() : 'N/A',
+            })
+            console.log('时间差:', afterUpdateTimestamp && beforeUpdateTimestamp
+              ? Math.round((new Date(afterUpdateTimestamp) - new Date(beforeUpdateTimestamp)) / 1000) + '秒'
+              : 'N/A')
+            console.groupEnd()
+            
+            return { commodities, orders, updatedCount }
+          } else {
+            console.log('✅ 增量轮询无新变更')
+            // ✅ 即使没有新变更，也清空之前的增量更新结果（避免使用旧数据）
+            incrementalUpdateResult.commodities = []
+            incrementalUpdateResult.orders = []
+            if (!force) {
+              // ✅ 详细日志：即使没有变更也更新时间戳的情况
+              const beforeUpdateTimestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
+              updateLastPollTimestamp()
+              const afterUpdateTimestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
+              
+              console.log('⏰ 无变更但更新时间戳:', {
+                before: beforeUpdateTimestamp,
+                after: afterUpdateTimestamp,
+              })
+            }
+            return { commodities: [], orders: [], updatedCount: 0 }
+          }
+        } else {
+          console.error('❌ 增量轮询失败:', {
+            errorMsg: response.errorMsg,
+            message: response.message,
+            fullResponse: response,
+          })
+          return { commodities: [], orders: [], updatedCount: 0 }
+            }
+          } catch (error) {
+        console.error('❌ 增量轮询异常:', {
+          error,
+          errorMessage: error.message,
+          errorStack: error.stack,
+        })
+        throw error
+      }
+    }
+    
+    // ✅ 优化：批量获取消息的详细信息（商品/订单），避免N+1查询（初始加载时使用）
+    const enrichMessages = async (messageList) => {
+      if (!messageList || messageList.length === 0) {
+        return messageList
+      }
+      
+      // 1. 收集所有需要查询的商品ID和订单ID（去重，且只查询未加载的）
+      const commodityIds = [...new Set(messageList
+        .filter(m => m.commodityId && !m.commodity)
+        .map(m => m.commodityId)
+      )]
+      
+      const orderIds = [...new Set(messageList
+        .filter(m => m.orderId && !m.order)
+        .map(m => m.orderId)
+      )]
+      
+      // 2. 批量查询（并行执行）
+      let commodityMap = new Map()
+      let orderMap = new Map()
+      
+      const [commodityResponse, orderResponse] = await Promise.all([
+        commodityIds.length > 0 
+          ? commodityAPI.getBatchStatus(commodityIds).catch(err => {
+              console.error('批量查询商品状态失败:', err)
+              return { success: false, data: [] }
+            })
+          : Promise.resolve({ success: true, data: [] }),
+        orderIds.length > 0
+          ? orderAPI.getBatchStatus(orderIds).catch(err => {
+              console.error('批量查询订单状态失败:', err)
+              return { success: false, data: [] }
+            })
+          : Promise.resolve({ success: true, data: [] })
+      ])
+      
+      // 3. 建立 Map 用于快速查找
+      if (commodityResponse.success && commodityResponse.data) {
+        commodityMap = new Map(
+          commodityResponse.data.map(c => [c.commodityId, c])
+        )
+      }
+      
+      if (orderResponse.success && orderResponse.data) {
+        orderMap = new Map(
+          orderResponse.data.map(o => [o.orderId, o])
+        )
+      }
+      
+      // 4. 填充消息的商品和订单信息
+      messageList.forEach(message => {
+        if (message.commodityId && !message.commodity) {
+          message.commodity = commodityMap.get(message.commodityId)
+        }
+        if (message.orderId && !message.order) {
+          message.order = orderMap.get(message.orderId)
+        }
+      })
+      
+      return messageList
+    }
+    
+    // ✅ 定期增量轮询更新消息中的商品和订单状态
+    const POLL_INTERVAL = 30000 // 30秒轮询一次
+    let pollTimer = null
+    let isPolling = false // 防止并发轮询
+    
+    const startPolling = () => {
+      // 清除旧的定时器
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        console.log('🔄 清除旧的轮询定时器')
+      }
+      
+      // ✅ 初始化时间戳（如果首次加载）
+      const existingTimestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
+      if (!existingTimestamp) {
+        updateLastPollTimestamp()
+        const newTimestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
+        console.log('🆕 初始化轮询时间戳:', {
+          timestamp: newTimestamp,
+          date: new Date(newTimestamp).toISOString(),
+        })
+      } else {
+        console.log('📅 使用已存在的时间戳:', {
+          timestamp: existingTimestamp,
+          date: new Date(existingTimestamp).toISOString(),
+        })
+      }
+      
+      console.log(`⏰ 启动定期轮询，间隔: ${POLL_INTERVAL / 1000}秒`)
+      
+      // 只在消息页面且有消息时才轮询
+      pollTimer = setInterval(async () => {
+        if (messages.value && messages.value.length > 0 && 
+            window.location.pathname.startsWith('/messages') &&
+            !isPolling) {
+          try {
+            isPolling = true
+            console.log(`⏱️ [定时器触发] 定期增量轮询：更新商品和订单状态 (${new Date().toISOString()})`)
+            await incrementalPoll(false) // 非强制轮询
+          } catch (error) {
+            console.error('❌ 定期增量轮询失败:', error)
+          } finally {
+            isPolling = false
+          }
+        } else {
+          // 记录为什么跳过轮询
+          const reason = []
+          if (!messages.value || messages.value.length === 0) reason.push('无消息')
+          if (!window.location.pathname.startsWith('/messages')) reason.push('不在消息页面')
+          if (isPolling) reason.push('正在轮询中')
+          console.log(`⏸️ 跳过轮询: ${reason.join(', ')}`)
+        }
+      }, POLL_INTERVAL)
+    }
+    
+    const stopPolling = () => {
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+    }
+    
+    // ✅ 强制立即增量轮询（用于新消息检测）
+    const forceIncrementalPoll = async () => {
+      if (isPolling) {
+        console.warn('⚠️ 正在轮询中，跳过强制轮询', {
+          currentTime: new Date().toISOString(),
+          isPolling,
+        })
+        return
+      }
+      
+      try {
+        isPolling = true
+        console.group('🚀 强制增量轮询：立即查询最新变更')
+        console.log('触发时间:', new Date().toISOString())
+        console.log('触发原因: 检测到新消息包含未加载的商品/订单')
+        console.groupEnd()
+        
+        const result = await incrementalPoll(true) // 强制轮询
+        
+        if (result.updatedCount === 0) {
+          console.warn('⚠️ 强制轮询未找到新数据，可能需要等待定期轮询', {
+            receivedCommodities: result.commodities?.length || 0,
+            receivedOrders: result.orders?.length || 0,
+            updatedCount: result.updatedCount,
+          })
+        } else {
+          console.log('✅ 强制轮询成功更新数据', {
+            updatedCount: result.updatedCount,
+            commoditiesReceived: result.commodities?.length || 0,
+            ordersReceived: result.orders?.length || 0,
+          })
+        }
+        
+        return result
+      } catch (error) {
+        console.error('❌ 强制增量轮询失败:', {
+          error,
+          errorMessage: error.message,
+          errorStack: error.stack,
+          timestamp: new Date().toISOString(),
+        })
+        throw error
+      } finally {
+        isPolling = false
+      }
+    }
+    
+    // 监听消息变化，自动获取详细信息和滚动到底部
+    watch(() => messages.value, async (newMessages, oldMessages) => {
       if (newMessages && newMessages.length > 0) {
+        // ✅ 初始加载时：全量查询未加载的商品/订单
         await enrichMessages(newMessages)
+        
+        // ✅ 检测新消息中是否有商品/订单ID但未加载数据
+        const unloadedCommodities = newMessages
+          .filter(msg => msg.commodityId && !msg.commodity)
+          .map(msg => ({ messageId: msg.messageId, commodityId: msg.commodityId }))
+        const unloadedOrders = newMessages
+          .filter(msg => msg.orderId && !msg.order)
+          .map(msg => ({ messageId: msg.messageId, orderId: msg.orderId }))
+        
+        const hasNewCommodityOrOrder = unloadedCommodities.length > 0 || unloadedOrders.length > 0
+        
+        if (hasNewCommodityOrOrder) {
+          console.group('🔍 检测到新消息包含未加载的商品/订单，准备强制增量轮询')
+          console.log('未加载的商品:', unloadedCommodities)
+          console.log('未加载的订单:', unloadedOrders)
+          console.log('延迟500ms后执行强制轮询，确保后端变更记录已写入Redis')
+          console.groupEnd()
+          
+          // 延迟一点时间，确保后端变更记录已写入Redis
+          setTimeout(() => {
+            forceIncrementalPoll().catch(err => {
+              console.error('❌ 强制轮询失败，将等待定期轮询:', err)
+            })
+          }, 500) // 延迟500ms后强制轮询
+        }
+        
+        // ✅ 当有新消息时（通过 WebSocket 接收），滚动到底部
+        if (!oldMessages || newMessages.length > oldMessages.length) {
+          await nextTick()
+          scrollToBottom()
+        }
       }
     }, { immediate: true, deep: true })
     
@@ -247,15 +662,30 @@ export default {
     let resizeTimer = null
     const handleResize = () => {
       if (resizeTimer) clearTimeout(resizeTimer)
-      resizeTimer = setTimeout(detectMobile, 150)
+      resizeTimer = setTimeout(() => {
+        detectMobile()
+        // ✅ 移动端修复：窗口大小变化时，如果是移动端且没有选中对话，确保聊天窗口隐藏
+        if (isMobile.value && !selectedConversationId.value) {
+          messageStore.hideChat()
+        }
+      }, 150)
     }
     
     onMounted(() => {
       // 初始化响应式检测
       detectMobile()
       
+      // ✅ 移动端修复：确保初始状态下聊天窗口隐藏且没有选中对话
+      if (isMobile.value) {
+        messageStore.clearCurrentConversation()
+        messageStore.hideChat()
+      }
+      
       // 监听窗口大小变化
       window.addEventListener('resize', handleResize)
+      
+      // ✅ 启动定期轮询
+      startPolling()
       window.addEventListener('orientationchange', handleResize)
       
       if (isLoggedIn.value) {
@@ -279,12 +709,19 @@ export default {
       // 清理监听器
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('orientationchange', handleResize)
+      
+      // ✅ 停止定期轮询
+      stopPolling()
+      
+      // ✅ 清空当前选中的对话，避免切换到其他页面后仍自动标记已读
+      messageStore.clearCurrentConversation()
     })
     
     // 返回对话列表 - 使用 store
     const backToConversations = () => {
-      messageStore.hideChat()
+      // ✅ 移动端修复：先清空对话（会触发hideChat），再确保隐藏
       messageStore.clearCurrentConversation()
+      messageStore.hideChat()
     }
     
     return {
@@ -302,6 +739,7 @@ export default {
       totalUnreadCount,
       messagesListRef,
       showChatWindow,
+      isMobile,
       getAvatarUrl,
       formatTime,
       selectConversation,

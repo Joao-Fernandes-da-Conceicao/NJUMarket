@@ -94,7 +94,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { commodityAPI, imageAPI, profileAPI } from '../api'
+import { commodityAPI, imageAPI } from '../api'
 import { ElMessage } from 'element-plus'
 import SearchBox from '../components/search/SearchBox.vue'
 import CommodityGrid from '../components/commodity/CommodityGrid.vue'
@@ -144,10 +144,6 @@ export default {
       { label: '价格从高到低', value: 'price_desc' },
       { label: '最新发布', value: 'latest' }
     ]
-    
-    // 卖家信息管理
-    const sellerInfoMap = ref(new Map())
-    const sellerLoadingMap = ref(new Map())
     
     const isLoggedIn = computed(() => userStore.isLoggedIn)
     const user = computed(() => userStore.user || {})
@@ -204,10 +200,7 @@ export default {
           currentPage.value = response.data.current || 1
           pageSize.value = response.data.size || 20
           
-          // 查询卖家信息
-          commodities.value.forEach(commodity => {
-            fetchSellerInfo(commodity)
-          })
+          // ✅ 优化：后端已批量返回卖家信息，无需前端逐个查询
         }
       } catch (error) {
         ElMessage.error('获取商品列表失败')
@@ -265,39 +258,8 @@ export default {
       return Math.ceil(total.value / pageSize.value)
     }
     
-    // 卖家信息查询相关方法
-    const getSellerInfo = (commodityId) => {
-      return sellerInfoMap.value.get(commodityId)
-    }
-    
-    const isSellerLoading = (commodityId) => {
-      return sellerLoadingMap.value.get(commodityId) || false
-    }
-    
-    const fetchSellerInfo = async (commodity) => {
-      if (!commodity.sellerId) {
-        return
-      }
-      
-      const commodityId = commodity.commodityId
-      
-      // 如果已经查询过，直接返回
-      if (sellerInfoMap.value.has(commodityId)) {
-        return
-      }
-      
-      try {
-        sellerLoadingMap.value.set(commodityId, true)
-        const response = await profileAPI.getUser(commodity.sellerId)
-        if (response.success) {
-          sellerInfoMap.value.set(commodityId, response.data)
-        }
-      } catch (error) {
-        console.error('获取卖家信息失败:', error)
-      } finally {
-        sellerLoadingMap.value.set(commodityId, false)
-      }
-    }
+    // ✅ 优化：后端已批量返回卖家信息，无需前端查询
+    // 直接使用 commodity.sellerNickname 和 commodity.sellerAvatar
     
     const getAvatarUrl = (avatar) => {
       if (!avatar) return ''
@@ -391,8 +353,6 @@ export default {
       getCategoryLabel,
       getTotalPages,
       handlePageClick,
-      getSellerInfo,
-      isSellerLoading,
       getAvatarUrl,
       handleSizeChange,
       handleCurrentChange,
@@ -407,7 +367,7 @@ export default {
 </script>
 
 <style scoped>
-@import '../styles/pagination.css';
+/* 翻页器样式由 Pagination 组件统一管理 */
 .commodity-list-page {
   min-height: 100vh;
   background-color: #f5f5f5;

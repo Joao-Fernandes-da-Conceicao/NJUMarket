@@ -4,7 +4,9 @@ import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.CommodityDTO;
 import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
+import com.njumarket.njumarket.entity.UserProfile;
 import com.njumarket.njumarket.repository.CommodityRepository;
+import com.njumarket.njumarket.repository.UserProfileRepository;
 import com.njumarket.njumarket.service.CommodityQueryService;
 import com.njumarket.njumarket.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,8 @@ import java.util.stream.Collectors;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Collections;
+import java.util.Objects;
+import java.util.Arrays;
 
 /**
  * 商品查询服务实现类
@@ -32,6 +36,7 @@ import java.util.Collections;
 public class CommodityQueryServiceImpl implements CommodityQueryService {
     
     private final CommodityRepository commodityRepository;
+    private final UserProfileRepository userProfileRepository;
     
     // ========== 公开商品查询实现 ==========
     
@@ -67,9 +72,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                     })
                     .collect(Collectors.toList());
             
-            List<CommodityDTO> commodityDTOs = filteredCommodities.stream()
-                    .map(this::convertToDTO)
-                    .collect(Collectors.toList());
+            // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(filteredCommodities);
             
             Map<String, Object> result = new HashMap<>();
             result.put("commodities", commodityDTOs);
@@ -95,9 +99,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "publishTime"));
             Page<Commodity> commodityPage = commodityRepository.findByCategoryAndVisible(category, pageable);
             
-            List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
-                    .map(this::convertToDTO)
-                    .collect(Collectors.toList());
+            // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodityPage.getContent());
             
             Map<String, Object> result = new HashMap<>();
             result.put("commodities", commodityDTOs);
@@ -134,7 +137,10 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             commodity.setClickCount(commodity.getClickCount() + 1);
             commodityRepository.save(commodity);
             
-            CommodityDTO commodityDTO = convertToDTO(commodity);
+            // ✅ 优化：批量查询卖家 Profile（虽然只有一条，但保持一致性）
+            List<Commodity> singleCommodityList = Collections.singletonList(commodity);
+            List<CommodityDTO> dtos = convertCommoditiesToDTOWithBatchProfile(singleCommodityList);
+            CommodityDTO commodityDTO = dtos.isEmpty() ? convertToDTO(commodity) : dtos.get(0);
             return Result.ok("获取商品详情成功", commodityDTO);
             
         } catch (Exception e) {
@@ -151,9 +157,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             Pageable pageable = PageRequest.of(0, limit);
             List<Commodity> commodities = commodityRepository.findHotCommodities(pageable);
             
-            List<CommodityDTO> commodityDTOs = commodities.stream()
-                    .map(this::convertToDTO)
-                    .collect(Collectors.toList());
+            // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
             
             return Result.ok("获取热门商品成功", commodityDTOs);
             
@@ -171,9 +176,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             Pageable pageable = PageRequest.of(0, limit);
             List<Commodity> commodities = commodityRepository.findLatestCommodities(pageable);
             
-            List<CommodityDTO> commodityDTOs = commodities.stream()
-                    .map(this::convertToDTO)
-                    .collect(Collectors.toList());
+            // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
             
             return Result.ok("获取最新商品成功", commodityDTOs);
             
@@ -292,9 +296,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                     commodityPage = commodityRepository.findBySellerIdAndCommodityStatus(targetSellerId, normalizedStatus, pageable);
                 }
                 
-                List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
-                        .map(this::convertToDTO)
-                        .collect(Collectors.toList());
+                // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+                List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodityPage.getContent());
                 
                 Map<String, Object> result = new HashMap<>();
                 result.put("commodities", commodityDTOs);
@@ -325,9 +328,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                         ? filteredCommodities.subList(start, end) 
                         : Collections.emptyList();
                 
-                List<CommodityDTO> commodityDTOs = pagedList.stream()
-                        .map(this::convertToDTO)
-                        .collect(Collectors.toList());
+                // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+                List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(pagedList);
                 
                 Map<String, Object> result = new HashMap<>();
                 result.put("commodities", commodityDTOs);
@@ -346,10 +348,12 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                 commodityPage = commodityRepository.findBySellerIdAndCommodityStatus(targetSellerId, normalizedStatus, pageable);
                 
                 // 过滤可见性
-                List<CommodityDTO> commodityDTOs = commodityPage.getContent().stream()
+                List<Commodity> visibleCommodities = commodityPage.getContent().stream()
                         .filter(commodity -> isCommodityVisibleToUser(commodity, user))
-                        .map(this::convertToDTO)
                         .collect(Collectors.toList());
+                
+                // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+                List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(visibleCommodities);
                 
                 Map<String, Object> result = new HashMap<>();
                 result.put("commodities", commodityDTOs);
@@ -464,8 +468,10 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                 return Result.fail("无权限查看此商品");
             }
             
-            // 转换为DTO
-            CommodityDTO commodityDTO = convertToDTO(commodity);
+            // ✅ 优化：批量查询卖家 Profile（虽然只有一条，但保持一致性）
+            List<Commodity> singleCommodityList = Collections.singletonList(commodity);
+            List<CommodityDTO> dtos = convertCommoditiesToDTOWithBatchProfile(singleCommodityList);
+            CommodityDTO commodityDTO = dtos.isEmpty() ? convertToDTO(commodity) : dtos.get(0);
             
             // 添加商品状态信息
             Map<String, Object> result = new HashMap<>();
@@ -544,7 +550,46 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     // ========== 私有辅助方法 ==========
     
     /**
-     * 转换Commodity实体为CommodityDTO
+     * 批量转换Commodity实体为CommodityDTO（优化 N+1 查询）
+     * 批量查询所有商品的卖家 Profile，然后填充到 DTO
+     */
+    private List<CommodityDTO> convertCommoditiesToDTOWithBatchProfile(List<Commodity> commodities) {
+        if (commodities == null || commodities.isEmpty()) {
+            return new ArrayList<>();
+        }
+        
+        // ✅ 收集所有唯一的卖家ID
+        Set<String> sellerIds = commodities.stream()
+                .map(Commodity::getSellerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        
+        // ✅ 批量查询所有卖家的 Profile
+        Map<String, UserProfile> profileMap = new HashMap<>();
+        if (!sellerIds.isEmpty()) {
+            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(sellerIds));
+            profileMap = profiles.stream()
+                    .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+        }
+        
+        // ✅ 转换为 DTO，并从 Map 中获取卖家信息
+        final Map<String, UserProfile> finalProfileMap = profileMap;
+        return commodities.stream()
+                .map(commodity -> {
+                    CommodityDTO dto = convertToDTO(commodity);
+                    // 从 Map 中获取卖家 Profile 信息
+                    UserProfile sellerProfile = finalProfileMap.get(commodity.getSellerId());
+                    if (sellerProfile != null) {
+                        dto.setSellerNickname(sellerProfile.getNickname());
+                        dto.setSellerAvatar(sellerProfile.getAvatar());
+                    }
+                    return dto;
+                })
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 转换Commodity实体为CommodityDTO（单条商品场景使用，如商品详情）
      */
     private CommodityDTO convertToDTO(Commodity commodity) {
         CommodityDTO dto = new CommodityDTO();
@@ -605,5 +650,84 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         }
         
         return PageRequest.of(page - 1, size, sort);
+    }
+    
+    // ========== 批量查询（用于聊天界面） ==========
+    
+    @Override
+    public Result getCommoditiesBatchStatus(List<String> commodityIds) {
+        try {
+            if (commodityIds == null || commodityIds.isEmpty()) {
+                return Result.ok("批量查询成功", Collections.emptyList());
+            }
+            
+            // 去重
+            Set<String> uniqueIds = new HashSet<>(commodityIds);
+            
+            // 批量查询商品
+            List<Commodity> commodities = commodityRepository.findAllById(uniqueIds);
+            
+            // ✅ 批量查询所有卖家的 Profile（避免 N+1 查询）
+            Set<String> sellerIds = commodities.stream()
+                    .map(Commodity::getSellerId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            
+            Map<String, UserProfile> profileMap = new HashMap<>();
+            if (!sellerIds.isEmpty()) {
+                List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(sellerIds));
+                profileMap = profiles.stream()
+                        .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            }
+            
+            // ✅ 转换为包含完整信息的DTO（用于聊天界面显示）
+            final Map<String, UserProfile> finalProfileMap = profileMap;
+            List<Map<String, Object>> result = commodities.stream()
+                .map(commodity -> {
+                    Map<String, Object> item = new HashMap<>();
+                    // 基本信息
+                    item.put("commodityId", commodity.getCommodityId());
+                    item.put("sellerId", commodity.getSellerId());
+                    item.put("title", commodity.getTitle());
+                    item.put("description", commodity.getDescription());
+                    item.put("price", commodity.getPrice());
+                    item.put("commodityStatus", commodity.getCommodityStatus());
+                    item.put("stock", commodity.getStock());
+                    item.put("location", commodity.getLocation());
+                    item.put("category", commodity.getCategory());
+                    item.put("conditionLevel", commodity.getConditionLevel());
+                    item.put("publishTime", commodity.getPublishTime() != null ? commodity.getPublishTime().toString() : null);
+                    
+                    // ✅ 图片数组（完整列表，而不是只返回第一张）
+                    if (StringUtils.hasText(commodity.getImages())) {
+                        // 解析逗号分隔的图片字符串为数组
+                        String[] imageArray = commodity.getImages().split(",");
+                        List<String> imagesList = Arrays.stream(imageArray)
+                                .map(String::trim)
+                                .filter(StringUtils::hasText)
+                                .collect(Collectors.toList());
+                        item.put("images", imagesList);
+                    } else {
+                        item.put("images", new ArrayList<>());
+                    }
+                    
+                    // ✅ 卖家信息（从批量查询的 Map 中获取）
+                    UserProfile sellerProfile = finalProfileMap.get(commodity.getSellerId());
+                    if (sellerProfile != null) {
+                        item.put("sellerNickname", sellerProfile.getNickname());
+                        item.put("sellerAvatar", sellerProfile.getAvatar());
+                    }
+                    
+                    return item;
+                })
+                .collect(Collectors.toList());
+            
+            log.info("Batch query commodity status successful - queried {} commodities, returned {} commodities", uniqueIds.size(), result.size());
+            return Result.ok("Batch query successful", result);
+            
+        } catch (Exception e) {
+            log.error("Failed to batch query commodity status: {}", e.getMessage(), e);
+            return Result.fail("Batch query failed");
+        }
     }
 }

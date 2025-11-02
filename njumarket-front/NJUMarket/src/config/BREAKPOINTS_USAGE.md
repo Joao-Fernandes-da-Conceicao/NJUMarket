@@ -97,8 +97,7 @@ if (window.innerWidth < BREAKPOINTS.mobile) {
 ## 已迁移的文件
 
 - ✅ `src/App.vue` - CSS 变量定义
-- ✅ `src/utils/responsive.js` - 使用 BREAKPOINT_MOBILE
-- ✅ `src/config/responsive.js` - 使用断点常量
+- ✅ `src/config/responsive.js` - 统一响应式检测中心（已合并原 `utils/responsive.js` 的功能）
 - ✅ `src/components/layout/AppHeader.vue` - 使用 BREAKPOINT_MOBILE
 
 ## 待迁移的媒体查询

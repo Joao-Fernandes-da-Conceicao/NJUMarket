@@ -11,7 +11,7 @@ import com.njumarket.njumarket.service.ContactService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -22,8 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -43,6 +45,10 @@ public class ContactServiceImpl implements ContactService {
     private final UserProfileRepository userProfileRepository;
     
     private final OrderRepository orderRepository;
+    
+    private final SimpMessagingTemplate messagingTemplate;
+    
+    private final com.njumarket.njumarket.service.WebSocketRetryService webSocketRetryService;
     
     @Override
     public Result sendMessage(String userId, SendMessageRequest request) {
@@ -145,6 +151,38 @@ public class ContactServiceImpl implements ContactService {
             // 转换为DTO返回
             MessageDTO messageDTO = convertMessageToDTO(message, userId);
             
+            // ✅ WebSocket 推送：实时推送新消息给接收方（带重试机制）
+            String receiverId = request.getReceiverId();
+            
+            // 使用重试服务推送消息（自动处理离线用户和重试逻辑）
+            webSocketRetryService.pushWithRetry(receiverId, messageDTO, "MESSAGE_NEW");
+            log.debug("WebSocket push attempted (with retry): receiverId={}, messageId={}", 
+                        receiverId, messageDTO.getMessageId());
+            
+            // ✅ 统一推送未读数更新事件（新消息 = 增加未读）
+            Integer totalUnreadCount = conversationRepository.getTotalUnreadCount(receiverId);
+            if (totalUnreadCount == null) {
+                totalUnreadCount = 0;
+            }
+            
+            // ✅ 获取该对话的未读数（用于侧边栏显示单个对话未读数）
+            Integer conversationUnreadCount = conversation.getUnreadCountForUser(receiverId);
+            if (conversationUnreadCount == null) {
+                conversationUnreadCount = 0;
+            }
+            
+            Map<String, Object> unreadCountUpdate = new java.util.HashMap<>();
+            unreadCountUpdate.put("type", "UNREAD_COUNT_UPDATE");
+            unreadCountUpdate.put("unreadCount", totalUnreadCount); // 总未读数（用于顶部栏）
+            unreadCountUpdate.put("conversationId", conversation.getConversationId());
+            unreadCountUpdate.put("conversationUnreadCount", conversationUnreadCount); // 单个对话未读数（用于侧边栏）
+            unreadCountUpdate.put("timestamp", LocalDateTime.now().toString());
+            
+            // 使用重试服务推送未读数更新
+            webSocketRetryService.pushWithRetry(receiverId, unreadCountUpdate, "UNREAD_COUNT_UPDATE");
+            log.debug("未读数更新推送尝试（带重试）: receiverId={}, totalUnreadCount={}, conversationUnreadCount={}", 
+                    receiverId, totalUnreadCount, conversationUnreadCount);
+            
             return Result.ok("消息发送成功", messageDTO);
         } catch (Exception e) {
             e.printStackTrace();
@@ -155,25 +193,52 @@ public class ContactServiceImpl implements ContactService {
     @Override
     public Result getConversations(String userId, int page, int size) {
         try {
-            // 基于user_id_1和user_id_2查询用户的所有对话
-            List<Conversation> allConversations = conversationRepository.findByUserIdOrderByLastMessageTime(userId);
+            // ✅ 优化：使用数据库分页，而不是内存分页
+            // 创建分页对象，按最后消息时间降序排序
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastMessageTime"));
             
-            // 手动分页
-            int totalElements = allConversations.size();
-            int fromIndex = page * size;
-            int toIndex = Math.min(fromIndex + size, totalElements);
+            // 查询用户的所有活跃对话（数据库分页）
+            Page<Conversation> conversationsPage = conversationRepository.findByUserIdAndStatus(userId, "ACTIVE", pageable);
+            List<Conversation> pagedConversations = conversationsPage.getContent();
             
-            List<Conversation> pagedConversations = fromIndex < totalElements 
-                ? allConversations.subList(fromIndex, toIndex)
-                : new ArrayList<>();
+            // ✅ 优化：批量查询所有相关的 UserProfile（避免 N+1 查询）
+            // 收集所有相关的用户ID（去重）
+            Set<String> userIds = new HashSet<>();
+            Set<String> userIdsForUserCheck = new HashSet<>(); // 用于检查用户是否已注销
+            for (Conversation conv : pagedConversations) {
+                userIds.add(conv.getUserId1());
+                userIds.add(conv.getUserId2());
+                userIdsForUserCheck.add(conv.getUserId1());
+                userIdsForUserCheck.add(conv.getUserId2());
+            }
             
-            // 转换为 DTO
+            // ✅ 优化：批量查询边界处理 - 只在有用户ID时才查询
+            final Map<String, UserProfile> profileMap;
+            if (!userIds.isEmpty()) {
+            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                profileMap = profiles.stream()
+                .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            } else {
+                profileMap = new HashMap<>();
+            }
+            
+            // ✅ 优化：批量查询 User（用于检查用户是否已注销）
+            final Map<String, User> userMap;
+            if (!userIdsForUserCheck.isEmpty()) {
+            List<User> users = userRepository.findAllById(userIdsForUserCheck);
+                userMap = users.stream()
+                .collect(Collectors.toMap(User::getUserId, u -> u));
+            } else {
+                userMap = new HashMap<>();
+            }
+            
+            // 转换为 DTO（使用批量查询的 Map）
             List<ConversationDTO> dtoList = pagedConversations.stream()
-                .map(conversation -> convertConversationToDTO(conversation, userId))
+                .map(conversation -> convertConversationToDTOWithMap(conversation, userId, profileMap, userMap))
                 .collect(Collectors.toList());
             
-            // 构造分页结果
-            Page<ConversationDTO> dtoPage = new PageImpl<>(dtoList, PageRequest.of(page, size), totalElements);
+            // 构造分页结果（使用数据库分页的总数）
+            Page<ConversationDTO> dtoPage = new PageImpl<>(dtoList, pageable, conversationsPage.getTotalElements());
             
             return Result.ok("获取对话列表成功", dtoPage);
         } catch (Exception e) {
@@ -202,6 +267,16 @@ public class ContactServiceImpl implements ContactService {
             Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
             Page<Message> messagesPage = messageRepository.findByConversationId(conversationId, pageable);
             
+            // ✅ 优化：批量查询两个用户的 UserProfile（只需要2次查询）
+            // 在一个对话中，消息的发送者只有两种可能：当前用户或对方用户
+            Set<String> userIds = new HashSet<>();
+            userIds.add(conversation.getUserId1());
+            userIds.add(conversation.getUserId2());
+            
+            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+            Map<String, UserProfile> profileMap = profiles.stream()
+                .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            
             // 转换对话和消息为DTO，并过滤当前用户已删除的消息
             ConversationDTO dto = convertConversationToDTO(conversation, userId);
             
@@ -218,7 +293,8 @@ public class ContactServiceImpl implements ContactService {
                 }
                 
                 if (!isDeletedByCurrentUser) {
-                    messageDTOs.add(convertMessageToDTO(message, userId));
+                    // ✅ 使用批量查询的 Map，不再单独查询
+                    messageDTOs.add(convertMessageToDTOWithMap(message, userId, profileMap));
                 }
             }
             
@@ -278,6 +354,37 @@ public class ContactServiceImpl implements ContactService {
             
             // 标记所有消息为已读
             messageRepository.markMessagesAsRead(conversationId, userId, LocalDateTime.now());
+            
+            // ✅ 推送未读数更新事件，让前端全局角标实时更新
+            try {
+                // 获取最新的未读消息总数（用于顶部栏）
+                Integer totalUnreadCount = conversationRepository.getTotalUnreadCount(userId);
+                if (totalUnreadCount == null) {
+                    totalUnreadCount = 0;
+                }
+                
+                // ✅ 获取该对话的未读数（标记已读后应该为0，用于侧边栏显示）
+                Integer conversationUnreadCount = conversation.getUnreadCountForUser(userId);
+                if (conversationUnreadCount == null) {
+                    conversationUnreadCount = 0;
+                }
+                
+                // 构建未读数更新消息
+                Map<String, Object> unreadCountUpdate = new java.util.HashMap<>();
+                unreadCountUpdate.put("type", "UNREAD_COUNT_UPDATE");
+                unreadCountUpdate.put("unreadCount", totalUnreadCount); // 总未读数（用于顶部栏）
+                unreadCountUpdate.put("conversationId", conversationId);
+                unreadCountUpdate.put("conversationUnreadCount", conversationUnreadCount); // 单个对话未读数（用于侧边栏）
+                unreadCountUpdate.put("timestamp", LocalDateTime.now().toString());
+                
+                // 使用重试服务推送未读数更新（带重试机制）
+                webSocketRetryService.pushWithRetry(userId, unreadCountUpdate, "UNREAD_COUNT_UPDATE");
+                log.debug("未读数更新推送尝试（带重试）: userId={}, totalUnreadCount={}, conversationUnreadCount={}", 
+                        userId, totalUnreadCount, conversationUnreadCount);
+            } catch (Exception e) {
+                log.error("推送未读数更新失败: userId={}, error={}", userId, e.getMessage(), e);
+                // WebSocket 推送失败不影响标记已读的成功返回
+            }
             
             return Result.ok("标记已读成功");
         } catch (Exception e) {
@@ -369,7 +476,17 @@ public class ContactServiceImpl implements ContactService {
             Pageable pageable = PageRequest.of(page, size);
             Page<Message> messagesPage = messageRepository.searchMessages(conversationId, keyword, pageable);
             
-            Page<MessageDTO> dtoPage = messagesPage.map(message -> convertMessageToDTO(message, userId));
+            // ✅ 优化：批量查询两个用户的 UserProfile（只需要2次查询）
+            Set<String> userIds = new HashSet<>();
+            userIds.add(conversation.getUserId1());
+            userIds.add(conversation.getUserId2());
+            
+            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+            Map<String, UserProfile> profileMap = profiles.stream()
+                .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            
+            // ✅ 使用批量查询的 Map，不再单独查询
+            Page<MessageDTO> dtoPage = messagesPage.map(message -> convertMessageToDTOWithMap(message, userId, profileMap));
             
             return Result.ok("搜索消息成功", dtoPage);
         } catch (Exception e) {
@@ -413,18 +530,12 @@ public class ContactServiceImpl implements ContactService {
         return Result.ok("检查成功", false);
     }
     
-    // 辅助方法：转换Conversation为DTO
-    private ConversationDTO convertConversationToDTO(Conversation conversation, String currentUserId) {
+    // 辅助方法：转换Conversation为DTO（使用批量查询的 Map，优化 N+1 查询）
+    private ConversationDTO convertConversationToDTOWithMap(Conversation conversation, String currentUserId, 
+                                                              Map<String, UserProfile> profileMap, 
+                                                              Map<String, User> userMap) {
         ConversationDTO dto = new ConversationDTO();
         dto.setConversationId(conversation.getConversationId());
-        
-        // 兼容字段：buyerId 和 sellerId（用于向后兼容，但不持久化）
-        // 注意：buyerId/sellerId 是 @Transient 字段，这里设置为 null 或保持为空
-        // 实际使用应该基于 user_id_1 和 user_id_2
-        dto.setBuyerId(null); // 不再使用 buyerId/sellerId，对话基于用户对
-        dto.setSellerId(null);
-        dto.setCommodityId(null); // 对话不再关联商品
-        dto.setOrderId(null); // 对话不再关联订单
         
         dto.setLastMessageContent(conversation.getLastMessageContent());
         dto.setLastMessageTime(conversation.getLastMessageTime());
@@ -439,7 +550,60 @@ public class ContactServiceImpl implements ContactService {
         String otherUserId = conversation.getOtherUserId(currentUserId);
         dto.setOtherUserId(otherUserId);
         
-        // 查询对方用户信息
+        // ✅ 从 Map 中获取对方用户信息，不再查询数据库
+        if (otherUserId != null) {
+            UserProfile profile = profileMap.get(otherUserId);
+            if (profile != null) {
+                dto.setOtherUserNickname(profile.getNickname());
+                dto.setOtherUserAvatar(profile.getAvatar());
+            }
+            
+            // ✅ 从 Map 中检查用户是否已注销
+            User user = userMap.get(otherUserId);
+            dto.setOtherUserIsDeleted(
+                user == null || "DELETED".equals(user.getAccountStatus())
+            );
+        }
+        
+        // ✅ 从 Map 中获取用户1的信息（用于兼容显示）
+        UserProfile user1Profile = profileMap.get(conversation.getUserId1());
+        if (user1Profile != null) {
+            // 如果当前用户是 user1，则 user1 的信息对应 "buyer"，否则对应 "seller"
+            // 为了向后兼容，这里统一设置为 buyerNickname/buyerAvatar
+            dto.setBuyerNickname(user1Profile.getNickname());
+            dto.setBuyerAvatar(user1Profile.getAvatar());
+        }
+        
+        // ✅ 从 Map 中获取用户2的信息（用于兼容显示）
+        UserProfile user2Profile = profileMap.get(conversation.getUserId2());
+        if (user2Profile != null) {
+            // 为了向后兼容，这里统一设置为 sellerNickname/sellerAvatar
+            dto.setSellerNickname(user2Profile.getNickname());
+            dto.setSellerAvatar(user2Profile.getAvatar());
+        }
+        
+        return dto;
+    }
+    
+    // 辅助方法：转换Conversation为DTO（保留原方法用于单条对话场景，如 getOrCreateConversation）
+    private ConversationDTO convertConversationToDTO(Conversation conversation, String currentUserId) {
+        ConversationDTO dto = new ConversationDTO();
+        dto.setConversationId(conversation.getConversationId());
+        
+        dto.setLastMessageContent(conversation.getLastMessageContent());
+        dto.setLastMessageTime(conversation.getLastMessageTime());
+        dto.setStatus(conversation.getStatus());
+        dto.setCreatedAt(conversation.getCreatedAt());
+        dto.setUpdatedAt(conversation.getUpdatedAt());
+        
+        // 设置未读数
+        dto.setUnreadCount(conversation.getUnreadCountForUser(currentUserId));
+        
+        // 获取对方用户ID
+        String otherUserId = conversation.getOtherUserId(currentUserId);
+        dto.setOtherUserId(otherUserId);
+        
+        // 查询对方用户信息（单条对话场景使用）
         if (otherUserId != null) {
             Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(otherUserId);
             if (profileOpt.isPresent()) {
@@ -477,7 +641,37 @@ public class ContactServiceImpl implements ContactService {
         return dto;
     }
     
-    // 辅助方法：转换Message为DTO
+    // 辅助方法：转换Message为DTO（使用批量查询的 Map）
+    private MessageDTO convertMessageToDTOWithMap(Message message, String currentUserId, Map<String, UserProfile> profileMap) {
+        MessageDTO dto = new MessageDTO();
+        dto.setMessageId(message.getMessageId());
+        dto.setConversationId(message.getConversationId());
+        dto.setSenderId(message.getSenderId());
+        dto.setReceiverId(message.getReceiverId());
+        dto.setMessageType(message.getMessageType());
+        dto.setContent(message.getContent());
+        dto.setImageUrl(message.getImageUrl());
+        // 实时商品和订单ID（用于商品/订单卡片）
+        dto.setCommodityId(message.getCommodityId());
+        dto.setOrderId(message.getOrderId());
+        dto.setIsRead(message.getIsRead());
+        dto.setReadTime(message.getReadTime());
+        dto.setCreatedAt(message.getCreatedAt());
+        
+        // 设置是否是当前用户发送的消息
+        dto.setIsMine(message.getSenderId().equals(currentUserId));
+        
+        // ✅ 从 Map 中获取发送者信息，不再查询数据库
+        UserProfile senderProfile = profileMap.get(message.getSenderId());
+        if (senderProfile != null) {
+            dto.setSenderNickname(senderProfile.getNickname());
+            dto.setSenderAvatar(senderProfile.getAvatar());
+        }
+        
+        return dto;
+    }
+    
+    // 辅助方法：转换Message为DTO（保留原方法用于单条消息，如 sendMessage）
     private MessageDTO convertMessageToDTO(Message message, String currentUserId) {
         MessageDTO dto = new MessageDTO();
         dto.setMessageId(message.getMessageId());
@@ -497,7 +691,7 @@ public class ContactServiceImpl implements ContactService {
         // 设置是否是当前用户发送的消息
         dto.setIsMine(message.getSenderId().equals(currentUserId));
         
-        // 查询发送者信息
+        // 查询发送者信息（单条消息场景使用）
         Optional<UserProfile> senderProfileOpt = userProfileRepository.findByUserId(message.getSenderId());
         if (senderProfileOpt.isPresent()) {
             UserProfile senderProfile = senderProfileOpt.get();

@@ -129,7 +129,7 @@
       <SelectCommodityOrOrderDialog
         v-model="commodityDialogVisible"
         type="commodity"
-        :default-id="defaultCommodityId"
+        :default-id="selectedCommodityId || defaultCommodityId"
         :other-user-id="currentConversation?.otherUserId"
         :current-user-id="currentUserId"
         @confirm="handleCommoditySelected"
@@ -139,7 +139,7 @@
       <SelectCommodityOrOrderDialog
         v-model="orderDialogVisible"
         type="order"
-        :default-id="defaultOrderId"
+        :default-id="selectedOrderId || defaultOrderId"
         :other-user-id="currentConversation?.otherUserId"
         :current-user-id="currentUserId"
         @confirm="handleOrderSelected"
@@ -200,6 +200,16 @@ onMounted(async () => {
   scrollToBottom()
 })
 
+// 监听 messages 变化，自动滚动到底部
+watch(() => props.messages, (newMessages, oldMessages) => {
+  // 当有新消息时滚动到底部
+  if (newMessages && oldMessages && newMessages.length > oldMessages.length) {
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+}, { deep: true })
+
 // 监听默认ID，自动打开弹窗
 watch(() => props.defaultCommodityId, (id) => {
   if (id) {
@@ -229,6 +239,7 @@ const handleCommoditySelected = (commodityId) => {
 }
 
 const handleCommodityCancel = () => {
+  // 取消选择时清空状态
   selectedCommodityId.value = null
 }
 
@@ -238,6 +249,7 @@ const handleOrderSelected = (orderId) => {
 }
 
 const handleOrderCancel = () => {
+  // 取消选择时清空状态
   selectedOrderId.value = null
 }
 

@@ -6,7 +6,7 @@
       </div>
       <div class="card-content">
         <h4 class="card-title">{{ order.commoditySnapshotTitle || '商品' }}</h4>
-        <div class="card-price">¥{{ formatPrice(order.totalAmount) }}</div>
+        <div class="card-price">¥{{ formatPrice(order.payAmount || order.totalAmount || order.commoditySnapshotPrice || 0) }}</div>
         <div class="card-status">
           <UnifiedTag :type="getStatusType(order.orderStatus)" size="small">
             {{ getStatusText(order.orderStatus) }}

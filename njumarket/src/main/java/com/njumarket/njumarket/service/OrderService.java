@@ -1,6 +1,7 @@
 package com.njumarket.njumarket.service;
 
 import com.njumarket.njumarket.dto.Result;
+import java.util.List;
 import java.util.Map;
 import com.njumarket.njumarket.dto.OrderDTO;
 
@@ -142,4 +143,12 @@ public interface OrderService {
      * 创建新订单（基于商品快照，但允许用户修改信息）
      */
     Result createOrderFromSnapshot(String orderId, Map<String, Object> orderData);
+    
+    /**
+     * 批量查询订单基本信息（用于聊天界面，轻量级查询）
+     * 只返回订单ID、状态、金额等基本信息
+     * @param orderIds 订单ID列表
+     * @return 订单基本信息列表
+     */
+    Result getOrdersBatchStatus(List<String> orderIds);
 }

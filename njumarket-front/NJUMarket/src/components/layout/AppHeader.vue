@@ -51,9 +51,9 @@
             class="nav-link" 
             :class="{ active: $route.path.startsWith('/messages') }"
           >
-            <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99">
+            <UnreadBadge :count="unreadCount" type="number" :max="99">
               消息
-            </el-badge>
+            </UnreadBadge>
           </router-link>
         </nav>
         
@@ -157,7 +157,7 @@
               <div class="mobile-menu-item" @click="handleMobileItem('messages')">
                 <el-icon><Message /></el-icon>
                 <span>消息</span>
-                <el-badge :value="unreadCount" :hidden="unreadCount === 0" :max="99" />
+                <UnreadBadge :count="unreadCount" type="number" :max="99" />
               </div>
               <div class="mobile-menu-item" @click="handleMobileItem('profile')">
                 <el-icon><User /></el-icon>
@@ -197,6 +197,7 @@ import { getAvatarUrl } from '../../utils/imageUtils'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, User, ShoppingCart, Box, Plus, SwitchButton, Close, HomeFilled, Goods, Message } from '@element-plus/icons-vue'
 import UnifiedButton from '../common/UnifiedButton.vue'
+import UnreadBadge from '../common/UnreadBadge.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -315,9 +316,6 @@ const handleDesktopLogout = async () => {
   }
 }
 
-// 定时刷新未读数（每30秒）- 使用 store
-let unreadInterval = null
-
 // 点击外部区域关闭菜单
 const handleClickOutside = (event) => {
   if (userInfoRef.value && !userInfoRef.value.contains(event.target)) {
@@ -335,21 +333,14 @@ onMounted(() => {
   // 监听点击外部区域
   document.addEventListener('click', handleClickOutside)
   
-  // 定时刷新未读数
+  // 初始获取未读数（WebSocket 会实时更新，不需要定时轮询）
   messageStore.fetchUnreadCount()
-  unreadInterval = setInterval(() => {
-    messageStore.fetchUnreadCount()
-  }, 30000)
 })
 
 onUnmounted(() => {
   // 移除监听器
   window.removeEventListener('resize', detectMobile)
   document.removeEventListener('click', handleClickOutside)
-  
-  if (unreadInterval) {
-    clearInterval(unreadInterval)
-  }
 })
 
 // 移动端菜单项点击处理

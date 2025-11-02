@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 @Tag(name = "用户订单管理", description = "买家订单和卖家订单的完整管理功能")
@@ -262,5 +263,12 @@ public class UserOrderController {
                                    @Parameter(description = "每页数量", example = "10") @RequestParam(defaultValue = "10") Integer size,
                                    @Parameter(description = "状态") @RequestParam(required = false) String status) {
         return orderService.getMyReturnRecords(page, size, status);
+    }
+    
+    // ✅ 批量查询订单状态（用于聊天界面，轻量级查询）
+    @Operation(summary = "批量查询订单状态", description = "批量查询订单基本信息，用于聊天界面显示，只返回轻量级信息")
+    @PostMapping("/batch-status")
+    public Result getOrdersBatchStatus(@RequestBody List<String> orderIds) {
+        return orderService.getOrdersBatchStatus(orderIds);
     }
 }

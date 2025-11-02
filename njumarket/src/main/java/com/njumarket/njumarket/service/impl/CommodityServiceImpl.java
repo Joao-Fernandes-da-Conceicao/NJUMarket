@@ -8,6 +8,7 @@ import com.njumarket.njumarket.entity.Order;
 import com.njumarket.njumarket.entity.User;
 import com.njumarket.njumarket.repository.CommodityRepository;
 import com.njumarket.njumarket.repository.OrderRepository;
+import com.njumarket.njumarket.service.ChangeRecordService;
 import com.njumarket.njumarket.service.CommodityService;
 import com.njumarket.njumarket.service.CommodityQueryService;
 import com.njumarket.njumarket.service.ImageService;
@@ -40,6 +41,7 @@ public class CommodityServiceImpl implements CommodityService {
     private final OrderRepository orderRepository;
     private final ImageService imageService;
     private final CommodityQueryService commodityQueryService;
+    private final ChangeRecordService changeRecordService;
 
     // ========== 商品管理核心功能 ==========
     
@@ -203,7 +205,13 @@ public class CommodityServiceImpl implements CommodityService {
             commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
             
             // 保存更新
+            LocalDateTime now = LocalDateTime.now();
             Commodity updatedCommodity = commodityRepository.save(commodity);
+            
+            // ✅ 记录商品变更（用于增量轮询）- 只有已上架的商品变更才记录（避免草稿频繁变更）
+            if ("ON_SHELF".equals(updatedCommodity.getCommodityStatus())) {
+                changeRecordService.recordCommodityChange(commodityId, "UPDATE", now);
+            }
             
             log.info("商品更新成功 - commodityId: {}", commodityId);
             return Result.ok("商品更新成功", convertToDTO(updatedCommodity));
@@ -283,8 +291,12 @@ public class CommodityServiceImpl implements CommodityService {
             }
             
             commodity.setCommodityStatus("ON_SHELF");
-            commodity.setPublishTime(LocalDateTime.now());
+            LocalDateTime now = LocalDateTime.now();
+            commodity.setPublishTime(now);
             commodityRepository.save(commodity);
+            
+            // ✅ 记录商品变更（用于增量轮询）
+            changeRecordService.recordCommodityChange(commodityId, "SHELF", now);
             
             log.info("商品上架成功 - commodityId: {}", commodityId);
             return Result.ok("商品上架成功");
@@ -316,7 +328,11 @@ public class CommodityServiceImpl implements CommodityService {
             }
             
             commodity.setCommodityStatus("OFF_SHELF");
+            LocalDateTime now = LocalDateTime.now();
             commodityRepository.save(commodity);
+            
+            // ✅ 记录商品变更（用于增量轮询）- 下架操作影响聊天界面显示
+            changeRecordService.recordCommodityChange(commodityId, "UNSHELF", now);
             
             log.info("商品下架成功 - commodityId: {}", commodityId);
             return Result.ok("商品下架成功");
@@ -347,8 +363,23 @@ public class CommodityServiceImpl implements CommodityService {
                 return Result.fail("无权限操作此商品");
             }
             
+            // ✅ 获取变更前的状态（用于判断是否需要记录变更）
+            String previousStatus = commodity.getCommodityStatus();
+            
             commodity.setCommodityStatus("DRAFT");
+            LocalDateTime now = LocalDateTime.now();
             commodityRepository.save(commodity);
+            
+            // ✅ 只有当商品之前是已上架状态（ON_SHELF）时才记录变更
+            // 原因：只有已上架的商品才会出现在聊天界面中，设为草稿后需要更新卡片状态
+            // 如果商品本来就是草稿或其他状态，不会出现在聊天中，无需记录变更
+            if ("ON_SHELF".equals(previousStatus)) {
+                changeRecordService.recordCommodityChange(commodityId, "DRAFT", now);
+                log.debug("商品从已上架状态设为草稿，已记录变更: commodityId={}", commodityId);
+            } else {
+                log.debug("商品从非上架状态设为草稿，跳过变更记录: commodityId={}, previousStatus={}", 
+                    commodityId, previousStatus);
+            }
             
             log.info("商品设为草稿成功 - commodityId: {}", commodityId);
             return Result.ok("商品设为草稿成功");
@@ -380,8 +411,12 @@ public class CommodityServiceImpl implements CommodityService {
             }
             
             commodity.setCommodityStatus("ON_SHELF");
-            commodity.setPublishTime(LocalDateTime.now());
+            LocalDateTime now = LocalDateTime.now();
+            commodity.setPublishTime(now);
             commodityRepository.save(commodity);
+            
+            // ✅ 记录商品变更（用于增量轮询）
+            changeRecordService.recordCommodityChange(commodityId, "SHELF", now);
             
             log.info("商品重新上架成功 - commodityId: {}", commodityId);
             return Result.ok("商品重新上架成功");
@@ -761,7 +796,11 @@ public class CommodityServiceImpl implements CommodityService {
             }
             
             commodity.setCommodityStatus("OFF_SHELF");
+            LocalDateTime now = LocalDateTime.now();
             commodityRepository.save(commodity);
+            
+            // ✅ 记录商品变更（用于增量轮询）- 管理端强制下架也需要更新聊天界面
+            changeRecordService.recordCommodityChange(commodityId, "UNSHELF", now);
             
             log.info("商品强制下架成功 - commodityId: {}", commodityId);
             return Result.ok("商品强制下架成功");

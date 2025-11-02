@@ -22,29 +22,68 @@ export const isDesktop = ref(false)
 
 /**
  * 检测当前屏幕类型
- * 基于单一标准：屏幕宽度
+ * 支持两种模式：
+ * 1. 简单模式：仅基于屏幕宽度（默认）
+ * 2. 智能模式：基于宽度、纵横比、设备标识等综合判断（用于复杂场景）
+ * 
+ * @param {boolean} useSmartDetection - 是否使用智能检测模式
  */
-export function detectScreenType() {
+export function detectScreenType(useSmartDetection = false) {
   if (typeof window === 'undefined') return
   
   const width = window.innerWidth
   
-  isMobile.value = width < BREAKPOINTS.mobile
-  isTablet.value = width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet
-  isDesktop.value = width >= BREAKPOINTS.tablet
+  // 简单模式：仅基于宽度（推荐使用）
+  if (!useSmartDetection) {
+    isMobile.value = width < BREAKPOINTS.mobile
+    isTablet.value = width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet
+    isDesktop.value = width >= BREAKPOINTS.tablet
+    return
+  }
+  
+  // 智能模式：综合判断（兼容旧逻辑）
+  const height = window.innerHeight
+  const userAgent = navigator.userAgent.toLowerCase()
+  
+  // 判断纵横比：横向/纵向 < 1.5 认为是竖屏设备
+  const aspectRatio = width / height
+  const isVerticalOrientation = aspectRatio < 1.5
+  
+  // 判断设备尺寸
+  let isSmallDevice = false
+  if (width < BREAKPOINTS.mobile && height > width * 1.5) {
+    isSmallDevice = true
+  }
+  
+  // 综合判断
+  const isMobileWidth = width < BREAKPOINTS.mobile
+  const isMobileUA = /mobile|android|iphone|ipad|phone/i.test(userAgent)
+  
+  isMobile.value = isMobileWidth || (isVerticalOrientation && (isMobileUA || isSmallDevice))
+  isTablet.value = !isMobile.value && width >= BREAKPOINTS.mobile && width < BREAKPOINTS.tablet
+  isDesktop.value = !isMobile.value && !isTablet.value
+}
+
+/**
+ * 检测移动设备（兼容旧 API，使用智能检测）
+ * @deprecated 推荐使用 detectScreenType()，此函数保留以兼容旧代码
+ */
+export function detectMobile() {
+  detectScreenType(true)
 }
 
 /**
  * 初始化响应式检测
+ * @param {boolean} useSmartDetection - 是否使用智能检测模式
  */
-export function initResponsive() {
-  detectScreenType()
+export function initResponsive(useSmartDetection = false) {
+  detectScreenType(useSmartDetection)
   
   // 使用防抖处理resize事件
   let resizeTimer = null
   const debouncedDetect = () => {
     if (resizeTimer) clearTimeout(resizeTimer)
-    resizeTimer = setTimeout(detectScreenType, 150)
+    resizeTimer = setTimeout(() => detectScreenType(useSmartDetection), 150)
   }
   
   window.addEventListener('resize', debouncedDetect)
@@ -58,12 +97,13 @@ export function initResponsive() {
 
 /**
  * 组合式函数：在组件中使用响应式检测
+ * @param {boolean} useSmartDetection - 是否使用智能检测模式
  */
-export function useResponsive() {
+export function useResponsive(useSmartDetection = false) {
   const cleanup = ref(null)
   
   onMounted(() => {
-    cleanup.value = initResponsive()
+    cleanup.value = initResponsive(useSmartDetection)
   })
   
   onUnmounted(() => {
