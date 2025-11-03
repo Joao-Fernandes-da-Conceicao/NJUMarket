@@ -3,7 +3,7 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-section">
-          <h3 class="footer-title">南大市场</h3>
+          <h3 class="footer-title">南大集市</h3>
           <p class="footer-desc">南京大学校园二手交易平台</p>
         </div>
         

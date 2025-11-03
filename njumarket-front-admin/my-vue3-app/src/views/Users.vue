@@ -20,12 +20,18 @@
       </el-table-column>
       <el-table-column
         prop="accountStatus"
-        label="状态"
+        label="账号状态"
         width="120"
         :filters="statusFilters"
         column-key="accountStatus"
         filter-placement="bottom-end"
-      />
+      >
+        <template #default="{ row }">
+          <UnifiedTag :type="accountStatusType(row.accountStatus)">
+            {{ accountStatusText(row.accountStatus) }}
+          </UnifiedTag>
+        </template>
+      </el-table-column>
       <el-table-column prop="registerTime" label="注册时间" width="180" sortable="custom"/>
       <el-table-column label="信用/评分" width="200">
         <template #default="{ row }">
@@ -37,8 +43,12 @@
           卖出: {{ row.profile?.totalSales ?? '-' }} / 购入: {{ row.profile?.totalPurchases ?? '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="会员" width="120">
-        <template #default="{ row }">{{ row.profile?.vipLevel || '-' }}</template>
+      <el-table-column label="会员等级" width="120">
+        <template #default="{ row }">
+          <UnifiedTag :type="vipLevelType(row.profile?.vipLevel)">
+            {{ vipLevelText(row.profile?.vipLevel) }}
+          </UnifiedTag>
+        </template>
       </el-table-column>
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
@@ -61,6 +71,7 @@
 <script>
 import UnifiedButton from '../components/common/UnifiedButton.vue'
 import UnifiedInput from '../components/common/UnifiedInput.vue'
+import UnifiedTag from '../components/common/UnifiedTag.vue'
 import Pagination from '../components/common/Pagination.vue'
 
 export default {
@@ -68,6 +79,7 @@ export default {
   components:{
     UnifiedButton,
     UnifiedInput,
+    UnifiedTag,
     Pagination
   },
   data(){ return { list: [], total: 0, page: 1, pageSize: 10, keyword: '', sortKey: '', sortOrder: '', statusFilters: [
@@ -128,6 +140,48 @@ export default {
       this.pageSize = s
       this.page = 1
       this.loadData()
+    },
+    // ✅ 账号状态文本映射
+    accountStatusText(status) {
+      const map = {
+        'ACTIVE': '活跃',
+        'SUSPENDED': '已暂停',
+        'BANNED': '已封禁'
+      }
+      return map[status] || (status || '-')
+    },
+    // ✅ 账号状态类型映射（用于 tag 颜色）
+    accountStatusType(status) {
+      const map = {
+        'ACTIVE': 'success',
+        'SUSPENDED': 'warning',
+        'BANNED': 'danger'
+      }
+      return map[status] || 'info'
+    },
+    // ✅ 会员等级文本映射
+    vipLevelText(vipLevel) {
+      if (!vipLevel) return '-'
+      const map = {
+        'NORMAL': '普通',
+        'BRONZE': '青铜',
+        'SILVER': '白银',
+        'GOLD': '黄金',
+        'PLATINUM': '铂金'
+      }
+      return map[vipLevel] || vipLevel
+    },
+    // ✅ 会员等级类型映射（用于 tag 颜色）
+    vipLevelType(vipLevel) {
+      if (!vipLevel) return 'info'
+      const map = {
+        'NORMAL': 'info',
+        'BRONZE': 'default',
+        'SILVER': '',
+        'GOLD': 'warning',
+        'PLATINUM': 'success'
+      }
+      return map[vipLevel] || 'info'
     }
   },
   computed:{}

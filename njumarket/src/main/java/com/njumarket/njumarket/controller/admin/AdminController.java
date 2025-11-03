@@ -80,11 +80,25 @@ public class AdminController {
         return adminService.updateAdmin(adminId, admin);
     }
 
+    @Operation(summary = "完整更新管理员信息", description = "只有system权限的管理员可以更新所有非客观字段（包括密码）")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "更新成功"),
+        @ApiResponse(responseCode = "403", description = "权限不足"),
+        @ApiResponse(responseCode = "404", description = "管理员不存在")
+    })
+    @PutMapping("/{adminId}/full")
+    public Result updateAdminFull(
+        @Parameter(description = "管理员ID", required = true)
+        @PathVariable String adminId,
+        @RequestBody java.util.Map<String, Object> payload) {
+        return adminService.updateAdminFull(adminId, payload);
+    }
+
     @Operation(summary = "删除管理员", description = "删除指定的管理员账号")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "删除成功"),
         @ApiResponse(responseCode = "404", description = "管理员不存在"),
-        @ApiResponse(responseCode = "403", description = "不能删除超级管理员")
+        @ApiResponse(responseCode = "403", description = "不能删除系统管理员")
     })
     @DeleteMapping("/{adminId}")
     public Result deleteAdmin(
@@ -99,13 +113,19 @@ public class AdminController {
     })
     @GetMapping("/list")
     public Result getAdminList(
-        @Parameter(description = "页码，从0开始")
-        @RequestParam(defaultValue = "0") Integer page,
+        @Parameter(description = "页码")
+        @RequestParam(defaultValue = "1") Integer page,
         @Parameter(description = "每页大小")
         @RequestParam(defaultValue = "10") Integer size,
         @Parameter(description = "搜索关键词")
-        @RequestParam(required = false) String keyword) {
-        return adminService.getAdminList(page, size, keyword);
+        @RequestParam(required = false) String keyword,
+        @Parameter(description = "账户状态筛选")
+        @RequestParam(required = false) String accountStatus,
+        @Parameter(description = "排序字段")
+        @RequestParam(required = false) String sortProp,
+        @Parameter(description = "排序方向")
+        @RequestParam(required = false) String sortOrder) {
+        return adminService.getAdminList(page, size, keyword, accountStatus, sortProp, sortOrder);
     }
 
     @Operation(summary = "获取管理员详情", description = "根据ID获取管理员详细信息")
@@ -282,9 +302,11 @@ public class AdminController {
                              @RequestParam(defaultValue = "10") Integer size,
                              @RequestParam(required = false) String keyword,
                              @RequestParam(required = false) String status,
+                             @RequestParam(required = false) String sellerVisibility,
+                             @RequestParam(required = false) String buyerVisibility,
                              @RequestParam(required = false) String sortProp,
                              @RequestParam(required = false) String sortOrder) {
-        return adminService.listOrders(page, size, keyword, status, sortProp, sortOrder);
+        return adminService.listOrders(page, size, keyword, status, sellerVisibility, buyerVisibility, sortProp, sortOrder);
     }
 
     @GetMapping("/orders/{orderId}")
@@ -319,6 +341,17 @@ public class AdminController {
         return adminService.listConversations(page, size, keyword);
     }
 
+    @GetMapping("/conversations/{conversationId}")
+    public Result getConversationById(@PathVariable String conversationId) {
+        return adminService.getConversationById(conversationId);
+    }
+
+    @PutMapping("/conversations/{conversationId}/full")
+    public Result updateConversationFull(@PathVariable String conversationId,
+                                         @RequestBody java.util.Map<String, Object> payload) {
+        return adminService.updateConversationFull(conversationId, payload);
+    }
+
     @DeleteMapping("/conversations/{conversationId}")
     public Result deleteConversation(@PathVariable String conversationId) {
         return adminService.deleteConversation(conversationId);
@@ -329,6 +362,17 @@ public class AdminController {
                                @RequestParam(defaultValue = "1") Integer page,
                                @RequestParam(defaultValue = "10") Integer size) {
         return adminService.listMessages(conversationId, page, size);
+    }
+
+    @GetMapping("/messages/{messageId}")
+    public Result getMessageById(@PathVariable String messageId) {
+        return adminService.getMessageById(messageId);
+    }
+
+    @PutMapping("/messages/{messageId}/full")
+    public Result updateMessageFull(@PathVariable String messageId,
+                                    @RequestBody java.util.Map<String, Object> payload) {
+        return adminService.updateMessageFull(messageId, payload);
     }
 
     @DeleteMapping("/messages/{messageId}")

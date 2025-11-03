@@ -22,11 +22,13 @@ public interface AdminService {
     Result createAdmin(Admin admin);
     /** 更新管理员信息 */
     Result updateAdmin(String adminId, Admin admin);
+    /** 完整更新管理员信息（包括所有非客观字段，只有system权限可用） */
+    Result updateAdminFull(String adminId, java.util.Map<String, Object> payload);
     /** 删除管理员账号 */
     Result deleteAdmin(String adminId);
-    /** 获取管理员列表 */
-    Result getAdminList(Integer page, Integer size, String keyword);
-    /** 根据ID获取管理员信息 */
+    /** 获取管理员列表（只有system权限可用） */
+    Result getAdminList(Integer page, Integer size, String keyword, String accountStatus, String sortProp, String sortOrder);
+    /** 根据ID获取管理员信息（只有system权限可用） */
     Result getAdminById(String adminId);
     /** 更新管理员状态 */
     Result updateAdminStatus(String adminId, String status);
@@ -60,7 +62,7 @@ public interface AdminService {
     Result updateCommodityFull(String commodityId, java.util.Map<String, Object> payload);
 
     // 订单
-    Result listOrders(Integer page, Integer size, String keyword, String status, String sortProp, String sortOrder);
+    Result listOrders(Integer page, Integer size, String keyword, String status, String sellerVisibility, String buyerVisibility, String sortProp, String sortOrder);
     Result getOrderById(String orderId);
     Result updateOrderFields(String orderId, String status, String trackingNumber, String remark);
     /** 完整更新订单（包括状态和可见性） */
@@ -69,7 +71,11 @@ public interface AdminService {
 
     // 会话/消息
     Result listConversations(Integer page, Integer size, String keyword);
+    Result getConversationById(String conversationId);
+    Result updateConversationFull(String conversationId, java.util.Map<String, Object> payload);
     Result deleteConversation(String conversationId);
     Result listMessages(String conversationId, Integer page, Integer size);
+    Result getMessageById(String messageId);
+    Result updateMessageFull(String messageId, java.util.Map<String, Object> payload);
     Result deleteMessage(String messageId);
 }

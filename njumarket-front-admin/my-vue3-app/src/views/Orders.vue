@@ -2,10 +2,10 @@
   <div>
     <h2>订单管理</h2>
     <div style="margin:12px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <UnifiedInput v-model="keyword" placeholder="搜索（买家ID/卖家ID/商品标题快照）" style="width: 360px;" />
+      <UnifiedInput v-model="keyword" placeholder="搜索（买家ID/卖家ID/买家昵称/卖家昵称/商品标题）" style="width: 360px;" />
       <UnifiedButton type="primary" @click="doSearch">搜索</UnifiedButton>
     </div>
-    <el-table :data="list" border style="width: 100%" @sort-change="onSortChange">
+    <el-table :data="list" border style="width: 100%" @sort-change="onSortChange" @filter-change="onFilterChange">
       <el-table-column type="expand">
         <template #default="{ row }">
           <div class="order-expand">
@@ -70,26 +70,71 @@
         </template>
       </el-table-column>
       <el-table-column prop="orderId" label="订单ID" width="280"/>
-      <el-table-column prop="buyerId" label="买家" width="180"/>
-      <el-table-column prop="sellerId" label="卖家" width="180"/>
-      <el-table-column label="状态" width="140">
+      <el-table-column label="买家" width="220">
+        <template #default="{ row }">
+          <div class="user-cell">
+            <el-avatar :size="40" :src="getAvatarUrl(getBuyerAvatar(row))" class="user-avatar">
+              <span v-if="!getBuyerAvatar(row)">无头像</span>
+            </el-avatar>
+            <div class="user-text">
+              <p class="user-name">{{ getBuyerName(row) }}</p>
+              <p class="user-id">ID: {{ row.buyerId || '-' }}</p>
+            </div>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="卖家" width="220">
+        <template #default="{ row }">
+          <div class="user-cell">
+            <el-avatar :size="40" :src="getAvatarUrl(getSellerAvatar(row))" class="user-avatar">
+              <span v-if="!getSellerAvatar(row)">无头像</span>
+            </el-avatar>
+            <div class="user-text">
+              <p class="user-name">{{ getSellerName(row) }}</p>
+              <p class="user-id">ID: {{ row.sellerId || '-' }}</p>
+            </div>
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column
+        prop="orderStatus"
+        label="状态"
+        width="140"
+        :filters="statusFilters"
+        column-key="orderStatus"
+        filter-placement="bottom-end"
+      >
         <template #default="{ row }">
           <UnifiedTag :type="statusType(row.orderStatus)">{{ statusText(row.orderStatus) }}</UnifiedTag>
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="创建时间" width="170" sortable="custom"/>
       <el-table-column prop="commoditySnapshotTitle" label="商品标题(快照)" min-width="160"/>
-      <el-table-column label="卖家可见" width="120">
+      <el-table-column
+        prop="sellerVisibility"
+        label="卖家可见"
+        width="120"
+        :filters="visibilityFilters"
+        column-key="sellerVisibility"
+        filter-placement="bottom-end"
+      >
         <template #default="{ row }">
           <UnifiedTag :type="visType(row.sellerVisibility)">{{ visText(row.sellerVisibility) }}</UnifiedTag>
         </template>
       </el-table-column>
-      <el-table-column label="买家可见" width="120">
+      <el-table-column
+        prop="buyerVisibility"
+        label="买家可见"
+        width="120"
+        :filters="visibilityFilters"
+        column-key="buyerVisibility"
+        filter-placement="bottom-end"
+      >
         <template #default="{ row }">
           <UnifiedTag :type="visType(row.buyerVisibility)">{{ visText(row.buyerVisibility) }}</UnifiedTag>
         </template>
       </el-table-column>
-      <el-table-column prop="payAmount" label="金额" width="120"/>
+      <el-table-column prop="payAmount" label="金额" width="120" sortable="custom"/>
       <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <UnifiedButton size="small" @click="edit(row)">编辑</UnifiedButton>
@@ -118,7 +163,27 @@ export default {
   components:{ UnifiedButton, UnifiedInput, UnifiedTag, Pagination },
   data(){ 
     return { 
-      list: [], total: 0, page: 1, pageSize: 10, keyword: '', sortProp: '', sortOrder: ''
+      list: [], total: 0, page: 1, pageSize: 10, keyword: '', sortProp: '', sortOrder: '',
+      activeFilters: {}, // 筛选器状态
+      statusFilters: [
+        { text: '已创建', value: 'CREATED' },
+        { text: '已支付', value: 'PAID' },
+        { text: '已发货', value: 'SHIPPED' },
+        { text: '已完成', value: 'COMPLETED' },
+        { text: '已取消', value: 'CANCELLED' },
+        { text: '申请退款', value: 'REFUND_REQUESTED' },
+        { text: '退款通过', value: 'REFUND_APPROVED' },
+        { text: '退款被拒', value: 'REFUND_REJECTED' },
+        { text: '申请退货', value: 'RETURN_REQUESTED' },
+        { text: '退货通过', value: 'RETURN_APPROVED' },
+        { text: '退货被拒', value: 'RETURN_REJECTED' },
+        { text: '退货完成', value: 'RETURN_COMPLETED' }
+      ],
+      visibilityFilters: [
+        { text: '公开', value: 'PUBLIC' },
+        { text: '私密', value: 'PRIVATE' },
+        { text: '隐藏', value: 'HIDDEN' }
+      ]
     } 
   },
   mounted(){ this.loadData() },
@@ -210,11 +275,25 @@ export default {
     },
     async loadData(){
       const { ordersAPI } = await import('../api/admin/orders')
-      const res = await ordersAPI.list(this.page, this.pageSize, { keyword: (this.keyword||'').trim(), sortProp: this.sortProp, sortOrder: this.sortOrder === 'descending' ? 'desc' : (this.sortOrder === 'ascending' ? 'asc' : '') })
+      const query = {
+        keyword: (this.keyword || '').trim(),
+        status: this.activeFilters.orderStatus?.[0] || '',
+        sellerVisibility: this.activeFilters.sellerVisibility?.[0] || '',
+        buyerVisibility: this.activeFilters.buyerVisibility?.[0] || '',
+        sortProp: this.sortProp || '',
+        sortOrder: this.sortOrder === 'descending' ? 'desc' : (this.sortOrder === 'ascending' ? 'asc' : '')
+      }
+      const res = await ordersAPI.list(this.page, this.pageSize, query)
       if (res && res.success) {
         this.list = res.data?.list || res.data?.orders || res.data || []
         this.total = res.data?.total ?? this.list.length
       }
+    },
+    onFilterChange(filters) {
+      // 更新筛选器状态
+      this.activeFilters = filters
+      this.page = 1 // 重置到第一页
+      this.loadData()
     },
     doSearch(){
       this.keyword = (this.keyword || '').trim()
@@ -300,6 +379,12 @@ export default {
   gap: 12px;
 }
 
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .user-avatar {
   flex-shrink: 0;
   border: 2px solid var(--primary-color, #6a015e);
@@ -310,6 +395,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
 }
 
 .user-name {
@@ -317,12 +403,18 @@ export default {
   font-size: 14px;
   font-weight: 500;
   color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-id {
   margin: 0;
   font-size: 12px;
   color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .snapshot-images {

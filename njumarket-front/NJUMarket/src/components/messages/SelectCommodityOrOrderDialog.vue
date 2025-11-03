@@ -146,6 +146,9 @@ import { ElMessage } from 'element-plus'
 // ✅ 注入父组件（Messages.vue）的增量更新结果
 const incrementalUpdateResult = inject('incrementalUpdateResult', null)
 
+// ✅ 注入父组件（Messages.vue）的profile缓存访问方法
+const profileCacheProvider = inject('profileCacheProvider', null)
+
 const props = defineProps({
   modelValue: {
     type: Boolean,
@@ -187,46 +190,131 @@ const searchKeyword = ref('')
 const selectedCommodityId = ref(null)
 const selectedOrderId = ref(null)
 
-// ✅ 更新对话框列表中的商品/订单数据（基于增量轮询结果）
-const updateDialogItemsFromPoll = (commodities = [], orders = []) => {
+// ✅ 更新对话框列表中的商品/订单数据（基于增量轮询结果）- 异步处理profile信息
+const updateDialogItemsFromPoll = async (commodities = [], orders = []) => {
   let updatedCount = 0
   
   if (commodities.length > 0 && props.type === 'commodity') {
     const commodityMap = new Map(commodities.map(c => [c.commodityId, c]))
+    const existingIds = new Set(items.value.map(item => item.commodityId))
+    
+    // ✅ 收集需要获取profile的卖家ID
+    const sellerIds = []
+    commodities.forEach(commodity => {
+      if (commodity.sellerId && !commodity.sellerNickname && !commodity.sellerAvatar) {
+        sellerIds.push(commodity.sellerId)
+      }
+    })
+    
+    // ✅ 批量获取profile信息（优先使用缓存）
+    const profileMap = sellerIds.length > 0 ? await fetchUserProfiles(sellerIds) : new Map()
+    
+    // 更新现有商品
     items.value.forEach((item, index) => {
       if (commodityMap.has(item.commodityId)) {
         const updatedCommodity = commodityMap.get(item.commodityId)
+        const sellerProfile = profileMap.get(updatedCommodity.sellerId)
+        
         // 合并更新，保留原有数据但更新变更的字段
         items.value[index] = {
           ...item,
           ...updatedCommodity,
-          // 保留原有的seller信息（如果新的没有）
-          sellerNickname: updatedCommodity.sellerNickname || item.sellerNickname,
-          sellerAvatar: updatedCommodity.sellerAvatar || item.sellerAvatar
+          // ✅ 合并profile信息（优先使用查询到的profile，否则使用已有的）
+          sellerNickname: sellerProfile ? sellerProfile.nickname : (updatedCommodity.sellerNickname || item.sellerNickname),
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : (updatedCommodity.sellerAvatar || item.sellerAvatar)
         }
         updatedCount++
       }
     })
+    
+    // ✅ 添加新创建的商品到列表最顶端（合并profile信息）
+    commodities.forEach(commodity => {
+      if (!existingIds.has(commodity.commodityId)) {
+        const sellerProfile = profileMap.get(commodity.sellerId)
+        const commodityWithProfile = {
+          ...commodity,
+          sellerNickname: sellerProfile ? sellerProfile.nickname : commodity.sellerNickname,
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : commodity.sellerAvatar
+        }
+        items.value.unshift(commodityWithProfile) // 添加到最前面
+        updatedCount++
+      }
+    })
+    
+    // ✅ 如果有更新或新商品，重新按发布时间排序
+    if (updatedCount > 0) {
+      items.value.sort((a, b) => {
+        const timeA = a.publishTime ? new Date(a.publishTime).getTime() : 0
+        const timeB = b.publishTime ? new Date(b.publishTime).getTime() : 0
+        return timeB - timeA // 降序：最新的在前
+      })
+    }
   }
   
   if (orders.length > 0 && props.type === 'order') {
     const orderMap = new Map(orders.map(o => [o.orderId, o]))
+    const existingIds = new Set(items.value.map(item => item.orderId))
+    
+    // ✅ 收集需要获取profile的卖家/买家ID
+    const userIds = []
+    orders.forEach(order => {
+      if (order.sellerId && !order.sellerNickname && !order.sellerAvatar) {
+        userIds.push(order.sellerId)
+      }
+      if (order.buyerId && !order.buyerNickname && !order.buyerAvatar) {
+        userIds.push(order.buyerId)
+      }
+    })
+    
+    // ✅ 批量获取profile信息（优先使用缓存）
+    const profileMap = userIds.length > 0 ? await fetchUserProfiles(userIds) : new Map()
+    
+    // 更新现有订单
     items.value.forEach((item, index) => {
       if (orderMap.has(item.orderId)) {
         const updatedOrder = orderMap.get(item.orderId)
+        const sellerProfile = profileMap.get(updatedOrder.sellerId)
+        const buyerProfile = profileMap.get(updatedOrder.buyerId)
+        
         // 合并更新，保留原有数据但更新变更的字段
         items.value[index] = {
           ...item,
           ...updatedOrder,
-          // 保留原有的用户信息（如果新的没有）
-          sellerNickname: updatedOrder.sellerNickname || item.sellerNickname,
-          sellerAvatar: updatedOrder.sellerAvatar || item.sellerAvatar,
-          buyerNickname: updatedOrder.buyerNickname || item.buyerNickname,
-          buyerAvatar: updatedOrder.buyerAvatar || item.buyerAvatar
+          // ✅ 合并profile信息（优先使用查询到的profile，否则使用已有的）
+          sellerNickname: sellerProfile ? sellerProfile.nickname : (updatedOrder.sellerNickname || item.sellerNickname),
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : (updatedOrder.sellerAvatar || item.sellerAvatar),
+          buyerNickname: buyerProfile ? buyerProfile.nickname : (updatedOrder.buyerNickname || item.buyerNickname),
+          buyerAvatar: buyerProfile ? buyerProfile.avatar : (updatedOrder.buyerAvatar || item.buyerAvatar)
         }
         updatedCount++
       }
     })
+    
+    // ✅ 添加新创建的订单到列表最顶端（合并profile信息）
+    orders.forEach(order => {
+      if (!existingIds.has(order.orderId)) {
+        const sellerProfile = profileMap.get(order.sellerId)
+        const buyerProfile = profileMap.get(order.buyerId)
+        const orderWithProfile = {
+          ...order,
+          sellerNickname: sellerProfile ? sellerProfile.nickname : order.sellerNickname,
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : order.sellerAvatar,
+          buyerNickname: buyerProfile ? buyerProfile.nickname : order.buyerNickname,
+          buyerAvatar: buyerProfile ? buyerProfile.avatar : order.buyerAvatar
+        }
+        items.value.unshift(orderWithProfile) // 添加到最前面
+        updatedCount++
+      }
+    })
+    
+    // ✅ 如果有更新或新订单，重新按创建时间排序
+    if (updatedCount > 0) {
+      items.value.sort((a, b) => {
+        const timeA = a.createTime ? new Date(a.createTime).getTime() : 0
+        const timeB = b.createTime ? new Date(b.createTime).getTime() : 0
+        return timeB - timeA // 降序：最新的在前
+      })
+    }
   }
   
   return updatedCount
@@ -261,24 +349,55 @@ const dialogWidth = computed(() => {
   return globalIsMobile.value ? '90%' : '600px'
 })
 
-// 获取用户profile信息（批量）
+// ✅ 获取用户profile信息（批量）- 优先使用对话级别的缓存
 const fetchUserProfiles = async (userIds) => {
   const profileMap = new Map()
   const uniqueUserIds = [...new Set(userIds.filter(id => id))]
   
-  // 并行获取所有用户的profile
-  const profilePromises = uniqueUserIds.map(async (userId) => {
-    try {
-      const response = await profileAPI.getUser(userId)
-      if (response.success && response.data) {
-        profileMap.set(userId, response.data)
-      }
-    } catch (error) {
-      console.error(`获取用户 ${userId} 的profile失败:`, error)
-    }
-  })
+  if (uniqueUserIds.length === 0) return profileMap
   
-  await Promise.all(profilePromises)
+  // ✅ 优先从缓存中获取
+  const cachePromises = uniqueUserIds.map(async (userId) => {
+    if (profileCacheProvider?.getProfileFromCache) {
+      try {
+        const cachedProfile = await profileCacheProvider.getProfileFromCache(userId, null)
+        if (cachedProfile) {
+          profileMap.set(userId, cachedProfile)
+          return true
+        }
+      } catch (error) {
+        // 忽略缓存获取错误
+      }
+    }
+    return false
+  })
+  await Promise.all(cachePromises)
+  
+  // ✅ 对于缓存中没有的用户，进行查询
+  const uncachedUserIds = uniqueUserIds.filter(userId => !profileMap.has(userId))
+  
+  if (uncachedUserIds.length > 0) {
+    const queryPromises = uncachedUserIds.map(async (userId) => {
+      try {
+        const response = await profileAPI.getUser(userId)
+        if (response.success && response.data) {
+          profileMap.set(userId, response.data)
+          // ✅ 更新到缓存（如果缓存提供者存在）
+          if (profileCacheProvider?.conversationProfileCache) {
+            const conversationProfileCache = profileCacheProvider.conversationProfileCache
+            for (const [, cache] of conversationProfileCache.entries()) {
+              cache.set(userId, response.data)
+              break
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`获取用户 ${userId} 的profile失败:`, error)
+      }
+    })
+    await Promise.all(queryPromises)
+  }
+  
   return profileMap
 }
 
@@ -331,7 +450,7 @@ const fetchCommodities = async () => {
     const profileMap = await fetchUserProfiles(sellerIds)
     
     // 合并profile信息到商品数据
-    items.value = uniqueCommodities.map(commodity => {
+    let commoditiesWithProfile = uniqueCommodities.map(commodity => {
       const profile = profileMap.get(commodity.sellerId)
       if (profile) {
         return {
@@ -342,6 +461,15 @@ const fetchCommodities = async () => {
       }
       return commodity
     })
+    
+    // ✅ 按发布时间降序排序（最新的在最前面）
+    commoditiesWithProfile.sort((a, b) => {
+      const timeA = a.publishTime ? new Date(a.publishTime).getTime() : 0
+      const timeB = b.publishTime ? new Date(b.publishTime).getTime() : 0
+      return timeB - timeA // 降序：最新的在前
+    })
+    
+    items.value = commoditiesWithProfile
     
     // 如果有默认ID，自动选择
     if (props.defaultId) {
@@ -414,9 +542,10 @@ const fetchOrders = async () => {
     const profileMap = await fetchUserProfiles(userIds)
     
     // 合并profile信息到订单数据
-    items.value = uniqueOrders.map(order => {
+    let ordersWithProfile = uniqueOrders.map(order => {
       const sellerProfile = profileMap.get(order.sellerId)
       const buyerProfile = profileMap.get(order.buyerId)
+      
       return {
         ...order,
         sellerNickname: sellerProfile ? (sellerProfile.nickname || order.sellerNickname) : order.sellerNickname,
@@ -425,6 +554,15 @@ const fetchOrders = async () => {
         buyerAvatar: buyerProfile ? (buyerProfile.avatar || order.buyerAvatar) : order.buyerAvatar
       }
     })
+    
+    // ✅ 按创建时间降序排序（最新的在最前面）
+    ordersWithProfile.sort((a, b) => {
+      const timeA = a.createTime ? new Date(a.createTime).getTime() : 0
+      const timeB = b.createTime ? new Date(b.createTime).getTime() : 0
+      return timeB - timeA // 降序：最新的在前
+    })
+    
+    items.value = ordersWithProfile
     
     // 如果有默认ID，自动选择
     if (props.defaultId) {
@@ -653,10 +791,11 @@ watch(() => props.modelValue, async (visible) => {
 
 // ✅ 监听父组件（Messages.vue）的增量更新结果，实时更新对话框列表
 if (incrementalUpdateResult) {
-  watch(() => incrementalUpdateResult.timestamp, (newTimestamp) => {
+  watch(() => incrementalUpdateResult.timestamp, async (newTimestamp) => {
     // 只有当对话框打开且有时间戳更新时才处理
     if (props.modelValue && newTimestamp && items.value.length > 0) {
-      updateDialogItemsFromPoll(
+      // ✅ await异步函数，确保profile信息被正确获取和合并
+      await updateDialogItemsFromPoll(
         incrementalUpdateResult.commodities || [],
         incrementalUpdateResult.orders || []
       )

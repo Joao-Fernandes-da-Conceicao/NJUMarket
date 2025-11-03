@@ -4,7 +4,7 @@
       <div class="login-form-wrapper">
         <div class="form-header">
           <h2 class="text-primary">管理员登录</h2>
-          <p class="text-secondary">NJUMarket Admin</p>
+          <p class="text-secondary">NJUMarketAdmin</p>
         </div>
 
         <el-form

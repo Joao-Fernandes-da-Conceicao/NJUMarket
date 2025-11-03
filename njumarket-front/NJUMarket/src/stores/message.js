@@ -240,6 +240,17 @@ export const useMessageStore = defineStore('message', {
       // 提供即时的UI反馈，避免等待后端响应
       this.updateUnreadCount(conversationId, 0, true)
       
+      // ✅ 立即更新消息列表中的已读状态（提供即时UI反馈）
+      const now = new Date().toISOString()
+      if (this.messages && this.messages.length > 0) {
+        this.messages.forEach(msg => {
+          if (msg.conversationId === conversationId && !msg.isMine && !msg.isRead) {
+            msg.isRead = true
+            msg.readTime = now
+          }
+        })
+      }
+      
       try {
         // 调用后端API同步状态
         const response = await contactAPI.markAsRead(conversationId)
@@ -251,6 +262,15 @@ export const useMessageStore = defineStore('message', {
         } else {
           // 如果后端返回失败，回滚状态
           this.updateUnreadCount(conversationId, oldUnreadCount, true)
+          // 回滚消息已读状态
+          if (this.messages && this.messages.length > 0) {
+            this.messages.forEach(msg => {
+              if (msg.conversationId === conversationId && !msg.isMine) {
+                msg.isRead = false
+                msg.readTime = null
+              }
+            })
+          }
         }
         
         return response
@@ -259,6 +279,15 @@ export const useMessageStore = defineStore('message', {
         
         // 回滚状态
         this.updateUnreadCount(conversationId, oldUnreadCount, true)
+        // 回滚消息已读状态
+        if (this.messages && this.messages.length > 0) {
+          this.messages.forEach(msg => {
+            if (msg.conversationId === conversationId && !msg.isMine) {
+              msg.isRead = false
+              msg.readTime = null
+            }
+          })
+        }
         
         throw error
       }
@@ -361,6 +390,11 @@ export const useMessageStore = defineStore('message', {
       // ✅ 注册未读数更新处理函数（支持全局角标更新）
       wsClient.on('UNREAD_COUNT_UPDATE', (updateData) => {
         this.handleUnreadCountUpdate(updateData)
+      })
+      
+      // ✅ 注册已读回执处理函数（接收对方已读通知）
+      wsClient.on('MESSAGE_READ', (readData) => {
+        this.handleMessageRead(readData)
       })
       
       // 监听连接状态
@@ -468,6 +502,10 @@ export const useMessageStore = defineStore('message', {
         // 这样可以避免时序问题：先收到未读数+1，立即标记已读又收到未读数=0
         // ✅ 同时检查是否在消息页面，避免切换到其他页面后仍自动标记已读
         if (message.receiverId === currentUserId && isOnMessagesPage) {
+          // ✅ 立即更新这条消息的已读状态（提供即时UI反馈）
+          message.isRead = true
+          message.readTime = new Date().toISOString()
+          
           // 使用 setTimeout 延迟标记已读，确保后端的未读数更新事件先处理完成
           setTimeout(() => {
             // 再次检查：对话是否仍然被选中且仍在消息页面（用户可能已经切换了页面或对话）
@@ -475,6 +513,9 @@ export const useMessageStore = defineStore('message', {
                 this.selectedConversationId === message.conversationId) {
           this.markAsRead(message.conversationId).catch(err => {
             console.error('标记消息已读失败:', err)
+                // ✅ 如果标记已读失败，回滚消息的已读状态
+                message.isRead = false
+                message.readTime = null
           })
             }
           }, 300) // 延迟300ms，足够后端推送未读数更新事件
@@ -547,6 +588,49 @@ export const useMessageStore = defineStore('message', {
     },
     
     /**
+     * 处理已读回执通知
+     * 当对方标记消息为已读后，会收到此通知，更新发送者消息的已读状态
+     * 
+     * @param {Object} readData - 已读通知数据
+     * @param {string} readData.conversationId - 对话ID
+     * @param {string[]} readData.messageIds - 已读消息ID列表
+     * @param {string} readData.readTime - 已读时间
+     */
+    handleMessageRead(readData) {
+      const { conversationId, messageIds, readTime } = readData
+      
+      if (!conversationId || !messageIds || messageIds.length === 0) {
+        console.warn('收到无效的已读回执通知:', readData)
+        return
+      }
+      
+      console.log('收到已读回执通知:', { conversationId, messageCount: messageIds.length, readTime })
+      
+      // ✅ 更新消息列表中的已读状态
+      if (this.messages && this.messages.length > 0) {
+        let updatedCount = 0
+        this.messages.forEach(msg => {
+          // 只更新发送者是当前用户且消息ID在已读列表中的消息
+          if (msg.conversationId === conversationId && 
+              msg.isMine && 
+              messageIds.includes(msg.messageId) && 
+              !msg.isRead) {
+            msg.isRead = true
+            msg.readTime = readTime || new Date().toISOString()
+            updatedCount++
+          }
+        })
+        
+        if (updatedCount > 0) {
+          console.log(`已更新 ${updatedCount} 条消息的已读状态`)
+        }
+      }
+      
+      // ✅ 如果当前选中的对话不是这个对话，也尝试更新对话列表中的最后消息状态
+      // 注意：这里不需要特别处理，因为已读回执不影响对话列表的显示
+    },
+    
+    /**
      * 断开 WebSocket 连接
      * 在用户登出时调用
      */
@@ -554,6 +638,7 @@ export const useMessageStore = defineStore('message', {
       // 移除所有消息处理函数
       wsClient.off('MESSAGE_NEW')
       wsClient.off('UNREAD_COUNT_UPDATE')
+      wsClient.off('MESSAGE_READ')
       
       wsClient.disconnect()
       this.wsConnected = false

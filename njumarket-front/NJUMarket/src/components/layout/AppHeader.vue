@@ -17,7 +17,7 @@
         <!-- Logo -->
         <div class="logo">
           <router-link to="/" class="logo-link">
-            <h2 class="text-primary">NJUMarket 南大市场</h2>
+            <h2 class="text-primary">NJUMarket 南大集市</h2>
           </router-link>
         </div>
         

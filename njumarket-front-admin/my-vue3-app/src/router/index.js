@@ -8,6 +8,11 @@ const CommodityEdit = () => import('../views/CommodityEdit.vue')
 const Orders = () => import('../views/Orders.vue')
 const OrderEdit = () => import('../views/OrderEdit.vue')
 const Messages = () => import('../views/Messages.vue')
+const ConversationDetail = () => import('../views/ConversationDetail.vue')
+const ConversationEdit = () => import('../views/ConversationEdit.vue')
+const Admins = () => import('../views/Admins.vue')
+const AdminEdit = () => import('../views/AdminEdit.vue')
+const AdminCreate = () => import('../views/AdminCreate.vue')
 const Login = () => import('../views/Login.vue')
 
 const routes = [
@@ -19,7 +24,12 @@ const routes = [
   { path: '/commodities/:commodityId/edit', name: 'CommodityEdit', component: CommodityEdit },
   { path: '/orders', name: 'Orders', component: Orders },
   { path: '/orders/:orderId/edit', name: 'OrderEdit', component: OrderEdit },
-  { path: '/messages', name: 'Messages', component: Messages }
+  { path: '/messages', name: 'Messages', component: Messages },
+  { path: '/messages/:conversationId/detail', name: 'ConversationDetail', component: ConversationDetail },
+  { path: '/messages/:conversationId/edit', name: 'ConversationEdit', component: ConversationEdit },
+  { path: '/admins', name: 'Admins', component: Admins },
+  { path: '/admins/create', name: 'AdminCreate', component: AdminCreate },
+  { path: '/admins/:adminId/edit', name: 'AdminEdit', component: AdminEdit }
 ]
 
 const router = createRouter({

@@ -46,6 +46,8 @@ public class ContactServiceImpl implements ContactService {
     
     private final OrderRepository orderRepository;
     
+    private final CommodityRepository commodityRepository;
+    
     private final SimpMessagingTemplate messagingTemplate;
     
     private final com.njumarket.njumarket.service.WebSocketRetryService webSocketRetryService;
@@ -53,10 +55,45 @@ public class ContactServiceImpl implements ContactService {
     @Override
     public Result sendMessage(String userId, SendMessageRequest request) {
         try {
+            // ✅ 鉴权检查：验证当前登录用户
+            User currentUser = com.njumarket.njumarket.utils.UserHolder.getUser();
+            if (currentUser == null) {
+                log.warn("发送消息失败：用户未登录");
+                return Result.fail("用户未登录");
+            }
+            
+            // ✅ 鉴权检查：验证传入的userId与当前登录用户匹配（防止用户冒充）
+            if (!currentUser.getUserId().equals(userId)) {
+                log.warn("发送消息失败：用户ID不匹配，当前登录用户={}, 传入userId={}", 
+                        currentUser.getUserId(), userId);
+                return Result.fail("无权操作：用户ID不匹配");
+            }
+            
+            // ✅ 鉴权检查：验证用户状态是否为ACTIVE
+            if (!"ACTIVE".equals(currentUser.getAccountStatus())) {
+                log.warn("发送消息失败：用户账户已被禁用，userId={}, status={}", 
+                        userId, currentUser.getAccountStatus());
+                return Result.fail("账户已被禁用，无法发送消息");
+            }
+            
             // 验证接收者是否存在
             Optional<User> receiverOpt = userRepository.findById(request.getReceiverId());
             if (!receiverOpt.isPresent()) {
                 return Result.fail("接收者不存在");
+            }
+            
+            // ✅ 鉴权检查：验证接收者状态是否为ACTIVE
+            User receiver = receiverOpt.get();
+            if (!"ACTIVE".equals(receiver.getAccountStatus())) {
+                log.warn("发送消息失败：接收者账户已被禁用，receiverId={}, status={}", 
+                        request.getReceiverId(), receiver.getAccountStatus());
+                return Result.fail("接收者账户已被禁用");
+            }
+            
+            // ✅ 鉴权检查：防止用户向自己发送消息（可选，根据业务需求）
+            if (userId.equals(request.getReceiverId())) {
+                log.warn("发送消息失败：不能向自己发送消息，userId={}", userId);
+                return Result.fail("不能向自己发送消息");
             }
             
             // 获取或创建对话
@@ -72,15 +109,112 @@ public class ContactServiceImpl implements ContactService {
                 if (!conversation.involvesUser(userId)) {
                     return Result.fail("无权访问此对话");
                 }
+                
+                // ✅ 如果接收方（B）删除了会话（不可见），自动恢复接收方的可见性
+                // A向B发消息时，如果B的可见性为false，则恢复为true
+                boolean visibilityRestored = false;
+                if (!conversation.getVisibilityForUser(request.getReceiverId())) {
+                    conversation.restoreVisibilityForUser(request.getReceiverId());
+                    visibilityRestored = true;
+                    log.info("恢复接收方会话可见性: conversationId={}, receiverId={}", 
+                            conversation.getConversationId(), request.getReceiverId());
+                }
+                
+                // ✅ 如果恢复了可见性，需要推送完整会话信息（用于前端自动添加到会话列表）
+                if (visibilityRestored) {
+                    // 批量查询用户信息（避免N+1查询）
+                    Set<String> userIds = new HashSet<>();
+                    userIds.add(conversation.getUserId1());
+                    userIds.add(conversation.getUserId2());
+                    
+                    Map<String, UserProfile> profileMap = new HashMap<>();
+                    Map<String, User> userMap = new HashMap<>();
+                    if (!userIds.isEmpty()) {
+                        List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                        profileMap = profiles.stream()
+                                .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+                        
+                        List<User> users = userRepository.findAllById(userIds);
+                        userMap = users.stream()
+                                .collect(Collectors.toMap(User::getUserId, u -> u));
+                    }
+                    
+                    // 转换为完整的会话DTO
+                    ConversationDTO conversationDTO = convertConversationToDTOWithMap(
+                            conversation, request.getReceiverId(), profileMap, userMap);
+                    // ✅ 确保推送的会话不包含消息列表（用于会话列表，不需要消息详情）
+                    conversationDTO.setMessages(null);
+                    conversationDTO.setTotalMessages(null);
+                    
+                    // 推送会话恢复通知
+                    Map<String, Object> conversationRestore = new java.util.HashMap<>();
+                    conversationRestore.put("type", "CONVERSATION_VISIBILITY_RESTORED");
+                    conversationRestore.put("conversation", conversationDTO);
+                    conversationRestore.put("conversationId", conversation.getConversationId());
+                    conversationRestore.put("timestamp", LocalDateTime.now().toString());
+                    
+                    webSocketRetryService.pushWithRetry(request.getReceiverId(), conversationRestore, "CONVERSATION_RESTORED");
+                    log.debug("推送会话恢复通知: receiverId={}, conversationId={}", 
+                            request.getReceiverId(), conversation.getConversationId());
+                }
             } else {
                 // 创建新对话（基于用户对，确保唯一性）
                 Optional<Conversation> existingConv = conversationRepository.findByUserPairActive(userId, request.getReceiverId());
                 if (existingConv.isPresent()) {
                     conversation = existingConv.get();
+                    // ✅ 如果接收方（B）删除了会话（不可见），自动恢复接收方的可见性
+                    boolean visibilityRestored = false;
+                    if (!conversation.getVisibilityForUser(request.getReceiverId())) {
+                        conversation.restoreVisibilityForUser(request.getReceiverId());
+                        visibilityRestored = true;
+                        log.info("恢复接收方会话可见性: conversationId={}, receiverId={}", 
+                                conversation.getConversationId(), request.getReceiverId());
+                    }
+                    
+                    // ✅ 如果恢复了可见性，需要推送完整会话信息（用于前端自动添加到会话列表）
+                    if (visibilityRestored) {
+                        // 批量查询用户信息（避免N+1查询）
+                        Set<String> userIds = new HashSet<>();
+                        userIds.add(conversation.getUserId1());
+                        userIds.add(conversation.getUserId2());
+                        
+                        Map<String, UserProfile> profileMap = new HashMap<>();
+                        Map<String, User> userMap = new HashMap<>();
+                        if (!userIds.isEmpty()) {
+                            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                            profileMap = profiles.stream()
+                                    .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+                            
+                            List<User> users = userRepository.findAllById(userIds);
+                            userMap = users.stream()
+                                    .collect(Collectors.toMap(User::getUserId, u -> u));
+                        }
+                        
+                        // 转换为完整的会话DTO
+                        ConversationDTO conversationDTO = convertConversationToDTOWithMap(
+                                conversation, request.getReceiverId(), profileMap, userMap);
+                        // ✅ 确保推送的会话不包含消息列表（用于会话列表，不需要消息详情）
+                        conversationDTO.setMessages(null);
+                        conversationDTO.setTotalMessages(null);
+                        
+                        // 推送会话恢复通知
+                        Map<String, Object> conversationRestore = new java.util.HashMap<>();
+                        conversationRestore.put("type", "CONVERSATION_VISIBILITY_RESTORED");
+                        conversationRestore.put("conversation", conversationDTO);
+                        conversationRestore.put("conversationId", conversation.getConversationId());
+                        conversationRestore.put("timestamp", LocalDateTime.now().toString());
+                        
+                        webSocketRetryService.pushWithRetry(request.getReceiverId(), conversationRestore, "CONVERSATION_RESTORED");
+                        log.debug("推送会话恢复通知: receiverId={}, conversationId={}", 
+                                request.getReceiverId(), conversation.getConversationId());
+                    }
                 } else {
                     conversation = new Conversation();
                     conversation.setUserPair(userId, request.getReceiverId());
                     conversation.setStatus("ACTIVE");
+                    // 新会话默认双方都可见
+                    conversation.setUser1Visibility(true);
+                    conversation.setUser2Visibility(true);
                     conversationRepository.save(conversation);
                 }
             }
@@ -96,11 +230,47 @@ public class ContactServiceImpl implements ContactService {
             
             // 处理商品卡片和订单卡片
             if ("COMMODITY_CARD".equals(request.getMessageType()) && request.getCommodityId() != null) {
-                // TODO: 商品卡片功能（需要卖家商品查询页面）
-                // 暂时设置commodityId字段，但返回错误提示
+                // ✅ 商品卡片鉴权：验证商品是否存在
+                Optional<Commodity> commodityOpt = commodityRepository.findById(request.getCommodityId());
+                if (commodityOpt.isEmpty()) {
+                    return Result.fail("商品不存在");
+                }
+                Commodity commodity = commodityOpt.get();
+                
+                // ✅ 商品卡片鉴权：验证商品的卖家必须是对话双方之一
+                // 获取对话的对方用户
+                String otherUserId = conversation.getOtherUserId(userId);
+                if (otherUserId == null) {
+                    return Result.fail("无法确定对话对方用户");
+                }
+                
+                // ✅ 验证商品的卖家必须匹配对话的双方用户之一
+                // 场景1：卖家（commodity.sellerId）向买家发送商品卡片
+                // 场景2：买家咨询卖家的商品
+                boolean sellerIsSender = commodity.getSellerId().equals(userId);
+                boolean sellerIsReceiver = commodity.getSellerId().equals(otherUserId);
+                
+                // 商品卖家必须是对话双方之一
+                if (!sellerIsSender && !sellerIsReceiver) {
+                    log.warn("发送商品卡片失败：商品卖家不属于对话双方，commodityId={}, sellerId={}, userId={}, otherUserId={}", 
+                            request.getCommodityId(), commodity.getSellerId(), userId, otherUserId);
+                    return Result.fail("无权发送此商品卡片：商品不属于当前对话双方");
+                }
+                
+                // ✅ 商品卡片鉴权：验证商品状态（可选，根据业务需求）
+                // 已下架或草稿状态的商品可能不允许发送
+                if ("OFF_SHELF".equals(commodity.getCommodityStatus()) || "DRAFT".equals(commodity.getCommodityStatus())) {
+                    log.warn("发送商品卡片失败：商品状态不允许发送，commodityId={}, status={}", 
+                            request.getCommodityId(), commodity.getCommodityStatus());
+                    return Result.fail("商品状态不允许发送：商品已下架或为草稿状态");
+                }
+                
+                // 设置商品卡片相关字段
                 message.setCommodityId(request.getCommodityId());
                 message.setMessageType("COMMODITY_CARD");
-                return Result.fail("商品卡片功能暂未实现");
+                if (message.getContent() == null || message.getContent().isEmpty()) {
+                    message.setContent("商品：" + commodity.getTitle());
+                }
             }
             
             if ("ORDER_CARD".equals(request.getMessageType()) && request.getOrderId() != null) {
@@ -142,9 +312,20 @@ public class ContactServiceImpl implements ContactService {
             // deletedBySender 和 deletedByReceiver 默认值为 false，不需要设置
             messageRepository.save(message);
             
-            // 更新对话最后消息
-            conversation.setLastMessageContent(request.getContent());
-            conversation.setLastMessageTime(LocalDateTime.now());
+            // ✅ 更新对话最后消息
+            LocalDateTime now = LocalDateTime.now();
+            String messageContent = request.getContent();
+            
+            // 更新管理端字段（不过滤，显示真实最新消息）
+            conversation.setLastMessageContent(messageContent);
+            conversation.setLastMessageTime(now);
+            
+            // ✅ 更新用户级别的最后消息字段（新消息对发送方和接收方都可见）
+            // 发送方（userId）的最后消息
+            conversation.setLastMessageForUser(userId, messageContent, now);
+            // 接收方（request.getReceiverId()）的最后消息
+            conversation.setLastMessageForUser(request.getReceiverId(), messageContent, now);
+            
             conversation.incrementUnreadForUser(request.getReceiverId());
             conversationRepository.save(conversation);
             
@@ -185,7 +366,8 @@ public class ContactServiceImpl implements ContactService {
             
             return Result.ok("消息发送成功", messageDTO);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("发送消息失败: userId={}, receiverId={}, conversationId={}, error={}", 
+                    userId, request.getReceiverId(), request.getConversationId(), e.getMessage(), e);
             return Result.fail("发送消息失败：" + e.getMessage());
         }
     }
@@ -193,13 +375,28 @@ public class ContactServiceImpl implements ContactService {
     @Override
     public Result getConversations(String userId, int page, int size) {
         try {
-            // ✅ 优化：使用数据库分页，而不是内存分页
-            // 创建分页对象，按最后消息时间降序排序
-            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastMessageTime"));
+            // ✅ 优化：由于需要使用用户级别的最后消息时间排序，先查询所有对话
+            // 然后在内存中按用户对应的最后消息时间排序和分页
+            List<Conversation> allConversations = conversationRepository.findByUserIdAndStatus(userId, "ACTIVE")
+                    .stream()
+                    .sorted((c1, c2) -> {
+                        // 按用户对应的最后消息时间降序排序
+                        LocalDateTime time1 = c1.getLastMessageTimeForUser(userId);
+                        LocalDateTime time2 = c2.getLastMessageTimeForUser(userId);
+                        if (time1 == null && time2 == null) return 0;
+                        if (time1 == null) return 1; // null 排在后面
+                        if (time2 == null) return -1;
+                        return time2.compareTo(time1); // 降序
+                    })
+                    .collect(Collectors.toList());
             
-            // 查询用户的所有活跃对话（数据库分页）
-            Page<Conversation> conversationsPage = conversationRepository.findByUserIdAndStatus(userId, "ACTIVE", pageable);
-            List<Conversation> pagedConversations = conversationsPage.getContent();
+            // 手动分页
+            int total = allConversations.size();
+            int fromIndex = page * size;
+            int toIndex = Math.min(fromIndex + size, total);
+            List<Conversation> pagedConversations = fromIndex < total 
+                    ? allConversations.subList(fromIndex, toIndex) 
+                    : new ArrayList<>();
             
             // ✅ 优化：批量查询所有相关的 UserProfile（避免 N+1 查询）
             // 收集所有相关的用户ID（去重）
@@ -237,8 +434,9 @@ public class ContactServiceImpl implements ContactService {
                 .map(conversation -> convertConversationToDTOWithMap(conversation, userId, profileMap, userMap))
                 .collect(Collectors.toList());
             
-            // 构造分页结果（使用数据库分页的总数）
-            Page<ConversationDTO> dtoPage = new PageImpl<>(dtoList, pageable, conversationsPage.getTotalElements());
+            // 构造分页结果
+            Pageable pageable = PageRequest.of(page, size);
+            Page<ConversationDTO> dtoPage = new PageImpl<>(dtoList, pageable, total);
             
             return Result.ok("获取对话列表成功", dtoPage);
         } catch (Exception e) {
@@ -303,7 +501,8 @@ public class ContactServiceImpl implements ContactService {
             
             return Result.ok("获取对话详情成功", dto);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("获取对话详情失败: userId={}, conversationId={}, error={}", 
+                    userId, conversationId, e.getMessage(), e);
             return Result.fail("获取对话详情失败：" + e.getMessage());
         }
     }
@@ -352,8 +551,45 @@ public class ContactServiceImpl implements ContactService {
             conversation.markAsReadForUser(userId);
             conversationRepository.save(conversation);
             
+            // ✅ 在标记为已读之前，先查询所有未读消息（用于向发送者推送已读通知）
+            // 获取对话中的对方用户ID
+            String otherUserId = conversation.getUserId1().equals(userId) 
+                    ? conversation.getUserId2() 
+                    : conversation.getUserId1();
+            
+            // 查询该对话中由对方发送给当前用户的未读消息
+            List<Message> unreadMessages = messageRepository.findUnreadMessagesByConversationAndReceiver(
+                    conversationId, userId);
+            
             // 标记所有消息为已读
-            messageRepository.markMessagesAsRead(conversationId, userId, LocalDateTime.now());
+            LocalDateTime readTime = LocalDateTime.now();
+            messageRepository.markMessagesAsRead(conversationId, userId, readTime);
+            
+            // ✅ 如果有未读消息，向发送者推送已读通知
+            if (unreadMessages != null && !unreadMessages.isEmpty()) {
+                try {
+                    // 构建已读通知消息
+                    Map<String, Object> readNotification = new java.util.HashMap<>();
+                    readNotification.put("type", "MESSAGE_READ");
+                    readNotification.put("conversationId", conversationId);
+                    readNotification.put("readTime", readTime.toString());
+                    
+                    // 构建已读消息ID列表
+                    List<String> readMessageIds = unreadMessages.stream()
+                            .map(Message::getMessageId)
+                            .collect(java.util.stream.Collectors.toList());
+                    readNotification.put("messageIds", readMessageIds);
+                    
+                    // 向发送者推送已读通知（使用重试机制）
+                    webSocketRetryService.pushWithRetry(otherUserId, readNotification, "MESSAGE_READ");
+                    log.debug("已读通知推送尝试（带重试）: senderId={}, conversationId={}, messageCount={}", 
+                            otherUserId, conversationId, readMessageIds.size());
+                } catch (Exception e) {
+                    log.error("推送已读通知失败: senderId={}, conversationId={}, error={}", 
+                            otherUserId, conversationId, e.getMessage(), e);
+                    // WebSocket 推送失败不影响标记已读的成功返回
+                }
+            }
             
             // ✅ 推送未读数更新事件，让前端全局角标实时更新
             try {
@@ -388,7 +624,8 @@ public class ContactServiceImpl implements ContactService {
             
             return Result.ok("标记已读成功");
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("标记已读失败: userId={}, conversationId={}, error={}", 
+                    userId, conversationId, e.getMessage(), e);
             return Result.fail("标记已读失败：" + e.getMessage());
         }
     }
@@ -399,7 +636,7 @@ public class ContactServiceImpl implements ContactService {
             Integer count = conversationRepository.getTotalUnreadCount(userId);
             return Result.ok("获取未读数成功", count != null ? count : 0);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("获取未读数失败: userId={}, error={}", userId, e.getMessage(), e);
             return Result.fail("获取未读数失败：" + e.getMessage());
         }
     }
@@ -420,7 +657,8 @@ public class ContactServiceImpl implements ContactService {
             conversationRepository.softDelete(conversationId);
             return Result.ok("删除对话成功");
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("删除对话失败: userId={}, conversationId={}, error={}", 
+                    userId, conversationId, e.getMessage(), e);
             return Result.fail("删除对话失败：" + e.getMessage());
         }
     }
@@ -440,18 +678,59 @@ public class ContactServiceImpl implements ContactService {
                 return Result.fail("无权删除此消息");
             }
             
+            // 获取对话信息
+            Optional<Conversation> convOpt = conversationRepository.findById(message.getConversationId());
+            if (!convOpt.isPresent()) {
+                return Result.fail("对话不存在");
+            }
+            Conversation conversation = convOpt.get();
+            
             // 双向删除：根据用户身份设置对应的删除标记
-            if (message.getSenderId().equals(userId)) {
+            boolean isSender = message.getSenderId().equals(userId);
+            if (isSender) {
                 // 发送方删除
                 messageRepository.markDeletedBySender(messageId);
-            } else if (message.getReceiverId().equals(userId)) {
+            } else {
                 // 接收方删除
                 messageRepository.markDeletedByReceiver(messageId);
             }
             
+            // ✅ 检查删除的消息是否为该用户可见的最后一条消息
+            // 注意：刚删除后，findLastMessageForUser不会返回这条消息，所以需要先检查
+            String userLastContent = conversation.getLastMessageContentForUser(userId);
+            LocalDateTime userLastTime = conversation.getLastMessageTimeForUser(userId);
+            
+            // 比较内容和时间（需要考虑null情况）
+            boolean isLastMessage = false;
+            if (userLastContent != null && userLastTime != null) {
+                isLastMessage = message.getContent().equals(userLastContent) && 
+                               message.getCreatedAt().equals(userLastTime);
+            }
+            
+            if (isLastMessage) {
+                // ✅ 查询倒数第二条可见消息并更新
+                // 注意：删除后，这条消息已经不可见了，所以查询会跳过它
+                Pageable pageable = PageRequest.of(0, 1); // 查询最新的1条（删除后的最新消息）
+                List<Message> lastMessages = messageRepository.findLastMessageForUser(
+                        message.getConversationId(), userId, pageable);
+                
+                if (!lastMessages.isEmpty()) {
+                    // 有新的最后消息，更新
+                    Message newLastMessage = lastMessages.get(0);
+                    conversation.setLastMessageForUser(userId, 
+                            newLastMessage.getContent(), 
+                            newLastMessage.getCreatedAt());
+                } else {
+                    // 没有其他可见消息了，设置为空
+                    conversation.setLastMessageForUser(userId, null, null);
+                }
+                conversationRepository.save(conversation);
+            }
+            
             return Result.ok("删除消息成功");
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("删除消息失败: userId={}, messageId={}, error={}", 
+                    userId, messageId, e.getMessage(), e);
             return Result.fail("删除消息失败：" + e.getMessage());
         }
     }
@@ -490,7 +769,8 @@ public class ContactServiceImpl implements ContactService {
             
             return Result.ok("搜索消息成功", dtoPage);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("搜索消息失败: userId={}, conversationId={}, keyword={}, error={}", 
+                    userId, conversationId, keyword, e.getMessage(), e);
             return Result.fail("搜索消息失败：" + e.getMessage());
         }
     }
@@ -507,7 +787,8 @@ public class ContactServiceImpl implements ContactService {
                 return Result.fail("对话不存在");
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("获取对话失败: userId={}, otherUserId={}, error={}", 
+                    userId, otherUserId, e.getMessage(), e);
             return Result.fail("获取对话失败：" + e.getMessage());
         }
     }
@@ -537,8 +818,11 @@ public class ContactServiceImpl implements ContactService {
         ConversationDTO dto = new ConversationDTO();
         dto.setConversationId(conversation.getConversationId());
         
-        dto.setLastMessageContent(conversation.getLastMessageContent());
-        dto.setLastMessageTime(conversation.getLastMessageTime());
+        // ✅ 用户端：使用用户级别的最后消息字段（过滤用户删除的）
+        // 使用辅助方法获取对应用户的最后消息
+        dto.setLastMessageContent(conversation.getLastMessageContentForUser(currentUserId));
+        dto.setLastMessageTime(conversation.getLastMessageTimeForUser(currentUserId));
+        
         dto.setStatus(conversation.getStatus());
         dto.setCreatedAt(conversation.getCreatedAt());
         dto.setUpdatedAt(conversation.getUpdatedAt());
@@ -590,8 +874,11 @@ public class ContactServiceImpl implements ContactService {
         ConversationDTO dto = new ConversationDTO();
         dto.setConversationId(conversation.getConversationId());
         
-        dto.setLastMessageContent(conversation.getLastMessageContent());
-        dto.setLastMessageTime(conversation.getLastMessageTime());
+        // ✅ 用户端：使用用户级别的最后消息字段（过滤用户删除的）
+        // 使用辅助方法获取对应用户的最后消息
+        dto.setLastMessageContent(conversation.getLastMessageContentForUser(currentUserId));
+        dto.setLastMessageTime(conversation.getLastMessageTimeForUser(currentUserId));
+        
         dto.setStatus(conversation.getStatus());
         dto.setCreatedAt(conversation.getCreatedAt());
         dto.setUpdatedAt(conversation.getUpdatedAt());

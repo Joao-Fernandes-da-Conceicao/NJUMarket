@@ -117,7 +117,8 @@ export default {
     const isMobile = computed(() => globalIsMobile.value)
     
     const messageContent = ref('')
-    const messagesListRef = ref(null)
+    // ⚠️ messagesListRef 在 ChatWindow 组件内部，这里不需要定义
+    // const messagesListRef = ref(null)
     
     // ✅ 提供增量更新结果给子组件（对话框）
     const incrementalUpdateResult = reactive({
@@ -126,6 +127,129 @@ export default {
       timestamp: null
     })
     provide('incrementalUpdateResult', incrementalUpdateResult)
+    
+    // ✅ 对话级别的profile缓存：以conversationId为key，存储对话双方的profile
+    // 结构：Map<conversationId, Map<userId, profile>>
+    const conversationProfileCache = new Map()
+    
+    /**
+     * ✅ 缓存对话双方的profile信息
+     * 在进入聊天框时调用，后续订单直接使用缓存
+     */
+    const cacheConversationProfiles = async (conversation) => {
+      if (!conversation || !conversation.conversationId) {
+        console.warn('⚠️ cacheConversationProfiles: 对话数据无效', conversation)
+        return
+      }
+      
+      const conversationId = conversation.conversationId
+      const currentUserId = userStore.user?.userId
+      const otherUserId = conversation.otherUserId
+      
+      if (!currentUserId) {
+        console.warn('⚠️ cacheConversationProfiles: 当前用户未登录')
+        return
+      }
+      
+      if (!otherUserId) {
+        console.warn('⚠️ cacheConversationProfiles: 对话对方用户ID缺失')
+        return
+      }
+      
+      // 检查缓存是否已存在
+      if (conversationProfileCache.has(conversationId)) {
+        const cached = conversationProfileCache.get(conversationId)
+        const hasCurrentUser = cached.has(currentUserId)
+        const hasOtherUser = cached.has(otherUserId)
+        
+        if (hasCurrentUser && hasOtherUser) {
+          console.log(`✅ cacheConversationProfiles: 对话 ${conversationId} 的profile已缓存，跳过查询`)
+          return
+        }
+      }
+      
+      console.log(`🔄 cacheConversationProfiles: 开始缓存对话 ${conversationId} 的profile`, {
+        currentUserId,
+        otherUserId
+      })
+      
+      // 初始化该对话的profile缓存Map
+      if (!conversationProfileCache.has(conversationId)) {
+        conversationProfileCache.set(conversationId, new Map())
+      }
+      const profileMap = conversationProfileCache.get(conversationId)
+      
+      // 批量查询双方profile
+      const userIds = [currentUserId, otherUserId].filter(Boolean)
+      const { profileAPI } = await import('../api')
+      
+      const profilePromises = userIds.map(async (userId) => {
+        // 如果已缓存，跳过
+        if (profileMap.has(userId)) {
+          console.log(`⏭️ cacheConversationProfiles: 用户 ${userId} 的profile已缓存，跳过`)
+          return
+        }
+        
+        try {
+          console.log(`🔍 cacheConversationProfiles: 查询用户profile: ${userId}`)
+          const response = await profileAPI.getUser(userId)
+          if (response.success && response.data) {
+            profileMap.set(userId, response.data)
+            console.log(`✅ cacheConversationProfiles: 用户profile查询成功并缓存: ${userId}`, response.data)
+          } else {
+            console.warn(`⚠️ cacheConversationProfiles: 用户profile查询失败: ${userId}`, response)
+          }
+        } catch (error) {
+          console.error(`❌ cacheConversationProfiles: 获取用户 ${userId} 的profile失败:`, error)
+        }
+      })
+      
+      await Promise.all(profilePromises)
+      console.log(`✅ cacheConversationProfiles: 对话 ${conversationId} 的profile缓存完成`, {
+        cachedUsers: Array.from(profileMap.keys()),
+        cacheSize: profileMap.size
+      })
+    }
+    
+    /**
+     * ✅ 从缓存获取profile信息（优先使用缓存，缓存中没有则查询）
+     * @param {string} userId - 用户ID
+     * @param {string} conversationId - 对话ID（可选，如果提供则优先从该对话的缓存中获取）
+     * @returns {Promise<Object|null>} profile信息，如果不存在返回null
+     */
+    const getProfileFromCache = async (userId, conversationId = null) => {
+      if (!userId) return null
+      
+      // 如果提供了conversationId，优先从该对话的缓存中获取
+      if (conversationId && conversationProfileCache.has(conversationId)) {
+        const conversationCache = conversationProfileCache.get(conversationId)
+        if (conversationCache.has(userId)) {
+          const profile = conversationCache.get(userId)
+          console.log(`✅ getProfileFromCache: 从对话 ${conversationId} 缓存中获取用户 ${userId} 的profile`)
+          return profile
+        }
+      }
+      
+      // 遍历所有对话的缓存，查找该用户
+      for (const [cid, profileMap] of conversationProfileCache.entries()) {
+        if (profileMap.has(userId)) {
+          const profile = profileMap.get(userId)
+          console.log(`✅ getProfileFromCache: 从对话 ${cid} 缓存中获取用户 ${userId} 的profile`)
+          return profile
+        }
+      }
+      
+      // 缓存中没有，返回null（由调用者决定是否查询）
+      console.log(`⚠️ getProfileFromCache: 用户 ${userId} 的profile未在缓存中`)
+      return null
+    }
+    
+    // ✅ 提供profile缓存访问方法给子组件（对话框）- 在函数定义后提供
+    const profileCacheProvider = {
+      getProfileFromCache,
+      conversationProfileCache
+    }
+    provide('profileCacheProvider', profileCacheProvider)
     
     // 获取头像URL
     const getAvatarUrl = (avatar) => {
@@ -137,8 +261,7 @@ export default {
     // 获取对话列表 - 使用 store
     const fetchConversations = async () => {
       await messageStore.fetchConversations()
-      await nextTick()
-      scrollToBottom()
+      // ✅ 滚动逻辑在 ChatWindow 组件内部处理
     }
     
     // 获取未读数 - 使用 store
@@ -150,13 +273,16 @@ export default {
     const selectConversation = async (conversation) => {
       await messageStore.selectConversation(conversation)
       
+      // ✅ 缓存对话双方的profile信息
+      await cacheConversationProfiles(conversation)
+      
       // 移动端：显示聊天窗口
       if (isMobile.value) {
         messageStore.showChat()
       }
       
-      await nextTick()
-      scrollToBottom()
+      // ✅ 滚动逻辑在 ChatWindow 组件内部处理（通过 watch currentConversation）
+      // 这里不需要手动滚动
     }
     
     // 发送消息 - 使用 store
@@ -181,8 +307,7 @@ export default {
         
         if (response.success) {
           messageContent.value = ''
-          await nextTick()
-          scrollToBottom()
+          // ✅ 滚动逻辑在 ChatWindow 组件内部处理（通过 watch messages）
         }
       } catch (error) {
         // 错误已在 store 中处理
@@ -196,12 +321,8 @@ export default {
       }
     }
     
-    // 滚动到底部
-    const scrollToBottom = () => {
-      if (messagesListRef.value) {
-        messagesListRef.value.scrollTop = messagesListRef.value.scrollHeight
-      }
-    }
+    // ✅ 滚动逻辑在 ChatWindow 组件内部处理，因为滚动容器在该组件中
+    // 不需要在这里定义滚动函数
     
     // 从路由参数获取商品/订单ID
     const defaultCommodityId = computed(() => route.query.commodityId || null)
@@ -224,7 +345,7 @@ export default {
     }
     
     // ✅ 增量更新商品和订单数据（仅更新已存在的消息）
-    const updateCommoditiesAndOrders = (commodities = [], orders = []) => {
+    const updateCommoditiesAndOrders = async (commodities = [], orders = []) => {
       // 建立 Map
       const commodityMap = new Map(commodities.map(c => [c.commodityId, c]))
       const orderMap = new Map(orders.map(o => [o.orderId, o]))
@@ -251,15 +372,113 @@ export default {
             orderId: o.orderId,
             orderStatus: o.orderStatus,
             payAmount: o.payAmount,
+            sellerId: o.sellerId,
+            buyerId: o.buyerId,
             // 注意：如果后端返回了时间戳，这里也可以记录
           })
         })
         console.groupEnd()
       }
       
+      // ✅ 批量获取订单相关的用户profile信息（卖家、买家）- 优先使用缓存
+      const profileMap = new Map()
+      const userIds = []
+      orderMap.forEach(order => {
+        if (order.sellerId) userIds.push(order.sellerId)
+        if (order.buyerId) userIds.push(order.buyerId)
+      })
+      
+      // 批量查询profile（去重）
+      const uniqueUserIds = [...new Set(userIds)]
+      const currentConversationId = selectedConversationId.value
+      
+      console.log(`📋 updateCommoditiesAndOrders: 准备获取${uniqueUserIds.length}个用户的profile信息（优先使用缓存）`, {
+        userIds: uniqueUserIds,
+        conversationId: currentConversationId
+      })
+      
+      if (uniqueUserIds.length > 0) {
+        // ✅ 优先从缓存中获取
+        const cachePromises = uniqueUserIds.map(async (userId) => {
+          const cachedProfile = await getProfileFromCache(userId, currentConversationId)
+          if (cachedProfile) {
+            profileMap.set(userId, cachedProfile)
+            return true // 从缓存获取成功
+          }
+          return false // 缓存中没有
+        })
+        await Promise.all(cachePromises)
+        
+        // ✅ 对于缓存中没有的用户，进行查询
+        const uncachedUserIds = uniqueUserIds.filter(userId => !profileMap.has(userId))
+        console.log(`📋 updateCommoditiesAndOrders: 缓存命中 ${profileMap.size} 个，需要查询 ${uncachedUserIds.length} 个`, {
+          cached: Array.from(profileMap.keys()),
+          uncached: uncachedUserIds
+        })
+        
+        if (uncachedUserIds.length > 0) {
+          const { profileAPI } = await import('../api')
+          const queryPromises = uncachedUserIds.map(async (userId) => {
+            try {
+              console.log(`🔍 updateCommoditiesAndOrders: 查询用户profile（缓存未命中）: ${userId}`)
+              const response = await profileAPI.getUser(userId)
+              if (response.success && response.data) {
+                profileMap.set(userId, response.data)
+                console.log(`✅ updateCommoditiesAndOrders: 用户profile查询成功: ${userId}`, {
+                  userId,
+                  nickname: response.data.nickname,
+                  avatar: response.data.avatar,
+                  fullProfile: response.data
+                })
+                // ✅ 同时更新到缓存（如果当前对话存在）
+                if (currentConversationId) {
+                  if (!conversationProfileCache.has(currentConversationId)) {
+                    conversationProfileCache.set(currentConversationId, new Map())
+                  }
+                  conversationProfileCache.get(currentConversationId).set(userId, response.data)
+                  console.log(`💾 updateCommoditiesAndOrders: 用户profile已缓存到对话 ${currentConversationId}: ${userId}`)
+                }
+              } else {
+                console.warn(`⚠️ updateCommoditiesAndOrders: 用户profile查询失败: ${userId}`, response)
+              }
+            } catch (error) {
+              console.error(`❌ updateCommoditiesAndOrders: 获取用户 ${userId} 的profile失败:`, error)
+            }
+          })
+          await Promise.all(queryPromises)
+        }
+        
+        console.log(`📋 updateCommoditiesAndOrders: profile获取完成: 缓存${profileMap.size - uncachedUserIds.length}个，查询${uncachedUserIds.length}个，总计${profileMap.size}个`, {
+          profileMapEntries: Array.from(profileMap.entries()).map(([userId, profile]) => ({
+            userId,
+            nickname: profile.nickname,
+            avatar: profile.avatar
+          }))
+        })
+      }
+      
       // ✅ 增量更新：只更新已存在的消息中的商品和订单数据
       let updatedCount = 0
       const updatedMessages = []
+      
+      // ✅ 调试：检查订单匹配情况
+      const messageOrderIds = messages.value
+        .filter(m => m.orderId)
+        .map(m => m.orderId)
+      const uniqueMessageOrderIds = [...new Set(messageOrderIds)]
+      
+      console.log(`🔍 updateCommoditiesAndOrders: 开始遍历${messages.value.length}条消息，查找需要更新的订单`, {
+        orderMapSize: orderMap.size,
+        orderMapKeys: Array.from(orderMap.keys()),
+        messageOrderIdsCount: uniqueMessageOrderIds.length,
+        messageOrderIds: uniqueMessageOrderIds,
+        hasMatchingOrders: Array.from(orderMap.keys()).some(orderId => uniqueMessageOrderIds.includes(orderId)),
+        orderMapOrders: Array.from(orderMap.values()).map(o => ({
+          orderId: o.orderId,
+          sellerId: o.sellerId,
+          buyerId: o.buyerId
+        }))
+      })
       
       messages.value.forEach((message, messageIndex) => {
         let messageUpdated = false
@@ -267,6 +486,17 @@ export default {
           messageIndex,
           messageId: message.messageId,
           updates: []
+        }
+        
+        // ✅ 调试：检查是否有匹配的订单
+        if (message.orderId) {
+          const orderInMap = orderMap.has(message.orderId)
+          console.log(`🔍 updateCommoditiesAndOrders: 消息 ${messageIndex} (messageId=${message.messageId}, orderId=${message.orderId}):`, {
+            orderId: message.orderId,
+            orderInMap,
+            hasOrder: !!message.order,
+            orderStatus: message.order?.orderStatus
+          })
         }
         
         if (message.commodityId && commodityMap.has(message.commodityId)) {
@@ -290,11 +520,69 @@ export default {
         }
         
         if (message.orderId && orderMap.has(message.orderId)) {
+          console.log(`✅ updateCommoditiesAndOrders: 找到需要更新的订单消息 (messageId=${message.messageId}, orderId=${message.orderId})`)
+          
           const oldOrder = message.order ? { ...message.order } : null
           const newOrder = orderMap.get(message.orderId)
           
-          // 更新订单数据（覆盖旧数据）
-          message.order = newOrder
+          console.log(`🔍 updateCommoditiesAndOrders: 订单数据详情:`, {
+            newOrderFromMap: newOrder,
+            oldOrder: oldOrder,
+            profileMapSize: profileMap.size,
+            profileMapKeys: Array.from(profileMap.keys())
+          })
+          
+          // ✅ 合并profile信息到订单数据（类似enrichMessages的处理方式）
+          const sellerProfile = profileMap.get(newOrder.sellerId)
+          const buyerProfile = profileMap.get(newOrder.buyerId)
+          
+          console.log(`🔍 updateCommoditiesAndOrders: 准备合并profile (orderId=${newOrder.orderId}):`, {
+            sellerId: newOrder.sellerId,
+            buyerId: newOrder.buyerId,
+            sellerProfileFromMap: sellerProfile,
+            buyerProfileFromMap: buyerProfile,
+            sellerProfileInMap: profileMap.has(newOrder.sellerId),
+            buyerProfileInMap: profileMap.has(newOrder.buyerId),
+            profileMapSize: profileMap.size,
+            profileMapKeys: Array.from(profileMap.keys())
+          })
+          
+          const orderWithProfile = {
+            ...newOrder,
+            sellerNickname: sellerProfile ? (sellerProfile.nickname || newOrder.sellerNickname) : newOrder.sellerNickname,
+            sellerAvatar: sellerProfile ? (sellerProfile.avatar || newOrder.sellerAvatar) : newOrder.sellerAvatar,
+            buyerNickname: buyerProfile ? (buyerProfile.nickname || newOrder.buyerNickname) : newOrder.buyerNickname,
+            buyerAvatar: buyerProfile ? (buyerProfile.avatar || newOrder.buyerAvatar) : newOrder.buyerAvatar
+          }
+          
+          console.log(`🔄 updateCommoditiesAndOrders: 更新订单数据 (messageId=${message.messageId}, orderId=${newOrder.orderId}):`, {
+            hasSellerProfile: !!sellerProfile,
+            hasBuyerProfile: !!buyerProfile,
+            sellerNickname: orderWithProfile.sellerNickname,
+            buyerNickname: orderWithProfile.buyerNickname,
+            sellerAvatar: orderWithProfile.sellerAvatar,
+            buyerAvatar: orderWithProfile.buyerAvatar,
+            oldOrderExists: !!message.order,
+            oldOrderHasProfile: !!(message.order?.sellerNickname || message.order?.buyerNickname),
+            orderWithProfileFull: orderWithProfile
+          })
+          
+          // ✅ 更新订单数据（包含profile信息）- 使用新对象引用确保触发响应式更新
+          const oldOrderRef = message.order
+          message.order = orderWithProfile
+          console.log(`✅ updateCommoditiesAndOrders: 订单对象已更新 (messageId=${message.messageId})`, {
+            orderReferenceChanged: oldOrderRef !== message.order,
+            messageOrderNow: {
+              orderId: message.order?.orderId,
+              sellerId: message.order?.sellerId,
+              buyerId: message.order?.buyerId,
+              sellerNickname: message.order?.sellerNickname,
+              sellerAvatar: message.order?.sellerAvatar,
+              buyerNickname: message.order?.buyerNickname,
+              buyerAvatar: message.order?.buyerAvatar
+            },
+            shouldTriggerWatch: true
+          })
           updatedCount++
           messageUpdated = true
           
@@ -314,6 +602,53 @@ export default {
         }
       })
       
+      console.log(`📊 updateCommoditiesAndOrders: 遍历完成，更新了${updatedCount}条消息`, {
+        updatedMessagesCount: updatedMessages.length,
+        messagesTotal: messages.value.length,
+        orderMapKeys: Array.from(orderMap.keys()),
+        orderMapSize: orderMap.size
+      })
+      
+      // ✅ 处理未匹配的订单：检查所有有orderId但没有订单数据的消息
+      // 这样可以处理新消息到达时订单数据已经准备好的情况
+      const messagesWithoutOrderData = messages.value.filter(msg => {
+        return msg.orderId && !msg.order && orderMap.has(msg.orderId)
+      })
+      
+      if (messagesWithoutOrderData.length > 0) {
+        console.log(`🔄 updateCommoditiesAndOrders: 发现${messagesWithoutOrderData.length}条消息有orderId但缺少订单数据，立即填充`, {
+          messageOrderIds: messagesWithoutOrderData.map(m => m.orderId)
+        })
+        
+        messagesWithoutOrderData.forEach((message) => {
+          const newOrder = orderMap.get(message.orderId)
+          if (newOrder) {
+            console.log(`✅ updateCommoditiesAndOrders: 为消息 ${message.messageId} 填充订单数据 (orderId=${message.orderId})`)
+            
+            const sellerProfile = profileMap.get(newOrder.sellerId)
+            const buyerProfile = profileMap.get(newOrder.buyerId)
+            
+            const orderWithProfile = {
+              ...newOrder,
+              sellerNickname: sellerProfile ? (sellerProfile.nickname || newOrder.sellerNickname) : newOrder.sellerNickname,
+              sellerAvatar: sellerProfile ? (sellerProfile.avatar || newOrder.sellerAvatar) : newOrder.sellerAvatar,
+              buyerNickname: buyerProfile ? (buyerProfile.nickname || newOrder.buyerNickname) : newOrder.buyerNickname,
+              buyerAvatar: buyerProfile ? (buyerProfile.avatar || newOrder.buyerAvatar) : newOrder.buyerAvatar
+            }
+            
+            message.order = orderWithProfile
+            updatedCount++
+            
+            console.log(`✅ updateCommoditiesAndOrders: 订单数据填充完成 (messageId=${message.messageId}, orderId=${message.orderId}):`, {
+              sellerNickname: orderWithProfile.sellerNickname,
+              buyerNickname: orderWithProfile.buyerNickname,
+              sellerAvatar: orderWithProfile.sellerAvatar,
+              buyerAvatar: orderWithProfile.buyerAvatar
+            })
+          }
+        })
+      }
+      
       // ✅ 详细日志：记录更新的消息详情
       if (updatedCount > 0) {
         console.group(`✅ 增量更新完成: 更新了${updatedCount}个消息的商品/订单数据`)
@@ -321,6 +656,12 @@ export default {
           console.log(`消息 ${updateInfo.messageIndex + 1} (${updateInfo.messageId}):`, updateInfo.updates)
         })
         console.groupEnd()
+      } else {
+        console.warn(`⚠️ updateCommoditiesAndOrders: 没有找到匹配的消息进行更新`, {
+          orderMapKeys: Array.from(orderMap.keys()),
+          messageOrderIds: uniqueMessageOrderIds,
+          unmatchedOrderIds: Array.from(orderMap.keys()).filter(orderId => !uniqueMessageOrderIds.includes(orderId))
+        })
       }
       // 注意：如果 updatedCount 为 0，说明变更数据不匹配当前消息，这是正常情况
       // （可能是其他对话的消息，或者变更数据已过期）
@@ -364,8 +705,8 @@ export default {
           if (commodities.length > 0 || orders.length > 0) {
             console.log(`📦 增量轮询获取到变更: 商品${commodities.length}个, 订单${orders.length}个`)
             
-            // 增量更新前端数据
-            const updatedCount = updateCommoditiesAndOrders(commodities, orders)
+            // 增量更新前端数据（await异步函数）
+            const updatedCount = await updateCommoditiesAndOrders(commodities, orders)
             
             // ✅ 通知子组件（对话框）增量更新结果
             incrementalUpdateResult.commodities = commodities
@@ -487,13 +828,131 @@ export default {
         )
       }
       
-      // 4. 填充消息的商品和订单信息
+      // ✅ 批量获取订单相关的用户profile信息（卖家、买家）- 优先使用缓存
+      const profileMap = new Map()
+      const userIds = []
+      orderMap.forEach(order => {
+        if (order.sellerId) userIds.push(order.sellerId)
+        if (order.buyerId) userIds.push(order.buyerId)
+      })
+      
+      // 批量查询profile（去重）
+      const uniqueUserIds = [...new Set(userIds)]
+      const currentConversationId = selectedConversationId.value
+      
+      console.log(`📋 enrichMessages: 准备获取${uniqueUserIds.length}个用户的profile信息（优先使用缓存）`, {
+        userIds: uniqueUserIds,
+        conversationId: currentConversationId
+      })
+      
+      if (uniqueUserIds.length > 0) {
+        // ✅ 优先从缓存中获取
+        const cachePromises = uniqueUserIds.map(async (userId) => {
+          const cachedProfile = await getProfileFromCache(userId, currentConversationId)
+          if (cachedProfile) {
+            profileMap.set(userId, cachedProfile)
+            console.log(`✅ enrichMessages: 从缓存获取用户 ${userId} 的profile:`, {
+              userId,
+              nickname: cachedProfile.nickname,
+              avatar: cachedProfile.avatar
+            })
+            return true // 从缓存获取成功
+          }
+          console.log(`⚠️ enrichMessages: 用户 ${userId} 的profile不在缓存中`)
+          return false // 缓存中没有
+        })
+        await Promise.all(cachePromises)
+        
+        // ✅ 对于缓存中没有的用户，进行查询
+        const uncachedUserIds = uniqueUserIds.filter(userId => !profileMap.has(userId))
+        console.log(`📋 enrichMessages: 缓存命中 ${profileMap.size} 个，需要查询 ${uncachedUserIds.length} 个`, {
+          cached: Array.from(profileMap.keys()),
+          uncached: uncachedUserIds
+        })
+        
+        if (uncachedUserIds.length > 0) {
+          const { profileAPI } = await import('../api')
+          const queryPromises = uncachedUserIds.map(async (userId) => {
+            try {
+              console.log(`🔍 enrichMessages: 查询用户profile（缓存未命中）: ${userId}`)
+              const response = await profileAPI.getUser(userId)
+              if (response.success && response.data) {
+                profileMap.set(userId, response.data)
+                // ✅ 同时更新到缓存（如果当前对话存在）
+                if (currentConversationId) {
+                  if (!conversationProfileCache.has(currentConversationId)) {
+                    conversationProfileCache.set(currentConversationId, new Map())
+                  }
+                  conversationProfileCache.get(currentConversationId).set(userId, response.data)
+                }
+                console.log(`✅ enrichMessages: 用户profile查询成功并缓存: ${userId}`, response.data)
+              } else {
+                console.warn(`⚠️ enrichMessages: 用户profile查询失败: ${userId}`, response)
+              }
+            } catch (error) {
+              console.error(`❌ enrichMessages: 获取用户 ${userId} 的profile失败:`, error)
+            }
+          })
+          await Promise.all(queryPromises)
+        }
+        
+        console.log(`📋 enrichMessages: profile获取完成: 缓存${profileMap.size - uncachedUserIds.length}个，查询${uncachedUserIds.length}个，总计${profileMap.size}个`)
+      }
+      
+      // 4. 填充消息的商品和订单信息（订单包含profile信息）
       messageList.forEach(message => {
         if (message.commodityId && !message.commodity) {
           message.commodity = commodityMap.get(message.commodityId)
         }
         if (message.orderId && !message.order) {
-          message.order = orderMap.get(message.orderId)
+          const order = orderMap.get(message.orderId)
+          if (order) {
+            // ✅ 合并profile信息到订单数据（类似SelectCommodityOrOrderDialog的处理方式）
+            const sellerProfile = profileMap.get(order.sellerId)
+            const buyerProfile = profileMap.get(order.buyerId)
+            
+            console.log(`🔍 enrichMessages: 准备合并profile (orderId=${order.orderId}):`, {
+              sellerId: order.sellerId,
+              buyerId: order.buyerId,
+              sellerProfileFromMap: sellerProfile,
+              buyerProfileFromMap: buyerProfile,
+              sellerProfileInMap: profileMap.has(order.sellerId),
+              buyerProfileInMap: profileMap.has(order.buyerId),
+              profileMapSize: profileMap.size,
+              profileMapKeys: Array.from(profileMap.keys())
+            })
+            
+            const orderWithProfile = {
+              ...order,
+              sellerNickname: sellerProfile ? (sellerProfile.nickname || order.sellerNickname) : order.sellerNickname,
+              sellerAvatar: sellerProfile ? (sellerProfile.avatar || order.sellerAvatar) : order.sellerAvatar,
+              buyerNickname: buyerProfile ? (buyerProfile.nickname || order.buyerNickname) : order.buyerNickname,
+              buyerAvatar: buyerProfile ? (buyerProfile.avatar || order.buyerAvatar) : order.buyerAvatar
+            }
+            
+            console.log(`📝 enrichMessages: 为消息填充订单数据 (messageId=${message.messageId}, orderId=${order.orderId}):`, {
+              hasSellerProfile: !!sellerProfile,
+              hasBuyerProfile: !!buyerProfile,
+              sellerNickname: orderWithProfile.sellerNickname,
+              buyerNickname: orderWithProfile.buyerNickname,
+              sellerAvatar: orderWithProfile.sellerAvatar,
+              buyerAvatar: orderWithProfile.buyerAvatar,
+              orderWithProfileFull: orderWithProfile
+            })
+            
+            message.order = orderWithProfile
+            console.log(`✅ enrichMessages: 订单对象已赋值 (messageId=${message.messageId})`, {
+              messageOrderNow: {
+                orderId: message.order?.orderId,
+                sellerId: message.order?.sellerId,
+                buyerId: message.order?.buyerId,
+                sellerNickname: message.order?.sellerNickname,
+                sellerAvatar: message.order?.sellerAvatar,
+                buyerNickname: message.order?.buyerNickname,
+                buyerAvatar: message.order?.buyerAvatar
+              }
+            })
+          }
         }
       })
       
@@ -501,7 +960,7 @@ export default {
     }
     
     // ✅ 定期增量轮询更新消息中的商品和订单状态
-    const POLL_INTERVAL = 30000 // 30秒轮询一次
+    const POLL_INTERVAL = 30000
     let pollTimer = null
     let isPolling = false // 防止并发轮询
     
@@ -609,42 +1068,91 @@ export default {
       }
     }
     
-    // 监听消息变化，自动获取详细信息和滚动到底部
+    // ✅ 保存上一次的消息长度（用于检测新消息）
+    const previousMessagesLength = ref(0)
+    
+    // 监听消息变化，自动获取详细信息
     watch(() => messages.value, async (newMessages, oldMessages) => {
       if (newMessages && newMessages.length > 0) {
-        // ✅ 初始加载时：全量查询未加载的商品/订单
-        await enrichMessages(newMessages)
+        // ✅ 检测新消息中是否有商品/订单ID（优先使用强制增量轮询获取最新变更）
+        // 使用 ref 保存的长度，而不是依赖 oldMessages（因为响应式更新时可能不准确）
+        const oldLength = previousMessagesLength.value
+        const newLength = newMessages.length
         
-        // ✅ 检测新消息中是否有商品/订单ID但未加载数据
-        const unloadedCommodities = newMessages
-          .filter(msg => msg.commodityId && !msg.commodity)
-          .map(msg => ({ messageId: msg.messageId, commodityId: msg.commodityId }))
-        const unloadedOrders = newMessages
-          .filter(msg => msg.orderId && !msg.order)
-          .map(msg => ({ messageId: msg.messageId, orderId: msg.orderId }))
+        // ✅ 添加调试日志
+        console.log(`🔍 Messages.vue watch触发: oldLength=${oldLength}, newLength=${newLength}, oldMessagesLength=${oldMessages?.length || 'undefined'}`)
         
-        const hasNewCommodityOrOrder = unloadedCommodities.length > 0 || unloadedOrders.length > 0
-        
-        if (hasNewCommodityOrOrder) {
-          console.group('🔍 检测到新消息包含未加载的商品/订单，准备强制增量轮询')
-          console.log('未加载的商品:', unloadedCommodities)
-          console.log('未加载的订单:', unloadedOrders)
-          console.log('延迟500ms后执行强制轮询，确保后端变更记录已写入Redis')
-          console.groupEnd()
+        // 如果消息数量增加（新消息到达），检查是否包含订单/商品
+        if (newLength > oldLength) {
+          const newMessagesOnly = newMessages.slice(oldLength)
+          const newMessageOrderIds = [...new Set(newMessagesOnly
+            .filter(msg => msg.orderId && !msg.order)
+            .map(msg => msg.orderId)
+          )]
+          const newMessageCommodityIds = [...new Set(newMessagesOnly
+            .filter(msg => msg.commodityId && !msg.commodity)
+            .map(msg => msg.commodityId)
+          )]
           
-          // 延迟一点时间，确保后端变更记录已写入Redis
-          setTimeout(() => {
-            forceIncrementalPoll().catch(err => {
-              console.error('❌ 强制轮询失败，将等待定期轮询:', err)
-            })
-          }, 500) // 延迟500ms后强制轮询
+          const hasNewCommodityOrOrder = newMessageOrderIds.length > 0 || newMessageCommodityIds.length > 0
+          
+          if (hasNewCommodityOrOrder) {
+            console.group('🔍 检测到新消息包含订单/商品，优先使用强制增量轮询获取最新变更')
+            console.log('新消息中的订单ID:', newMessageOrderIds)
+            console.log('新消息中的商品ID:', newMessageCommodityIds)
+            console.log('延迟500ms后执行强制轮询，确保后端变更记录已写入Redis')
+            console.groupEnd()
+            
+            // ✅ 优先使用强制增量轮询（能获取到最新变更，如订单状态变化）
+            // 延迟一点时间，确保后端变更记录已写入Redis
+            setTimeout(async () => {
+              try {
+                const pollResult = await forceIncrementalPoll()
+                
+                // 检查强制轮询是否获取到了新消息中的订单/商品数据
+                const polledOrderIds = new Set(pollResult?.orders?.map(o => o.orderId) || [])
+                const polledCommodityIds = new Set(pollResult?.commodities?.map(c => c.commodityId) || [])
+                
+                const ordersNotInPoll = newMessageOrderIds.filter(id => !polledOrderIds.has(id))
+                const commoditiesNotInPoll = newMessageCommodityIds.filter(id => !polledCommodityIds.has(id))
+                
+                // 如果强制轮询未获取到部分订单/商品，使用批量查询作为后备
+                if (ordersNotInPoll.length > 0 || commoditiesNotInPoll.length > 0) {
+                  console.group('⚠️ 强制轮询未获取到部分订单/商品，使用批量查询作为后备')
+                  console.log('未在轮询中获取的订单ID:', ordersNotInPoll)
+                  console.log('未在轮询中获取的商品ID:', commoditiesNotInPoll)
+                  console.groupEnd()
+                  
+                  // 对未获取到的订单/商品使用批量查询
+                  await enrichMessages(newMessages.filter(msg => 
+                    (msg.orderId && ordersNotInPoll.includes(msg.orderId) && !msg.order) ||
+                    (msg.commodityId && commoditiesNotInPoll.includes(msg.commodityId) && !msg.commodity)
+                  ))
+                } else {
+                  console.log('✅ 强制轮询成功获取到所有新消息中的订单/商品数据')
+                }
+              } catch (err) {
+                console.error('❌ 强制轮询失败，回退到批量查询:', err)
+                // 强制轮询失败，回退到批量查询
+                await enrichMessages(newMessages)
+              }
+            }, 500) // 延迟500ms后强制轮询
+          } else {
+            // 没有新的订单/商品，使用批量查询填充其他未加载的数据
+            await enrichMessages(newMessages)
+          }
+        } else {
+          // 消息数量未增加（可能是更新现有消息），使用批量查询
+          await enrichMessages(newMessages)
         }
         
-        // ✅ 当有新消息时（通过 WebSocket 接收），滚动到底部
-        if (!oldMessages || newMessages.length > oldMessages.length) {
-          await nextTick()
-          scrollToBottom()
+        // ✅ 更新上一次的长度（确保下次能正确检测）
+        if (newLength !== previousMessagesLength.value) {
+          previousMessagesLength.value = newLength
         }
+        
+        // ⚠️ 滚动逻辑在 ChatWindow 组件内部处理
+        // 这里不需要处理滚动，因为 ChatWindow 组件会监听 messages 变化并自动滚动
       }
     }, { immediate: true, deep: true })
     
@@ -737,7 +1245,6 @@ export default {
       currentConversation,
       messageContent,
       totalUnreadCount,
-      messagesListRef,
       showChatWindow,
       isMobile,
       getAvatarUrl,

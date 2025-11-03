@@ -68,7 +68,7 @@ public class AdminServiceImpl implements AdminService {
             // 3. 检查账户状态
             if (!admin.canLogin()) {
                 log.warn("管理员登录失败: 账户被禁用, username={}", loginDTO.getUsername());
-                return Result.fail("账户已被禁用，请联系超级管理员");
+                return Result.fail("账户已被禁用，请联系系统管理员");
             }
 
             // 4. 验证密码
@@ -154,6 +154,14 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result createAdmin(Admin admin) {
         try {
+            // ✅ 权限检查：只有system权限的管理员才能创建管理员
+            Admin currentAdmin = com.njumarket.njumarket.utils.UserHolder.getAdmin();
+            if (currentAdmin == null || !currentAdmin.isSystemAdmin()) {
+                log.warn("非system权限管理员尝试创建管理员: adminId={}", 
+                    currentAdmin != null ? currentAdmin.getAdminId() : "null");
+                return Result.fail("权限不足，只有system权限的管理员才能创建管理员");
+            }
+
             // 1. 参数验证
             if (!StringUtils.hasText(admin.getUsername())) {
                 return Result.fail("用户名不能为空");
@@ -161,31 +169,43 @@ public class AdminServiceImpl implements AdminService {
             if (!StringUtils.hasText(admin.getPassword())) {
                 return Result.fail("密码不能为空");
             }
+            if (admin.getPassword().length() < 6) {
+                return Result.fail("密码长度不能少于6位");
+            }
 
             // 2. 检查用户名是否已存在
             if (adminRepository.existsByUsername(admin.getUsername())) {
                 return Result.fail("用户名已存在");
             }
 
-            // 3. 设置默认值
+            // ✅ 3. 限制：新创建的管理员级别只能是administrator，不能创建system管理员
+            if (admin.getAdminLevel() != null && "system".equals(admin.getAdminLevel())) {
+                return Result.fail("不允许创建system权限的管理员");
+            }
+
+            // 4. 设置默认值
             if (admin.getAdminId() == null) {
                 admin.setAdminId("ADMIN_" + System.currentTimeMillis());
             }
+            // ✅ 强制设置为administrator级别
+            admin.setAdminLevel("administrator");
             admin.setPassword(passwordService.encodePassword(admin.getPassword()));
             admin.setAccountStatus("ACTIVE");
             admin.setCreateTime(LocalDateTime.now());
             admin.setUpdateTime(LocalDateTime.now());
 
-            // 4. 保存管理员
+            // 5. 保存管理员
             Admin savedAdmin = adminRepository.save(admin);
 
-            log.info("创建管理员成功: adminId={}, username={}", savedAdmin.getAdminId(), savedAdmin.getUsername());
+            log.info("创建管理员成功: adminId={}, username={}, operatorId={}", 
+                savedAdmin.getAdminId(), savedAdmin.getUsername(), currentAdmin.getAdminId());
 
-            return Result.ok(savedAdmin);
+            Map<String, Object> result = toSimpleAdmin(savedAdmin);
+            return Result.ok("创建管理员成功", result);
 
         } catch (Exception e) {
-            log.error("创建管理员异常: username={}, error={}", admin.getUsername(), e.getMessage());
-            return Result.fail("创建管理员失败");
+            log.error("创建管理员异常: username={}, error={}", admin.getUsername(), e.getMessage(), e);
+            return Result.fail("创建管理员失败：" + e.getMessage());
         }
     }
 
@@ -264,20 +284,65 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
-    public Result getAdminList(Integer page, Integer size, String keyword) {
+    public Result getAdminList(Integer page, Integer size, String keyword, String accountStatus, String sortProp, String sortOrder) {
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createTime"));
-            Page<Admin> adminPage;
+            // ✅ 权限检查：只有system权限的管理员才能查看管理员列表
+            Admin currentAdmin = com.njumarket.njumarket.utils.UserHolder.getAdmin();
+            if (currentAdmin == null || !currentAdmin.isSystemAdmin()) {
+                log.warn("非system权限管理员尝试访问管理员列表: adminId={}", 
+                    currentAdmin != null ? currentAdmin.getAdminId() : "null");
+                return Result.fail("权限不足，只有system权限的管理员才能查看管理员列表");
+            }
 
-            if (StringUtils.hasText(keyword)) {
-                // 这里可以添加更复杂的搜索逻辑
-                adminPage = adminRepository.findAll(pageable);
-            } else {
-                adminPage = adminRepository.findAll(pageable);
+            String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+            org.springframework.data.jpa.domain.Specification<Admin> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+                
+                // ✅ 关键词搜索：支持按用户名、真实姓名、邮箱搜索
+                if (!kw.isEmpty()) {
+                    predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("username")), "%" + kw + "%"),
+                        cb.like(cb.lower(root.get("realName")), "%" + kw + "%"),
+                        cb.like(cb.lower(root.get("email")), "%" + kw + "%")
+                    ));
+                }
+                
+                // ✅ 账户状态筛选
+                if (org.springframework.util.StringUtils.hasText(accountStatus)) {
+                    predicates.add(cb.equal(root.get("accountStatus"), accountStatus.trim()));
+                }
+                
+                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+
+            // ✅ 排序（默认 createTime desc）
+            Sort sort = Sort.by(Sort.Direction.DESC, "createTime");
+            if (org.springframework.util.StringUtils.hasText(sortProp)) {
+                String sp = sortProp.trim();
+                Sort.Direction dir = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+                
+                // ✅ 特殊处理：lastLoginTime排序需要考虑null值（未登录的管理员）
+                if ("lastLoginTime".equals(sp)) {
+                    // 使用自定义排序：null值排在最后（升序时），或最前（降序时）
+                    // JPA原生不支持COALESCE，这里先按字段排序，null值会被JPA自动处理
+                    sort = Sort.by(dir, "lastLoginTime");
+                } else if ("createTime".equals(sp)) {
+                    sort = Sort.by(dir, "createTime");
+                }
+            }
+
+            Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, sort);
+            Page<Admin> adminPage = adminRepository.findAll(spec, pageable);
+
+            // ✅ 移除密码字段，避免返回敏感信息
+            List<Map<String, Object>> adminList = new ArrayList<>();
+            for (Admin admin : adminPage.getContent()) {
+                Map<String, Object> adminMap = toSimpleAdmin(admin);
+                adminList.add(adminMap);
             }
 
             Map<String, Object> result = new HashMap<>();
-            result.put("list", adminPage.getContent());
+            result.put("list", adminList);
             result.put("total", adminPage.getTotalElements());
             result.put("page", page);
             result.put("size", size);
@@ -286,7 +351,7 @@ public class AdminServiceImpl implements AdminService {
             return Result.ok(result);
 
         } catch (Exception e) {
-            log.error("获取管理员列表异常: error={}", e.getMessage());
+            log.error("获取管理员列表异常: error={}", e.getMessage(), e);
             return Result.fail("获取管理员列表失败");
         }
     }
@@ -294,16 +359,24 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result getAdminById(String adminId) {
         try {
+            // ✅ 权限检查：只有system权限的管理员才能查看其他管理员信息
+            Admin currentAdmin = com.njumarket.njumarket.utils.UserHolder.getAdmin();
+            if (currentAdmin == null || !currentAdmin.isSystemAdmin()) {
+                log.warn("非system权限管理员尝试查看管理员信息: adminId={}, targetAdminId={}", 
+                    currentAdmin != null ? currentAdmin.getAdminId() : "null", adminId);
+                return Result.fail("权限不足，只有system权限的管理员才能查看管理员信息");
+            }
+
             Optional<Admin> adminOpt = adminRepository.findById(adminId);
             if (adminOpt.isEmpty()) {
                 return Result.fail("管理员不存在");
             }
 
             Admin admin = adminOpt.get();
-            // 不返回密码
-            admin.setPassword(null);
+            // ✅ 返回简化的管理员信息（不包含密码）
+            Map<String, Object> adminMap = toSimpleAdmin(admin);
 
-            return Result.ok(admin);
+            return Result.ok(adminMap);
 
         } catch (Exception e) {
             log.error("获取管理员信息异常: adminId={}, error={}", adminId, e.getMessage());
@@ -448,6 +521,113 @@ public class AdminServiceImpl implements AdminService {
         } catch (Exception e) {
             log.error("检查管理员权限异常: adminId={}, permission={}, error={}", adminId, permission, e.getMessage());
             return Result.fail("权限检查失败");
+        }
+    }
+
+    @Override
+    public Result updateAdminFull(String adminId, java.util.Map<String, Object> payload) {
+        try {
+            // ✅ 权限检查：只有system权限的管理员才能更新其他管理员信息
+            Admin currentAdmin = com.njumarket.njumarket.utils.UserHolder.getAdmin();
+            if (currentAdmin == null || !currentAdmin.isSystemAdmin()) {
+                log.warn("非system权限管理员尝试更新管理员信息: adminId={}, targetAdminId={}", 
+                    currentAdmin != null ? currentAdmin.getAdminId() : "null", adminId);
+                return Result.fail("权限不足，只有system权限的管理员才能更新管理员信息");
+            }
+
+            Optional<Admin> adminOpt = adminRepository.findById(adminId);
+            if (adminOpt.isEmpty()) {
+                return Result.fail("管理员不存在");
+            }
+
+            Admin admin = adminOpt.get();
+
+            // ✅ 更新所有非客观字段（不包括createTime、updateTime、lastLoginTime、loginCount等）
+            if (payload.containsKey("username")) {
+                String username = String.valueOf(payload.get("username")).trim();
+                if (username.isEmpty()) {
+                    return Result.fail("用户名不能为空");
+                }
+                // 检查用户名是否已被其他管理员使用
+                Optional<Admin> existingAdmin = adminRepository.findByUsername(username);
+                if (existingAdmin.isPresent() && !existingAdmin.get().getAdminId().equals(adminId)) {
+                    return Result.fail("用户名已被使用");
+                }
+                admin.setUsername(username);
+            }
+
+            if (payload.containsKey("password")) {
+                // ✅ 更新密码
+                String newPassword = String.valueOf(payload.get("password")).trim();
+                if (newPassword.isEmpty()) {
+                    return Result.fail("密码不能为空");
+                }
+                if (newPassword.length() < 6) {
+                    return Result.fail("密码长度不能少于6位");
+                }
+                admin.setPassword(passwordService.encodePassword(newPassword));
+            }
+
+            if (payload.containsKey("realName")) {
+                admin.setRealName(payload.get("realName") != null ? String.valueOf(payload.get("realName")).trim() : null);
+            }
+
+            if (payload.containsKey("email")) {
+                admin.setEmail(payload.get("email") != null ? String.valueOf(payload.get("email")).trim() : null);
+            }
+
+            if (payload.containsKey("department")) {
+                admin.setDepartment(payload.get("department") != null ? String.valueOf(payload.get("department")).trim() : null);
+            }
+
+            if (payload.containsKey("position")) {
+                admin.setPosition(payload.get("position") != null ? String.valueOf(payload.get("position")).trim() : null);
+            }
+
+            // ✅ 管理员级别为固定字段，不允许修改
+            if (payload.containsKey("adminLevel")) {
+                return Result.fail("管理员级别为固定字段，不允许修改");
+            }
+
+            if (payload.containsKey("permissions")) {
+                Object perms = payload.get("permissions");
+                if (perms instanceof List) {
+                    String permissionsJson = String.join(",", (List<String>) perms);
+                    admin.setPermissions(permissionsJson);
+                } else if (perms instanceof String) {
+                    admin.setPermissions((String) perms);
+                }
+            }
+
+            if (payload.containsKey("accountStatus")) {
+                String status = String.valueOf(payload.get("accountStatus")).trim();
+                if (!"ACTIVE".equals(status) && !"SUSPENDED".equals(status) && !"BANNED".equals(status)) {
+                    return Result.fail("无效的账户状态");
+                }
+                
+                // ✅ 禁止修改系统管理员的账户状态
+                if ("system".equals(admin.getAdminLevel())) {
+                    return Result.fail("系统管理员的账户状态不允许修改");
+                }
+                
+                admin.setAccountStatus(status);
+            }
+
+            if (payload.containsKey("remark")) {
+                admin.setRemark(payload.get("remark") != null ? String.valueOf(payload.get("remark")).trim() : null);
+            }
+
+            // updateTime 由 @UpdateTimestamp 自动更新，不需要手动设置
+            adminRepository.save(admin);
+
+            log.info("更新管理员信息成功: adminId={}, operatorId={}", adminId, currentAdmin.getAdminId());
+
+            Map<String, Object> result = toSimpleAdmin(admin);
+            return Result.ok("更新成功", result);
+
+        } catch (Exception e) {
+            log.error("更新管理员信息异常: adminId={}, error={}", adminId, e.getMessage(), e);
+            return Result.fail("更新失败：" + e.getMessage());
         }
     }
 
@@ -883,19 +1063,51 @@ public class AdminServiceImpl implements AdminService {
 
     // ===================== 管理端最小CRUD：订单 =====================
     @Override
-    public Result listOrders(Integer page, Integer size, String keyword, String status, String sortProp, String sortOrder) {
+    public Result listOrders(Integer page, Integer size, String keyword, String status, String sellerVisibility, String buyerVisibility, String sortProp, String sortOrder) {
         try {
             String kw = keyword == null ? "" : keyword.trim().toLowerCase();
             org.springframework.data.jpa.domain.Specification<com.njumarket.njumarket.entity.Order> spec = (root, query, cb) -> {
                 java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
                 if (!kw.isEmpty()) {
+                    // ✅ 搜索优化：支持买家ID、卖家ID、商品标题、买家昵称、卖家昵称
                     jakarta.persistence.criteria.Expression<String> buyerId = cb.lower(root.get("buyerId"));
                     jakarta.persistence.criteria.Expression<String> sellerId = cb.lower(root.get("sellerId"));
                     jakarta.persistence.criteria.Expression<String> snapTitle = cb.lower(root.get("commoditySnapshotTitle"));
-                    predicates.add(cb.or(cb.like(buyerId, "%" + kw + "%"), cb.like(sellerId, "%" + kw + "%"), cb.like(snapTitle, "%" + kw + "%")));
+                    
+                    // 子查询：按买家昵称（UserProfile.nickname）模糊匹配
+                    jakarta.persistence.criteria.Subquery<com.njumarket.njumarket.entity.User> buyerSq = query.subquery(com.njumarket.njumarket.entity.User.class);
+                    jakarta.persistence.criteria.Root<com.njumarket.njumarket.entity.User> buyerUr = buyerSq.from(com.njumarket.njumarket.entity.User.class);
+                    jakarta.persistence.criteria.Join<com.njumarket.njumarket.entity.User, com.njumarket.njumarket.entity.UserProfile> buyerProfileJoin = buyerUr.join("userProfile", jakarta.persistence.criteria.JoinType.LEFT);
+                    jakarta.persistence.criteria.Predicate buyerMatch = cb.equal(buyerUr.get("userId"), root.get("buyerId"));
+                    jakarta.persistence.criteria.Predicate buyerNickLike = cb.like(cb.lower(buyerProfileJoin.get("nickname")), "%" + kw + "%");
+                    buyerSq.select(buyerUr).where(cb.and(buyerMatch, buyerNickLike));
+                    
+                    // 子查询：按卖家昵称（UserProfile.nickname）模糊匹配
+                    jakarta.persistence.criteria.Subquery<com.njumarket.njumarket.entity.User> sellerSq = query.subquery(com.njumarket.njumarket.entity.User.class);
+                    jakarta.persistence.criteria.Root<com.njumarket.njumarket.entity.User> sellerUr = sellerSq.from(com.njumarket.njumarket.entity.User.class);
+                    jakarta.persistence.criteria.Join<com.njumarket.njumarket.entity.User, com.njumarket.njumarket.entity.UserProfile> sellerProfileJoin = sellerUr.join("userProfile", jakarta.persistence.criteria.JoinType.LEFT);
+                    jakarta.persistence.criteria.Predicate sellerMatch = cb.equal(sellerUr.get("userId"), root.get("sellerId"));
+                    jakarta.persistence.criteria.Predicate sellerNickLike = cb.like(cb.lower(sellerProfileJoin.get("nickname")), "%" + kw + "%");
+                    sellerSq.select(sellerUr).where(cb.and(sellerMatch, sellerNickLike));
+                    
+                    predicates.add(cb.or(
+                        cb.like(buyerId, "%" + kw + "%"),
+                        cb.like(sellerId, "%" + kw + "%"),
+                        cb.like(snapTitle, "%" + kw + "%"),
+                        cb.exists(buyerSq),
+                        cb.exists(sellerSq)
+                    ));
                 }
                 if (org.springframework.util.StringUtils.hasText(status)) {
                     predicates.add(cb.equal(root.get("orderStatus"), status.trim()));
+                }
+                // ✅ 卖家可见性筛选
+                if (org.springframework.util.StringUtils.hasText(sellerVisibility)) {
+                    predicates.add(cb.equal(root.get("sellerVisibility"), sellerVisibility.trim()));
+                }
+                // ✅ 买家可见性筛选
+                if (org.springframework.util.StringUtils.hasText(buyerVisibility)) {
+                    predicates.add(cb.equal(root.get("buyerVisibility"), buyerVisibility.trim()));
                 }
                 return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
             };
@@ -904,6 +1116,7 @@ public class AdminServiceImpl implements AdminService {
             if (org.springframework.util.StringUtils.hasText(sortProp)) {
                 String sp = sortProp.trim();
                 Sort.Direction dir = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+                // ✅ 支持创建时间和金额排序
                 if ("createTime".equals(sp) || "payAmount".equals(sp)) {
                     sort = Sort.by(dir, sp);
                 }
@@ -1052,12 +1265,46 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result listConversations(Integer page, Integer size, String keyword) {
         try {
+            // 构建查询条件
+            org.springframework.data.jpa.domain.Specification<com.njumarket.njumarket.entity.Conversation> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+                if (org.springframework.util.StringUtils.hasText(keyword)) {
+                    String kw = keyword.trim();
+                    predicates.add(cb.or(
+                        cb.like(root.get("userId1"), "%" + kw + "%"),
+                        cb.like(root.get("userId2"), "%" + kw + "%"),
+                        cb.like(root.get("lastMessageContent"), "%" + kw + "%")
+                    ));
+                }
+                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+            
             Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "lastMessageTime"));
-            Page<com.njumarket.njumarket.entity.Conversation> p = conversationRepository.findAll(pageable);
-            List<Map<String, Object>> simpleList = new ArrayList<>();
-            for (com.njumarket.njumarket.entity.Conversation c : p.getContent()) {
-                simpleList.add(toSimpleConversation(c));
+            Page<com.njumarket.njumarket.entity.Conversation> p = conversationRepository.findAll(spec, pageable);
+            
+            // ✅ 批量查询所有用户的 UserProfile（避免 N+1 查询）
+            List<com.njumarket.njumarket.entity.Conversation> conversations = p.getContent();
+            Set<String> userIds = new HashSet<>();
+            for (com.njumarket.njumarket.entity.Conversation c : conversations) {
+                if (c.getUserId1() != null) userIds.add(c.getUserId1());
+                if (c.getUserId2() != null) userIds.add(c.getUserId2());
             }
+            
+            Map<String, com.njumarket.njumarket.entity.UserProfile> profileMap = new HashMap<>();
+            if (!userIds.isEmpty()) {
+                List<com.njumarket.njumarket.entity.UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                profileMap = profiles.stream()
+                        .collect(java.util.stream.Collectors.toMap(com.njumarket.njumarket.entity.UserProfile::getUserId, profile -> profile));
+            }
+            
+            // ✅ 转换为包含用户信息的简单对象
+            final Map<String, com.njumarket.njumarket.entity.UserProfile> finalProfileMap = profileMap;
+            List<Map<String, Object>> simpleList = conversations.stream()
+                    .map(c -> toSimpleConversationWithUsers(c, 
+                            finalProfileMap.get(c.getUserId1()), 
+                            finalProfileMap.get(c.getUserId2())))
+                    .collect(java.util.stream.Collectors.toList());
+            
             Map<String, Object> result = new HashMap<>();
             result.put("list", simpleList);
             result.put("total", p.getTotalElements());
@@ -1068,6 +1315,152 @@ public class AdminServiceImpl implements AdminService {
         } catch (Exception e) {
             log.error("获取会话列表异常: {}", e.getMessage());
             return Result.fail("获取会话列表失败");
+        }
+    }
+
+    @Override
+    public Result getConversationById(String conversationId) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Conversation> opt = conversationRepository.findById(conversationId);
+            if (opt.isEmpty()) {
+                return Result.fail("会话不存在");
+            }
+            com.njumarket.njumarket.entity.Conversation c = opt.get();
+            
+            // ✅ 批量查询用户Profile（避免N+1查询）
+            Set<String> userIds = new HashSet<>();
+            if (c.getUserId1() != null) userIds.add(c.getUserId1());
+            if (c.getUserId2() != null) userIds.add(c.getUserId2());
+            
+            Map<String, com.njumarket.njumarket.entity.UserProfile> profileMap = new HashMap<>();
+            if (!userIds.isEmpty()) {
+                List<com.njumarket.njumarket.entity.UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                profileMap = profiles.stream()
+                        .collect(java.util.stream.Collectors.toMap(com.njumarket.njumarket.entity.UserProfile::getUserId, profile -> profile));
+            }
+            
+            Map<String, Object> result = toSimpleConversationWithUsers(c, 
+                    profileMap.get(c.getUserId1()), 
+                    profileMap.get(c.getUserId2()));
+            return Result.ok(result);
+        } catch (Exception e) {
+            log.error("获取会话详情异常: conversationId={}, error={}", conversationId, e.getMessage());
+            return Result.fail("获取会话详情失败");
+        }
+    }
+
+    @Override
+    public Result updateConversationFull(String conversationId, java.util.Map<String, Object> payload) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Conversation> opt = conversationRepository.findById(conversationId);
+            if (opt.isEmpty()) {
+                return Result.fail("会话不存在");
+            }
+            com.njumarket.njumarket.entity.Conversation conversation = opt.get();
+
+            // 状态
+            Object status = payload.get("status");
+            if (status instanceof String && org.springframework.util.StringUtils.hasText((String) status)) {
+                String s = ((String) status).trim();
+                java.util.Set<String> allowedStatuses = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE", "DELETED", "ARCHIVED", "BLOCKED"));
+                if (!allowedStatuses.contains(s)) {
+                    return Result.fail("非法的会话状态");
+                }
+                conversation.setStatus(s);
+            }
+
+            // ✅ 保存原来的可见性状态（用于检测是否恢复可见性）
+            Boolean oldUser1Visibility = conversation.getUser1Visibility();
+            Boolean oldUser2Visibility = conversation.getUser2Visibility();
+
+            // 用户1可见性（Boolean类型）
+            Boolean newUser1Visibility = null;
+            Object user1Visibility = payload.get("user1Visibility");
+            if (user1Visibility != null) {
+                if (user1Visibility instanceof Boolean) {
+                    newUser1Visibility = (Boolean) user1Visibility;
+                    conversation.setUser1Visibility(newUser1Visibility);
+                } else if (user1Visibility instanceof String) {
+                    String v = ((String) user1Visibility).trim().toLowerCase();
+                    newUser1Visibility = "true".equals(v) || "1".equals(v);
+                    conversation.setUser1Visibility(newUser1Visibility);
+                } else if (user1Visibility instanceof Number) {
+                    newUser1Visibility = ((Number) user1Visibility).intValue() != 0;
+                    conversation.setUser1Visibility(newUser1Visibility);
+                }
+            }
+
+            // 用户2可见性（Boolean类型）
+            Boolean newUser2Visibility = null;
+            Object user2Visibility = payload.get("user2Visibility");
+            if (user2Visibility != null) {
+                if (user2Visibility instanceof Boolean) {
+                    newUser2Visibility = (Boolean) user2Visibility;
+                    conversation.setUser2Visibility(newUser2Visibility);
+                } else if (user2Visibility instanceof String) {
+                    String v = ((String) user2Visibility).trim().toLowerCase();
+                    newUser2Visibility = "true".equals(v) || "1".equals(v);
+                    conversation.setUser2Visibility(newUser2Visibility);
+                } else if (user2Visibility instanceof Number) {
+                    newUser2Visibility = ((Number) user2Visibility).intValue() != 0;
+                    conversation.setUser2Visibility(newUser2Visibility);
+                }
+            }
+
+            // ✅ 如果恢复可见性（从false变为true），需要更新对应用户的最后消息字段
+            // 用户1恢复可见性
+            if (newUser1Visibility != null && Boolean.FALSE.equals(oldUser1Visibility) && Boolean.TRUE.equals(newUser1Visibility)) {
+                try {
+                    // 查询用户1可见的最后一条消息
+                    org.springframework.data.domain.Pageable pageable = 
+                            org.springframework.data.domain.PageRequest.of(0, 1);
+                    List<com.njumarket.njumarket.entity.Message> lastMessages = 
+                            messageRepository.findLastMessageForUser(conversationId, conversation.getUserId1(), pageable);
+                    
+                    if (!lastMessages.isEmpty()) {
+                        com.njumarket.njumarket.entity.Message lastMessage = lastMessages.get(0);
+                        conversation.setUser1LastMessageContent(lastMessage.getContent());
+                        conversation.setUser1LastMessageTime(lastMessage.getCreatedAt());
+                    } else {
+                        // 没有可见消息，设置为空
+                        conversation.setUser1LastMessageContent(null);
+                        conversation.setUser1LastMessageTime(null);
+                    }
+                } catch (Exception e) {
+                    log.warn("管理端恢复用户1可见性时查询最后消息失败: conversationId={}, userId={}, error={}", 
+                            conversationId, conversation.getUserId1(), e.getMessage());
+                }
+            }
+            
+            // 用户2恢复可见性
+            if (newUser2Visibility != null && Boolean.FALSE.equals(oldUser2Visibility) && Boolean.TRUE.equals(newUser2Visibility)) {
+                try {
+                    // 查询用户2可见的最后一条消息
+                    org.springframework.data.domain.Pageable pageable = 
+                            org.springframework.data.domain.PageRequest.of(0, 1);
+                    List<com.njumarket.njumarket.entity.Message> lastMessages = 
+                            messageRepository.findLastMessageForUser(conversationId, conversation.getUserId2(), pageable);
+                    
+                    if (!lastMessages.isEmpty()) {
+                        com.njumarket.njumarket.entity.Message lastMessage = lastMessages.get(0);
+                        conversation.setUser2LastMessageContent(lastMessage.getContent());
+                        conversation.setUser2LastMessageTime(lastMessage.getCreatedAt());
+                    } else {
+                        // 没有可见消息，设置为空
+                        conversation.setUser2LastMessageContent(null);
+                        conversation.setUser2LastMessageTime(null);
+                    }
+                } catch (Exception e) {
+                    log.warn("管理端恢复用户2可见性时查询最后消息失败: conversationId={}, userId={}, error={}", 
+                            conversationId, conversation.getUserId2(), e.getMessage());
+                }
+            }
+
+            conversationRepository.save(conversation);
+            return Result.ok("会话更新成功", toSimpleConversationWithUsers(conversation, null, null));
+        } catch (Exception e) {
+            log.error("完整更新会话异常: conversationId={}, error={}", conversationId, e.getMessage());
+            return Result.fail("更新会话失败");
         }
     }
 
@@ -1088,18 +1481,39 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result listMessages(String conversationId, Integer page, Integer size) {
         try {
+            // ✅ 管理端：不过滤双方都被删除的消息，显示所有消息（包括双方都删除的）
+            // 注意：此处使用 findAll 而非 findByConversationId，因为 findByConversationId 会过滤双方都删除的消息
+            org.springframework.data.jpa.domain.Specification<com.njumarket.njumarket.entity.Message> spec = (root, query, cb) -> {
+                // 只按 conversationId 过滤，不添加任何删除状态过滤条件
+                return cb.equal(root.get("conversationId"), conversationId);
+            };
+            
             Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, Sort.by(Sort.Direction.DESC, "createdAt"));
-            Page<com.njumarket.njumarket.entity.Message> p = messageRepository.findByConversationId(conversationId, pageable);
+            Page<com.njumarket.njumarket.entity.Message> p = messageRepository.findAll(spec, pageable);
+            
+            // 统计双方都删除的消息数量（用于日志和验证）
+            long bothDeletedCount = 0;
             List<Map<String, Object>> simpleList = new ArrayList<>();
             for (com.njumarket.njumarket.entity.Message m : p.getContent()) {
+                // 统计双方都删除的消息
+                if (Boolean.TRUE.equals(m.getDeletedBySender()) && Boolean.TRUE.equals(m.getDeletedByReceiver())) {
+                    bothDeletedCount++;
+                }
                 simpleList.add(toSimpleMessage(m));
             }
+            
+            // 记录日志，验证是否查询到了双方都删除的消息
+            log.debug("管理端查询消息列表: conversationId={}, page={}, size={}, total={}, bothDeletedCount={}", 
+                    conversationId, page, size, p.getTotalElements(), bothDeletedCount);
+            
             Map<String, Object> result = new HashMap<>();
             result.put("list", simpleList);
             result.put("total", p.getTotalElements());
             result.put("pages", p.getTotalPages());
             result.put("current", page);
             result.put("size", size);
+            // 添加统计信息，方便前端了解有多少双方都删除的消息
+            result.put("bothDeletedCount", bothDeletedCount);
             return Result.ok(result);
         } catch (Exception e) {
             log.error("获取消息列表异常: conversationId={}, error={}", conversationId, e.getMessage());
@@ -1108,6 +1522,30 @@ public class AdminServiceImpl implements AdminService {
     }
 
     // ===================== 简化映射，避免循环引用 =====================
+    /**
+     * 将管理员实体转换为简单Map（不包含密码）
+     */
+    private Map<String, Object> toSimpleAdmin(Admin admin) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("adminId", admin.getAdminId());
+        m.put("username", admin.getUsername());
+        m.put("realName", admin.getRealName());
+        m.put("email", admin.getEmail());
+        m.put("department", admin.getDepartment());
+        m.put("position", admin.getPosition());
+        m.put("adminLevel", admin.getAdminLevel());
+        m.put("permissions", admin.getPermissions());
+        m.put("accountStatus", admin.getAccountStatus());
+        m.put("createTime", admin.getCreateTime());
+        m.put("updateTime", admin.getUpdateTime());
+        m.put("lastLoginTime", admin.getLastLoginTime());
+        m.put("lastLoginIp", admin.getLastLoginIp());
+        m.put("loginCount", admin.getLoginCount());
+        m.put("remark", admin.getRemark());
+        // ✅ 不包含密码字段
+        return m;
+    }
+
     private Map<String, Object> toSimpleUser(com.njumarket.njumarket.entity.User u) {
         Map<String, Object> m = new HashMap<>();
         m.put("userId", u.getUserId());
@@ -1349,17 +1787,62 @@ public class AdminServiceImpl implements AdminService {
     }
 
     private Map<String, Object> toSimpleConversation(com.njumarket.njumarket.entity.Conversation c) {
+        return toSimpleConversationWithUsers(c, null, null);
+    }
+    
+    /**
+     * 将会话实体转换为简单Map（包含用户信息）
+     * @param c 会话实体
+     * @param user1Profile 用户1的Profile（可选，如果为null则不在结果中包含用户信息）
+     * @param user2Profile 用户2的Profile（可选，如果为null则不在结果中包含用户信息）
+     * @return 简单Map对象
+     */
+    private Map<String, Object> toSimpleConversationWithUsers(com.njumarket.njumarket.entity.Conversation c,
+                                                               com.njumarket.njumarket.entity.UserProfile user1Profile,
+                                                               com.njumarket.njumarket.entity.UserProfile user2Profile) {
         Map<String, Object> m = new HashMap<>();
         m.put("conversationId", c.getConversationId());
         m.put("userId1", c.getUserId1());
         m.put("userId2", c.getUserId2());
         m.put("user1Count", c.getUser1Count());
         m.put("user2Count", c.getUser2Count());
+        
+        // ✅ 管理端字段（不过滤，显示真实最新消息，包括双方都删除的）
         m.put("lastMessageContent", c.getLastMessageContent());
         m.put("lastMessageTime", c.getLastMessageTime());
+        
+        // ✅ 用户级别的最后消息字段（过滤用户删除的）
+        m.put("user1LastMessageContent", c.getUser1LastMessageContent());
+        m.put("user1LastMessageTime", c.getUser1LastMessageTime());
+        m.put("user2LastMessageContent", c.getUser2LastMessageContent());
+        m.put("user2LastMessageTime", c.getUser2LastMessageTime());
+        
         m.put("status", c.getStatus());
         m.put("createdAt", c.getCreatedAt());
         m.put("updatedAt", c.getUpdatedAt());
+        
+        // ✅ 添加可见性字段（管理端可以看到所有会话，不受可见性限制，但仍显示字段值）
+        m.put("user1Visibility", c.getUser1Visibility() != null ? c.getUser1Visibility() : true);
+        m.put("user2Visibility", c.getUser2Visibility() != null ? c.getUser2Visibility() : true);
+        
+        // ✅ 添加用户1信息（如果提供了Profile）
+        if (user1Profile != null) {
+            Map<String, Object> user1Info = new HashMap<>();
+            user1Info.put("userId", c.getUserId1());
+            user1Info.put("nickname", user1Profile.getNickname());
+            user1Info.put("avatar", user1Profile.getAvatar());
+            m.put("user1", user1Info);
+        }
+        
+        // ✅ 添加用户2信息（如果提供了Profile）
+        if (user2Profile != null) {
+            Map<String, Object> user2Info = new HashMap<>();
+            user2Info.put("userId", c.getUserId2());
+            user2Info.put("nickname", user2Profile.getNickname());
+            user2Info.put("avatar", user2Profile.getAvatar());
+            m.put("user2", user2Info);
+        }
+        
         return m;
     }
 
@@ -1369,18 +1852,328 @@ public class AdminServiceImpl implements AdminService {
         m.put("conversationId", m0.getConversationId());
         m.put("senderId", m0.getSenderId());
         m.put("receiverId", m0.getReceiverId());
+        m.put("messageType", m0.getMessageType() != null ? m0.getMessageType() : "TEXT");
         m.put("content", m0.getContent());
-        m.put("createdAt", m0.getCreatedAt());
+        m.put("imageUrl", m0.getImageUrl());
+        m.put("commodityId", m0.getCommodityId());
+        m.put("orderId", m0.getOrderId());
         m.put("isRead", m0.getIsRead());
+        m.put("deletedBySender", m0.getDeletedBySender() != null ? m0.getDeletedBySender() : false);
+        m.put("deletedByReceiver", m0.getDeletedByReceiver() != null ? m0.getDeletedByReceiver() : false);
+        m.put("createdAt", m0.getCreatedAt());
+        m.put("readTime", m0.getReadTime());
         return m;
+    }
+
+    @Override
+    public Result getMessageById(String messageId) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Message> opt = messageRepository.findById(messageId);
+            if (opt.isEmpty()) {
+                return Result.fail("消息不存在");
+            }
+            return Result.ok(toSimpleMessage(opt.get()));
+        } catch (Exception e) {
+            log.error("获取消息详情异常: messageId={}, error={}", messageId, e.getMessage());
+            return Result.fail("获取消息详情失败");
+        }
+    }
+
+    @Override
+    public Result updateMessageFull(String messageId, java.util.Map<String, Object> payload) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Message> opt = messageRepository.findById(messageId);
+            if (opt.isEmpty()) {
+                return Result.fail("消息不存在");
+            }
+            com.njumarket.njumarket.entity.Message message = opt.get();
+            String conversationId = message.getConversationId();
+            
+            // ✅ 保存原来的可见性状态（用于检测变化）
+            Boolean oldDeletedBySender = message.getDeletedBySender();
+            Boolean oldDeletedByReceiver = message.getDeletedByReceiver();
+            
+            // ✅ 获取对话信息（用于更新用户级别的最后消息字段）
+            Optional<com.njumarket.njumarket.entity.Conversation> convOpt = 
+                    conversationRepository.findById(conversationId);
+
+            // 发送方删除标记（Boolean类型）
+            Boolean newDeletedBySender = null;
+            Object deletedBySender = payload.get("deletedBySender");
+            if (deletedBySender != null) {
+                if (deletedBySender instanceof Boolean) {
+                    newDeletedBySender = (Boolean) deletedBySender;
+                    message.setDeletedBySender(newDeletedBySender);
+                } else if (deletedBySender instanceof String) {
+                    String v = ((String) deletedBySender).trim().toLowerCase();
+                    newDeletedBySender = "true".equals(v) || "1".equals(v);
+                    message.setDeletedBySender(newDeletedBySender);
+                } else if (deletedBySender instanceof Number) {
+                    newDeletedBySender = ((Number) deletedBySender).intValue() != 0;
+                    message.setDeletedBySender(newDeletedBySender);
+                }
+            }
+
+            // 接收方删除标记（Boolean类型）
+            Boolean newDeletedByReceiver = null;
+            Object deletedByReceiver = payload.get("deletedByReceiver");
+            if (deletedByReceiver != null) {
+                if (deletedByReceiver instanceof Boolean) {
+                    newDeletedByReceiver = (Boolean) deletedByReceiver;
+                    message.setDeletedByReceiver(newDeletedByReceiver);
+                } else if (deletedByReceiver instanceof String) {
+                    String v = ((String) deletedByReceiver).trim().toLowerCase();
+                    newDeletedByReceiver = "true".equals(v) || "1".equals(v);
+                    message.setDeletedByReceiver(newDeletedByReceiver);
+                } else if (deletedByReceiver instanceof Number) {
+                    newDeletedByReceiver = ((Number) deletedByReceiver).intValue() != 0;
+                    message.setDeletedByReceiver(newDeletedByReceiver);
+                }
+            }
+
+            // 已读状态（Boolean类型）
+            Object isRead = payload.get("isRead");
+            if (isRead != null) {
+                if (isRead instanceof Boolean) {
+                    message.setIsRead((Boolean) isRead);
+                } else if (isRead instanceof String) {
+                    String v = ((String) isRead).trim().toLowerCase();
+                    message.setIsRead("true".equals(v) || "1".equals(v));
+                } else if (isRead instanceof Number) {
+                    message.setIsRead(((Number) isRead).intValue() != 0);
+                }
+            }
+
+            // ✅ 保存消息的更改
+            messageRepository.save(message);
+            
+            // ✅ 如果可见性发生变化，需要更新相关用户的最后消息字段
+            if (convOpt.isPresent() && (newDeletedBySender != null || newDeletedByReceiver != null)) {
+                com.njumarket.njumarket.entity.Conversation conversation = convOpt.get();
+                String senderId = message.getSenderId();
+                String receiverId = message.getReceiverId();
+                
+                // 检查发送方可见性的变化
+                if (newDeletedBySender != null && !newDeletedBySender.equals(oldDeletedBySender)) {
+                    // 发送方可见性发生了变化
+                    boolean wasVisible = !Boolean.TRUE.equals(oldDeletedBySender);
+                    boolean isNowVisible = !Boolean.TRUE.equals(newDeletedBySender);
+                    
+                    if (wasVisible && !isNowVisible) {
+                        // 从可见变为不可见（标记删除）
+                        // 检查是否是发送方的最后一条可见消息
+                        String senderLastContent = conversation.getLastMessageContentForUser(senderId);
+                        LocalDateTime senderLastTime = conversation.getLastMessageTimeForUser(senderId);
+                        boolean isSenderLastMessage = senderLastContent != null && senderLastTime != null &&
+                            message.getContent().equals(senderLastContent) && 
+                            message.getCreatedAt().equals(senderLastTime);
+                        
+                        if (isSenderLastMessage) {
+                            // 查询发送方可见的倒数第二条消息
+                            try {
+                                org.springframework.data.domain.Pageable pageable = 
+                                        org.springframework.data.domain.PageRequest.of(0, 1);
+                                List<com.njumarket.njumarket.entity.Message> lastMessages = 
+                                        messageRepository.findLastMessageForUser(conversationId, senderId, pageable);
+                                
+                                if (!lastMessages.isEmpty()) {
+                                    com.njumarket.njumarket.entity.Message newLastMessage = lastMessages.get(0);
+                                    conversation.setLastMessageForUser(senderId, 
+                                            newLastMessage.getContent(), 
+                                            newLastMessage.getCreatedAt());
+                                } else {
+                                    conversation.setLastMessageForUser(senderId, null, null);
+                                }
+                            } catch (Exception e) {
+                                log.warn("管理端更新消息可见性时更新发送方最后消息失败: conversationId={}, messageId={}, error={}", 
+                                        conversationId, messageId, e.getMessage());
+                            }
+                        }
+                    } else if (!wasVisible && isNowVisible) {
+                        // 从不可见变为可见（取消删除标记）
+                        // 检查这条消息是否比当前最后消息更新
+                        LocalDateTime senderLastTime = conversation.getLastMessageTimeForUser(senderId);
+                        if (senderLastTime == null || message.getCreatedAt().isAfter(senderLastTime)) {
+                            // 这条消息更新，更新为这条消息
+                            conversation.setLastMessageForUser(senderId, 
+                                    message.getContent(), 
+                                    message.getCreatedAt());
+                        }
+                    }
+                }
+                
+                // 检查接收方可见性的变化
+                if (newDeletedByReceiver != null && !newDeletedByReceiver.equals(oldDeletedByReceiver)) {
+                    // 接收方可见性发生了变化
+                    boolean wasVisible = !Boolean.TRUE.equals(oldDeletedByReceiver);
+                    boolean isNowVisible = !Boolean.TRUE.equals(newDeletedByReceiver);
+                    
+                    if (wasVisible && !isNowVisible) {
+                        // 从可见变为不可见（标记删除）
+                        // 检查是否是接收方的最后一条可见消息
+                        String receiverLastContent = conversation.getLastMessageContentForUser(receiverId);
+                        LocalDateTime receiverLastTime = conversation.getLastMessageTimeForUser(receiverId);
+                        boolean isReceiverLastMessage = receiverLastContent != null && receiverLastTime != null &&
+                            message.getContent().equals(receiverLastContent) && 
+                            message.getCreatedAt().equals(receiverLastTime);
+                        
+                        if (isReceiverLastMessage) {
+                            // 查询接收方可见的倒数第二条消息
+                            try {
+                                org.springframework.data.domain.Pageable pageable = 
+                                        org.springframework.data.domain.PageRequest.of(0, 1);
+                                List<com.njumarket.njumarket.entity.Message> lastMessages = 
+                                        messageRepository.findLastMessageForUser(conversationId, receiverId, pageable);
+                                
+                                if (!lastMessages.isEmpty()) {
+                                    com.njumarket.njumarket.entity.Message newLastMessage = lastMessages.get(0);
+                                    conversation.setLastMessageForUser(receiverId, 
+                                            newLastMessage.getContent(), 
+                                            newLastMessage.getCreatedAt());
+                                } else {
+                                    conversation.setLastMessageForUser(receiverId, null, null);
+                                }
+                            } catch (Exception e) {
+                                log.warn("管理端更新消息可见性时更新接收方最后消息失败: conversationId={}, messageId={}, error={}", 
+                                        conversationId, messageId, e.getMessage());
+                            }
+                        }
+                    } else if (!wasVisible && isNowVisible) {
+                        // 从不可见变为可见（取消删除标记）
+                        // 检查这条消息是否比当前最后消息更新
+                        LocalDateTime receiverLastTime = conversation.getLastMessageTimeForUser(receiverId);
+                        if (receiverLastTime == null || message.getCreatedAt().isAfter(receiverLastTime)) {
+                            // 这条消息更新，更新为这条消息
+                            conversation.setLastMessageForUser(receiverId, 
+                                    message.getContent(), 
+                                    message.getCreatedAt());
+                        }
+                    }
+                }
+                
+                // 保存对话的更新
+                conversationRepository.save(conversation);
+            }
+            
+            return Result.ok("消息更新成功", toSimpleMessage(message));
+        } catch (Exception e) {
+            log.error("完整更新消息异常: messageId={}, error={}", messageId, e.getMessage());
+            return Result.fail("更新消息失败");
+        }
     }
 
     @Override
     public Result deleteMessage(String messageId) {
         try {
-            if (!messageRepository.existsById(messageId)) {
+            Optional<com.njumarket.njumarket.entity.Message> msgOpt = messageRepository.findById(messageId);
+            if (msgOpt.isEmpty()) {
                 return Result.fail("消息不存在");
             }
+            
+            com.njumarket.njumarket.entity.Message message = msgOpt.get();
+            String conversationId = message.getConversationId();
+            
+            // ✅ 管理端硬删除消息前，检查并更新相关用户的最后消息字段
+            Optional<com.njumarket.njumarket.entity.Conversation> convOpt = 
+                    conversationRepository.findById(conversationId);
+            if (convOpt.isPresent()) {
+                com.njumarket.njumarket.entity.Conversation conversation = convOpt.get();
+                
+                // ✅ 检查消息对用户1是否可见，以及是否是最后一条可见消息
+                String user1Id = conversation.getUserId1();
+                boolean isVisibleToUser1 = false;
+                if (user1Id.equals(message.getSenderId())) {
+                    // 用户1是发送方，检查是否被发送方删除
+                    isVisibleToUser1 = !Boolean.TRUE.equals(message.getDeletedBySender());
+                } else if (user1Id.equals(message.getReceiverId())) {
+                    // 用户1是接收方，检查是否被接收方删除
+                    isVisibleToUser1 = !Boolean.TRUE.equals(message.getDeletedByReceiver());
+                }
+                
+                String user1LastContent = conversation.getUser1LastMessageContent();
+                LocalDateTime user1LastTime = conversation.getUser1LastMessageTime();
+                boolean isUser1LastMessage = isVisibleToUser1 && 
+                    user1LastContent != null && user1LastTime != null &&
+                    message.getContent().equals(user1LastContent) && 
+                    message.getCreatedAt().equals(user1LastTime);
+                
+                // ✅ 检查消息对用户2是否可见，以及是否是最后一条可见消息
+                String user2Id = conversation.getUserId2();
+                boolean isVisibleToUser2 = false;
+                if (user2Id.equals(message.getSenderId())) {
+                    // 用户2是发送方，检查是否被发送方删除
+                    isVisibleToUser2 = !Boolean.TRUE.equals(message.getDeletedBySender());
+                } else if (user2Id.equals(message.getReceiverId())) {
+                    // 用户2是接收方，检查是否被接收方删除
+                    isVisibleToUser2 = !Boolean.TRUE.equals(message.getDeletedByReceiver());
+                }
+                
+                String user2LastContent = conversation.getUser2LastMessageContent();
+                LocalDateTime user2LastTime = conversation.getUser2LastMessageTime();
+                boolean isUser2LastMessage = isVisibleToUser2 && 
+                    user2LastContent != null && user2LastTime != null &&
+                    message.getContent().equals(user2LastContent) && 
+                    message.getCreatedAt().equals(user2LastTime);
+                
+                // ✅ 如果删除的是某个用户的最后一条可见消息，需要更新对应用户字段
+                // 注意：删除前查询会包含这条消息，所以需要查询2条，跳过第一条
+                if (isUser1LastMessage) {
+                    try {
+                        // 查询用户1可见的前2条消息，第一条是要删除的，取第二条
+                        org.springframework.data.domain.Pageable pageable = 
+                                org.springframework.data.domain.PageRequest.of(0, 2);
+                        List<com.njumarket.njumarket.entity.Message> lastMessages = 
+                                messageRepository.findLastMessageForUser(
+                                        conversationId, conversation.getUserId1(), pageable);
+                        
+                        if (lastMessages.size() > 1) {
+                            // 有第二条消息，使用第二条作为新的最后消息
+                            com.njumarket.njumarket.entity.Message newLastMessage = lastMessages.get(1);
+                            conversation.setUser1LastMessageContent(newLastMessage.getContent());
+                            conversation.setUser1LastMessageTime(newLastMessage.getCreatedAt());
+                        } else {
+                            // 没有其他可见消息了，设置为空
+                            conversation.setUser1LastMessageContent(null);
+                            conversation.setUser1LastMessageTime(null);
+                        }
+                    } catch (Exception e) {
+                        log.warn("管理端删除消息时更新用户1最后消息失败: conversationId={}, messageId={}, error={}", 
+                                conversationId, messageId, e.getMessage());
+                    }
+                }
+                
+                if (isUser2LastMessage) {
+                    try {
+                        // 查询用户2可见的前2条消息，第一条是要删除的，取第二条
+                        org.springframework.data.domain.Pageable pageable = 
+                                org.springframework.data.domain.PageRequest.of(0, 2);
+                        List<com.njumarket.njumarket.entity.Message> lastMessages = 
+                                messageRepository.findLastMessageForUser(
+                                        conversationId, conversation.getUserId2(), pageable);
+                        
+                        if (lastMessages.size() > 1) {
+                            // 有第二条消息，使用第二条作为新的最后消息
+                            com.njumarket.njumarket.entity.Message newLastMessage = lastMessages.get(1);
+                            conversation.setUser2LastMessageContent(newLastMessage.getContent());
+                            conversation.setUser2LastMessageTime(newLastMessage.getCreatedAt());
+                        } else {
+                            // 没有其他可见消息了，设置为空
+                            conversation.setUser2LastMessageContent(null);
+                            conversation.setUser2LastMessageTime(null);
+                        }
+                    } catch (Exception e) {
+                        log.warn("管理端删除消息时更新用户2最后消息失败: conversationId={}, messageId={}, error={}", 
+                                conversationId, messageId, e.getMessage());
+                    }
+                }
+                
+                // 保存更新后的对话（如果有任何字段被更新）
+                if (isUser1LastMessage || isUser2LastMessage) {
+                    conversationRepository.save(conversation);
+                }
+            }
+            
+            // 执行硬删除
             messageRepository.deleteById(messageId);
             return Result.ok("消息删除成功");
         } catch (Exception e) {

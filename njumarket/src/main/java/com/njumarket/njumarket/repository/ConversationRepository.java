@@ -4,6 +4,7 @@ import com.njumarket.njumarket.entity.Conversation;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface ConversationRepository extends JpaRepository<Conversation, String> {
+public interface ConversationRepository extends JpaRepository<Conversation, String>, JpaSpecificationExecutor<Conversation> {
     
     /**
      * 查找两个用户之间的对话（基于标准化的用户对）
@@ -45,9 +46,11 @@ public interface ConversationRepository extends JpaRepository<Conversation, Stri
     
     /**
      * 获取用户的所有对话（作为userId1或userId2）
+     * ✅ 添加可见性过滤：只返回用户可见的会话
      */
     @Query("SELECT c FROM Conversation c WHERE " +
-           "(c.userId1 = :userId OR c.userId2 = :userId) AND " +
+           "((c.userId1 = :userId AND c.user1Visibility = true) OR " +
+           "(c.userId2 = :userId AND c.user2Visibility = true)) AND " +
            "c.status = :status " +
            "ORDER BY c.lastMessageTime DESC")
     Page<Conversation> findByUserIdAndStatus(@Param("userId") String userId, 
@@ -56,28 +59,45 @@ public interface ConversationRepository extends JpaRepository<Conversation, Stri
     
     /**
      * 获取用户的所有对话
+     * ✅ 添加可见性过滤：只返回用户可见的会话
      */
     @Query("SELECT c FROM Conversation c WHERE " +
-           "c.userId1 = :userId OR c.userId2 = :userId " +
+           "((c.userId1 = :userId AND c.user1Visibility = true) OR " +
+           "(c.userId2 = :userId AND c.user2Visibility = true)) " +
            "ORDER BY c.lastMessageTime DESC")
     Page<Conversation> findByUserId(@Param("userId") String userId, Pageable pageable);
     
     /**
      * 获取用户对话列表（按最后消息时间排序）
+     * ✅ 添加可见性过滤：只返回用户可见的会话
      */
     @Query("SELECT c FROM Conversation c WHERE " +
-           "(c.userId1 = :userId OR c.userId2 = :userId) AND " +
+           "((c.userId1 = :userId AND c.user1Visibility = true) OR " +
+           "(c.userId2 = :userId AND c.user2Visibility = true)) AND " +
            "c.status = 'ACTIVE' " +
            "ORDER BY c.lastMessageTime DESC")
     List<Conversation> findByUserIdOrderByLastMessageTime(@Param("userId") String userId);
     
     /**
+     * 获取用户的所有活跃对话（不排序，用于内存排序）
+     * ✅ 添加可见性过滤：只返回用户可见的会话
+     */
+    @Query("SELECT c FROM Conversation c WHERE " +
+           "((c.userId1 = :userId AND c.user1Visibility = true) OR " +
+           "(c.userId2 = :userId AND c.user2Visibility = true)) AND " +
+           "c.status = :status")
+    List<Conversation> findByUserIdAndStatus(@Param("userId") String userId, 
+                                            @Param("status") String status);
+    
+    /**
      * 获取用户未读消息总数
+     * ✅ 添加可见性过滤：只统计用户可见的会话
      */
     @Query("SELECT SUM(CASE WHEN c.userId1 = :userId THEN c.user1Count " +
            "ELSE c.user2Count END) " +
            "FROM Conversation c " +
-           "WHERE (c.userId1 = :userId OR c.userId2 = :userId) AND c.status = 'ACTIVE'")
+           "WHERE ((c.userId1 = :userId AND c.user1Visibility = true) OR " +
+           "(c.userId2 = :userId AND c.user2Visibility = true)) AND c.status = 'ACTIVE'")
     Integer getTotalUnreadCount(@Param("userId") String userId);
     
     /**

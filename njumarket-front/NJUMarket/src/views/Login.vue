@@ -3,7 +3,7 @@
     <div class="login-container">
       <div class="login-form-wrapper">
         <div class="form-header">
-          <h2 class="text-primary">登录南大市场</h2>
+          <h2 class="text-primary">登录南大集市</h2>
           <p class="text-secondary">欢迎回来，开始你的购物之旅</p>
         </div>
         

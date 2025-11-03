@@ -419,6 +419,40 @@ export default {
         
         // 统一：始终按商品下单（快照仅用于自动填充）
         const commodityIdToOrder = sourceCommodityId.value || id
+        
+        // ✅ 在下单前再次实时检查商品状态，防止商品在下单过程中被下架
+        try {
+          const commodityCheckResponse = await commodityAPI.getDetail(commodityIdToOrder)
+          if (!commodityCheckResponse.success || !commodityCheckResponse.data) {
+            ElMessage.error('商品不存在或已下架')
+            loading.value = false
+            return
+          }
+          
+          const currentCommodity = commodityCheckResponse.data
+          if (currentCommodity.commodityStatus !== 'ON_SHELF') {
+            ElMessage.error('商品未上架，无法购买')
+            loading.value = false
+            // 更新页面状态，显示商品已下架
+            commodityOnShelf.value = false
+            statusMessage.value = '商品已下架'
+            return
+          }
+          
+          // 检查库存是否足够
+          const quantityToCheck = Number(orderForm.value.quantity) || 0
+          if (currentCommodity.stock < quantityToCheck) {
+            ElMessage.error(`商品库存不足，当前库存：${currentCommodity.stock}`)
+            loading.value = false
+            return
+          }
+        } catch (checkError) {
+          console.error('检查商品状态失败:', checkError)
+          ElMessage.error('检查商品状态失败，请稍后重试')
+          loading.value = false
+          return
+        }
+        
         const quantityFinal = Number(orderForm.value.quantity) || 0
         const response = await orderAPI.create({
           commodityId: commodityIdToOrder,

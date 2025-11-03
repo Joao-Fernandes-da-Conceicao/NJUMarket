@@ -19,7 +19,7 @@ module.exports = {
             HtmlWebpackPlugin.getHooks(compilation).beforeEmit.tapAsync(
               'InjectTitle',
               (data, cb) => {
-                data.html = data.html.replace('<title>Admin</title>', '<title>NJUMarket Admin</title>')
+                data.html = data.html.replace(/<title>.*<\/title>/, '<title>南大集市管理系统 NJUMarketAdmin</title>')
                 cb(null, data)
               }
             )

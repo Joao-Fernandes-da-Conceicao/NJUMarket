@@ -14,20 +14,22 @@
         </div>
       </div>
     </div>
-    <div class="card-users" v-if="sellerProfile || buyerProfile || order.sellerId || order.buyerId">
-      <div class="card-user" v-if="sellerProfile || order.sellerId">
-        <div class="user-avatar" v-if="sellerProfile?.avatar">
-          <img :src="getAvatarUrl(sellerProfile.avatar)" :alt="sellerProfile.nickname || order.sellerId" />
+    <div class="card-users" v-if="order.sellerId || order.buyerId">
+      <!-- ✅ 调试：打印渲染时的数据 -->
+      <!-- {{ console.log('🎨 OrderCard渲染: sellerNickname=', order.sellerNickname, 'sellerAvatar=', order.sellerAvatar, 'buyerNickname=', order.buyerNickname, 'buyerAvatar=', order.buyerAvatar) || '' }} -->
+      <div class="card-user" v-if="order.sellerId">
+        <div class="user-avatar" v-if="order.sellerAvatar">
+          <img :src="getAvatarUrl(order.sellerAvatar)" :alt="order.sellerNickname || order.sellerId" />
         </div>
         <span class="user-label">卖家:</span>
-        <span class="user-name">{{ sellerProfile?.nickname || order.sellerId }}</span>
+        <span class="user-name">{{ order.sellerNickname || order.sellerId }}</span>
       </div>
-      <div class="card-user" v-if="buyerProfile || order.buyerId">
-        <div class="user-avatar" v-if="buyerProfile?.avatar">
-          <img :src="getAvatarUrl(buyerProfile.avatar)" :alt="buyerProfile.nickname || order.buyerId" />
+      <div class="card-user" v-if="order.buyerId">
+        <div class="user-avatar" v-if="order.buyerAvatar">
+          <img :src="getAvatarUrl(order.buyerAvatar)" :alt="order.buyerNickname || order.buyerId" />
         </div>
         <span class="user-label">买家:</span>
-        <span class="user-name">{{ buyerProfile?.nickname || order.buyerId }}</span>
+        <span class="user-name">{{ order.buyerNickname || order.buyerId }}</span>
       </div>
     </div>
   </div>
@@ -35,9 +37,9 @@
 
 <script setup>
 /* global defineProps, defineEmits */
-import { ref, onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { formatPrice } from '../../utils/formatUtils'
-import { imageAPI, profileAPI } from '../../api'
+import { imageAPI } from '../../api'
 import UnifiedTag from '../common/UnifiedTag.vue'
 
 const props = defineProps({
@@ -49,50 +51,43 @@ const props = defineProps({
 
 const emit = defineEmits(['click'])
 
-const sellerProfile = ref(null)
-const buyerProfile = ref(null)
-
-// 获取卖家 profile 信息
-const fetchSellerProfile = async () => {
-  if (!props.order.sellerId) return
-  
-  try {
-    const response = await profileAPI.getUser(props.order.sellerId)
-    if (response.success && response.data) {
-      sellerProfile.value = response.data
-    }
-  } catch (error) {
-    console.error('获取卖家profile失败:', error)
-  }
-}
-
-// 获取买家 profile 信息
-const fetchBuyerProfile = async () => {
-  if (!props.order.buyerId) return
-  
-  try {
-    const response = await profileAPI.getUser(props.order.buyerId)
-    if (response.success && response.data) {
-      buyerProfile.value = response.data
-    }
-  } catch (error) {
-    console.error('获取买家profile失败:', error)
-  }
-}
-
+// ✅ 调试日志：组件挂载时打印订单数据
 onMounted(() => {
-  // 始终请求 profile 以获取最新的昵称和头像
-  const promises = []
-  if (props.order.sellerId) {
-    promises.push(fetchSellerProfile())
-  }
-  if (props.order.buyerId) {
-    promises.push(fetchBuyerProfile())
-  }
-  if (promises.length > 0) {
-    Promise.all(promises)
-  }
+  console.log(`📦 OrderCard: 组件已挂载 (orderId=${props.order.orderId})`, {
+    orderId: props.order.orderId,
+    sellerId: props.order.sellerId,
+    buyerId: props.order.buyerId,
+    sellerNickname: props.order.sellerNickname,
+    sellerAvatar: props.order.sellerAvatar,
+    buyerNickname: props.order.buyerNickname,
+    buyerAvatar: props.order.buyerAvatar,
+    hasSellerProfile: !!(props.order.sellerNickname || props.order.sellerAvatar),
+    hasBuyerProfile: !!(props.order.buyerNickname || props.order.buyerAvatar),
+    fullOrder: props.order
+  })
 })
+
+// ✅ 调试日志：监听订单数据变化
+watch(() => props.order, (newOrder, oldOrder) => {
+  console.log(`🔄 OrderCard: 订单数据变化 (orderId=${newOrder?.orderId})`, {
+    orderId: newOrder?.orderId,
+    sellerId: newOrder?.sellerId,
+    buyerId: newOrder?.buyerId,
+    sellerNickname: newOrder?.sellerNickname,
+    sellerAvatar: newOrder?.sellerAvatar,
+    buyerNickname: newOrder?.buyerNickname,
+    buyerAvatar: newOrder?.buyerAvatar,
+    hasSellerProfile: !!(newOrder?.sellerNickname || newOrder?.sellerAvatar),
+    hasBuyerProfile: !!(newOrder?.buyerNickname || newOrder?.buyerAvatar),
+    profileChanged: {
+      sellerNickname: oldOrder?.sellerNickname !== newOrder?.sellerNickname,
+      sellerAvatar: oldOrder?.sellerAvatar !== newOrder?.sellerAvatar,
+      buyerNickname: oldOrder?.buyerNickname !== newOrder?.buyerNickname,
+      buyerAvatar: oldOrder?.buyerAvatar !== newOrder?.buyerAvatar
+    },
+    newOrderFull: newOrder
+  })
+}, { deep: true, immediate: false })
 
 const getStatusText = (status) => {
   const statusMap = {

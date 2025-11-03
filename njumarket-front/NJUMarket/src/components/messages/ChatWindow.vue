@@ -189,26 +189,175 @@ watch(() => props.modelValue, v => { localValue.value = v })
 watch(localValue, v => emit('update:modelValue', v))
 
 const messagesListRef = ref(null)
-const scrollToBottom = () => {
-  if (messagesListRef.value) {
-    messagesListRef.value.scrollTop = messagesListRef.value.scrollHeight
+// ✅ 保存"是否在底部"状态，解决渲染过快导致的检测问题
+const wasAtBottom = ref(true) // 默认假设在底部，用于首次加载和发送消息时的滚动
+
+// ✅ 检测滚动条是否在底部（允许一定的误差范围，因为浮点数计算）
+const isAtBottom = () => {
+  if (!messagesListRef.value) {
+    console.warn('isAtBottom: messagesListRef 未绑定')
+    return false
   }
+  const { scrollTop, scrollHeight, clientHeight } = messagesListRef.value
+  // 允许 100px 的误差范围，因为有时滚动位置可能略有偏差（特别是消息刚添加时）
+  const distance = scrollHeight - scrollTop - clientHeight
+  const isAtBottom = distance <= 100
+  console.log('检测滚动位置:', { scrollTop, scrollHeight, clientHeight, distance, isAtBottom })
+  return isAtBottom
+}
+
+// ✅ 更新"是否在底部"状态（通过滚动事件监听）
+const updateWasAtBottom = () => {
+  wasAtBottom.value = isAtBottom()
+}
+
+// ✅ 滚动到底部（使用平滑滚动或立即滚动）
+const scrollToBottom = (smooth = false) => {
+  if (!messagesListRef.value) {
+    console.warn('scrollToBottom: messagesListRef 未绑定')
+    return
+  }
+  
+  const scrollHeight = messagesListRef.value.scrollHeight
+  console.log('执行滚动到底部:', { smooth, scrollHeight })
+  
+  if (smooth) {
+    messagesListRef.value.scrollTo({
+      top: scrollHeight,
+      behavior: 'smooth'
+    })
+  } else {
+    messagesListRef.value.scrollTop = scrollHeight
+  }
+  
+  // ✅ 验证滚动是否成功
+  setTimeout(() => {
+    const afterScroll = messagesListRef.value.scrollTop
+    const finalHeight = messagesListRef.value.scrollHeight
+    console.log('滚动后验证:', { scrollTop: afterScroll, scrollHeight: finalHeight, success: Math.abs(finalHeight - afterScroll - messagesListRef.value.clientHeight) < 10 })
+  }, smooth ? 500 : 50)
 }
 
 onMounted(async () => {
   await nextTick()
+  // ✅ 初始加载时滚动到底部（延迟一点确保 DOM 完全渲染）
+  wasAtBottom.value = true // 初始状态设为在底部
+  setTimeout(() => {
   scrollToBottom()
+    // ✅ 设置滚动事件监听，实时更新 wasAtBottom 状态
+    if (messagesListRef.value) {
+      // 使用防抖监听滚动，避免频繁更新
+      let scrollTimeout
+      messagesListRef.value.addEventListener('scroll', () => {
+        clearTimeout(scrollTimeout)
+        scrollTimeout = setTimeout(() => {
+          updateWasAtBottom()
+        }, 100)
+      }, { passive: true })
+    }
+  }, 100)
 })
 
-// 监听 messages 变化，自动滚动到底部
-watch(() => props.messages, (newMessages, oldMessages) => {
-  // 当有新消息时滚动到底部
-  if (newMessages && oldMessages && newMessages.length > oldMessages.length) {
+// ✅ 监听 messages 变化，智能滚动到底部
+// 使用两种方式监听：1) 监听数组引用变化 2) 监听数组长度变化
+watch(() => props.messages?.length, (newLength, oldLength) => {
+  console.log('🔍 watch messages.length 触发:', { newLength, oldLength, messages: props.messages?.length, wasAtBottom: wasAtBottom.value })
+  
+  // 首次加载（oldLength 为 undefined 或 0）
+  if (!oldLength || oldLength === 0) {
+    if (newLength && newLength > 0) {
+      console.log('✅ 首次加载消息，滚动到底部')
+      wasAtBottom.value = true // 首次加载时假设在底部
+      nextTick(() => {
+        setTimeout(() => {
+          scrollToBottom()
+        }, 100)
+      })
+    }
+    return
+  }
+  
+  // 当有新消息时（长度增加）
+  if (newLength && newLength > oldLength) {
+    // ✅ 立即检查最新消息是否包含卡片（在DOM渲染前）
+    const latestMessage = props.messages?.[newLength - 1]
+    const hasCardMessage = latestMessage?.commodityId || latestMessage?.orderId
+    
+    // ✅ 在消息渲染前立即保存滚动状态（如果之前没有保存，则立即检测）
+    // 这样可以避免因为卡片等大内容渲染导致检测失败的问题
+    // 对于接收消息的情况，wasAtBottom 应该已经通过滚动事件更新了
+    // 但为了确保准确性，如果检测到可能刚添加消息，立即更新一次
+    const currentAtBottom = isAtBottom()
+    // 如果检测到已经在底部（可能是刚添加消息但DOM还没完全渲染），更新状态
+    if (currentAtBottom) {
+      wasAtBottom.value = true
+    }
+    const shouldScroll = wasAtBottom.value
+    
+    console.log('✅ 检测到新消息，准备滚动:', { 
+      oldLength, 
+      newLength, 
+      increase: newLength - oldLength, 
+      wasAtBottom: wasAtBottom.value,
+      currentAtBottom,
+      hasCardMessage
+    })
+    
+    // ✅ 延迟一点，确保DOM完全更新和滚动位置计算准确
+    // 特别是对于包含商品/订单卡片的消息，需要更长的渲染时间
     nextTick(() => {
-      scrollToBottom()
+      // ✅ 对于可能包含卡片的消息，增加延迟时间，确保卡片完全渲染
+      const delay = hasCardMessage ? 300 : 100 // 卡片消息延迟更久（300ms）
+      
+      setTimeout(() => {
+        // ✅ 使用之前保存的状态判断是否需要滚动
+        // 如果之前是在底部，则滚动到底部（即使现在检测不在底部，可能是渲染未完成导致的）
+        console.log('收到新消息，判断滚动:', { 
+          wasAtBottom: shouldScroll,
+          currentAtBottom: isAtBottom(),
+          hasCardMessage,
+          latestMessageType: hasCardMessage ? (latestMessage?.commodityId ? '商品卡片' : '订单卡片') : '文本',
+          newCount: newLength, 
+          oldCount: oldLength 
+        })
+        
+        if (shouldScroll) {
+          scrollToBottom(true) // 使用平滑滚动，更自然
+          console.log('✅ 自动滚动到底部（基于之前保存的状态）')
+          // 滚动后更新状态
+          setTimeout(() => {
+            wasAtBottom.value = true
+          }, 300)
+        } else {
+          console.log('⚠️ 之前不在底部，不自动滚动（用户正在查看历史消息）')
+        }
+      }, delay)
     })
   }
-}, { deep: true })
+}, { immediate: true })
+
+// ✅ 同时监听数组引用变化（作为备用）
+watch(() => props.messages, (newMessages, oldMessages) => {
+  console.log('🔍 watch messages 数组引用触发:', { 
+    newLength: newMessages?.length, 
+    oldLength: oldMessages?.length,
+    newRef: newMessages,
+    oldRef: oldMessages
+  })
+}, { deep: false })
+
+// ✅ 监听对话切换，确保切换对话后滚动到底部
+watch(() => props.currentConversation, (newConv, oldConv) => {
+  if (newConv && newConv.conversationId !== oldConv?.conversationId) {
+    // 切换到新对话时，重置状态并滚动到底部（延迟确保消息已加载）
+    wasAtBottom.value = true // 切换对话时假设在底部
+    nextTick(() => {
+      setTimeout(() => {
+      scrollToBottom()
+      }, 200)
+    })
+  }
+}, { immediate: true })
 
 // 监听默认ID，自动打开弹窗
 watch(() => props.defaultCommodityId, (id) => {
@@ -263,6 +412,12 @@ const handleOrderClick = (order) => {
 
 const onSend = () => {
   if (!localValue.value.trim() || props.sending) return
+  
+  // ✅ 发送消息前，保存当前是否在底部的状态
+  // 这样可以避免因为卡片消息渲染导致的检测失败问题
+  wasAtBottom.value = isAtBottom()
+  console.log('📤 发送消息前保存滚动状态:', { wasAtBottom: wasAtBottom.value })
+  
   emit('send', {
     commodityId: selectedCommodityId.value,
     orderId: selectedOrderId.value
@@ -270,7 +425,8 @@ const onSend = () => {
   // 发送后清空选择
   selectedCommodityId.value = null
   selectedOrderId.value = null
-  nextTick(() => scrollToBottom())
+  // ✅ 滚动逻辑通过 watch messages 自动处理（发送消息后 messages 会更新）
+  // 使用 wasAtBottom 状态来判断是否需要滚动
 }
 </script>
 

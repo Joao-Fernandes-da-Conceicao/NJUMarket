@@ -11,6 +11,7 @@ import com.njumarket.njumarket.repository.CommodityRepository;
 import com.njumarket.njumarket.repository.UserRepository;
 import com.njumarket.njumarket.repository.UserProfileRepository;
 import com.njumarket.njumarket.service.OrderService;
+import com.njumarket.njumarket.service.ChangeRecordService;
 import com.njumarket.njumarket.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final com.njumarket.njumarket.service.WebSocketRetryService webSocketRetryService;
+    private final ChangeRecordService changeRecordService;
 
     // ========== 买家功能 ==========
     @Override
@@ -123,6 +125,10 @@ public class OrderServiceImpl implements OrderService {
             commodity.updateStock(-orderDTO.getQuantity());
             commodityRepository.save(commodity);
             
+            // ✅ 记录订单变更（用于增量轮询）
+            LocalDateTime now = LocalDateTime.now();
+            changeRecordService.recordOrderChange(order.getOrderId(), "CREATE", now);
+            
             // ✅ WebSocket 推送：订单创建通知给卖家（发送完整OrderDTO，类似消息发送完整MessageDTO）
             OrderDTO orderDTOForNotification = convertToDTO(order);
             pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_CREATED", order.getOrderStatus(), "SELLER", orderDTOForNotification);
@@ -169,6 +175,10 @@ public class OrderServiceImpl implements OrderService {
             // 支付订单
             if (order.payOrder()) {
                 orderRepository.save(order);
+                
+                // ✅ 记录订单变更（用于增量轮询）
+                LocalDateTime now = LocalDateTime.now();
+                changeRecordService.recordOrderChange(order.getOrderId(), "PAY", now);
                 
                 // ✅ WebSocket 推送：订单支付通知给卖家
                 pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_PAID", order.getOrderStatus(), "SELLER");
@@ -218,6 +228,10 @@ public class OrderServiceImpl implements OrderService {
             // 确认收货
             if (order.completeOrder()) {
                 orderRepository.save(order);
+                
+                // ✅ 记录订单变更（用于增量轮询）
+                LocalDateTime now = LocalDateTime.now();
+                changeRecordService.recordOrderChange(order.getOrderId(), "COMPLETE", now);
                 
                 // ✅ WebSocket 推送：订单完成通知给卖家
                 pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED", order.getOrderStatus(), "SELLER");
@@ -296,6 +310,10 @@ public class OrderServiceImpl implements OrderService {
                 
                 orderRepository.save(order);
                 
+                // ✅ 记录订单变更（用于增量轮询）
+                LocalDateTime now = LocalDateTime.now();
+                changeRecordService.recordOrderChange(order.getOrderId(), "CANCEL", now);
+                
                 // ✅ WebSocket 推送：订单取消通知
                 // 如果是买家取消，通知卖家；如果是卖家取消，通知买家
                 if (order.getBuyerId().equals(currentUser.getUserId())) {
@@ -359,6 +377,10 @@ public class OrderServiceImpl implements OrderService {
             
             orderRepository.save(order);
             
+            // ✅ 记录订单变更（用于增量轮询）
+            LocalDateTime now = LocalDateTime.now();
+            changeRecordService.recordOrderChange(order.getOrderId(), "REFUND_REQUEST", now);
+            
             // ✅ WebSocket 推送：退款申请通知给卖家
             pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED", order.getOrderStatus(), "SELLER");
             
@@ -372,7 +394,7 @@ public class OrderServiceImpl implements OrderService {
             }
             
             log.info("退款/退货申请成功 - orderId: {}, sellerVisibilityRestored: {}", 
-                    orderId, sellerVisibilityRestored);
+                orderId, sellerVisibilityRestored);
             return Result.ok("退款/退货申请成功");
             
         } catch (Exception e) {
@@ -462,6 +484,10 @@ public class OrderServiceImpl implements OrderService {
             // 发货
             if (order.shipOrder(trackingNumber)) {
                 orderRepository.save(order);
+                
+                // ✅ 记录订单变更（用于增量轮询）
+                LocalDateTime now = LocalDateTime.now();
+                changeRecordService.recordOrderChange(order.getOrderId(), "SHIP", now);
                 
                 // ✅ WebSocket 推送：订单发货通知给买家
                 pushOrderChangeNotification(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED", order.getOrderStatus(), "BUYER");
@@ -555,6 +581,11 @@ public class OrderServiceImpl implements OrderService {
             }
             
             orderRepository.save(order);
+            
+            // ✅ 记录订单变更（用于增量轮询）
+            LocalDateTime now = LocalDateTime.now();
+            String operation = "APPROVE".equals(decision) ? "REFUND_APPROVE" : "REFUND_REJECT";
+            changeRecordService.recordOrderChange(order.getOrderId(), operation, now);
             
             // ✅ WebSocket 推送：退款处理结果通知给买家
             String notificationType = "APPROVE".equals(decision) ? "REFUND_APPROVED" : "REFUND_REJECTED";

@@ -3,7 +3,7 @@
     <div class="register-container">
       <div class="register-form-wrapper">
         <div class="form-header">
-          <h2 class="text-primary">注册南大市场</h2>
+          <h2 class="text-primary">注册南大集市</h2>
           <p class="text-secondary">加入我们，开启你的购物之旅</p>
         </div>
         

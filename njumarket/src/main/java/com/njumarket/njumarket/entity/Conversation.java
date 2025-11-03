@@ -20,10 +20,23 @@ public class Conversation {
     private String userId2; // 较大的userId
     
     @Column(name = "last_message_content", columnDefinition = "TEXT")
-    private String lastMessageContent;
+    private String lastMessageContent; // 用于管理后台（不过滤，显示真实最新消息）
     
     @Column(name = "last_message_time")
-    private LocalDateTime lastMessageTime;
+    private LocalDateTime lastMessageTime; // 用于管理后台（不过滤，显示真实最新消息）
+    
+    // ✅ 用户级别的最后消息字段（过滤用户删除的）
+    @Column(name = "user_1_last_message_content", columnDefinition = "TEXT")
+    private String user1LastMessageContent; // 用户1可见的最后一条消息
+    
+    @Column(name = "user_1_last_message_time")
+    private LocalDateTime user1LastMessageTime; // 用户1可见的最后一条消息时间
+    
+    @Column(name = "user_2_last_message_content", columnDefinition = "TEXT")
+    private String user2LastMessageContent; // 用户2可见的最后一条消息
+    
+    @Column(name = "user_2_last_message_time")
+    private LocalDateTime user2LastMessageTime; // 用户2可见的最后一条消息时间
     
     @Column(name = "user_1_count")
     private Integer user1Count = 0;
@@ -33,6 +46,15 @@ public class Conversation {
     
     @Column(name = "status")
     private String status = "ACTIVE";
+    
+    // ✅ 双方可见性字段（用于用户删除会话，不影响其他功能）
+    // true (1) 表示可见，false (0) 表示不可见（用户删除了此会话）
+    // 默认值为 true (可见)
+    @Column(name = "user_1_visibility", nullable = false)
+    private Boolean user1Visibility = true;
+    
+    @Column(name = "user_2_visibility", nullable = false)
+    private Boolean user2Visibility = true;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -185,6 +207,69 @@ public class Conversation {
         this.lastMessageTime = lastMessageTime;
     }
     
+    // 用户级别的最后消息字段的Getter和Setter
+    public String getUser1LastMessageContent() {
+        return user1LastMessageContent;
+    }
+    
+    public void setUser1LastMessageContent(String user1LastMessageContent) {
+        this.user1LastMessageContent = user1LastMessageContent;
+    }
+    
+    public LocalDateTime getUser1LastMessageTime() {
+        return user1LastMessageTime;
+    }
+    
+    public void setUser1LastMessageTime(LocalDateTime user1LastMessageTime) {
+        this.user1LastMessageTime = user1LastMessageTime;
+    }
+    
+    public String getUser2LastMessageContent() {
+        return user2LastMessageContent;
+    }
+    
+    public void setUser2LastMessageContent(String user2LastMessageContent) {
+        this.user2LastMessageContent = user2LastMessageContent;
+    }
+    
+    public LocalDateTime getUser2LastMessageTime() {
+        return user2LastMessageTime;
+    }
+    
+    public void setUser2LastMessageTime(LocalDateTime user2LastMessageTime) {
+        this.user2LastMessageTime = user2LastMessageTime;
+    }
+    
+    // 辅助方法：根据用户ID获取对应的最后消息内容和时间
+    public String getLastMessageContentForUser(String userId) {
+        if (userId1.equals(userId)) {
+            return user1LastMessageContent;
+        } else if (userId2.equals(userId)) {
+            return user2LastMessageContent;
+        }
+        return null;
+    }
+    
+    public LocalDateTime getLastMessageTimeForUser(String userId) {
+        if (userId1.equals(userId)) {
+            return user1LastMessageTime;
+        } else if (userId2.equals(userId)) {
+            return user2LastMessageTime;
+        }
+        return null;
+    }
+    
+    // 辅助方法：根据用户ID设置对应的最后消息内容和时间
+    public void setLastMessageForUser(String userId, String content, LocalDateTime time) {
+        if (userId1.equals(userId)) {
+            this.user1LastMessageContent = content;
+            this.user1LastMessageTime = time;
+        } else if (userId2.equals(userId)) {
+            this.user2LastMessageContent = content;
+            this.user2LastMessageTime = time;
+        }
+    }
+    
     public Integer getUser1Count() {
         return user1Count;
     }
@@ -247,5 +332,71 @@ public class Conversation {
     
     public void setUnreadCount(Integer unreadCount) {
         this.unreadCount = unreadCount;
+    }
+    
+    // ✅ 可见性相关方法
+    /**
+     * 获取用户在此会话中的可见性
+     * @param userId 用户ID
+     * @return true表示可见，false表示不可见
+     */
+    public Boolean getVisibilityForUser(String userId) {
+        if (userId1.equals(userId)) {
+            return user1Visibility != null ? user1Visibility : true;
+        } else if (userId2.equals(userId)) {
+            return user2Visibility != null ? user2Visibility : true;
+        }
+        return true; // 默认可见
+    }
+    
+    /**
+     * 设置用户在此会话中的可见性
+     * @param userId 用户ID
+     * @param visibility true表示可见，false表示不可见
+     * @return 设置是否成功
+     */
+    public Boolean setVisibilityForUser(String userId, Boolean visibility) {
+        if (userId1.equals(userId)) {
+            this.user1Visibility = visibility;
+            return true;
+        } else if (userId2.equals(userId)) {
+            this.user2Visibility = visibility;
+            return true;
+        }
+        return false;
+    }
+    
+    /**
+     * 恢复用户在此会话中的可见性（设置为可见）
+     * @param userId 用户ID
+     * @return 恢复是否成功
+     */
+    public Boolean restoreVisibilityForUser(String userId) {
+        return setVisibilityForUser(userId, true);
+    }
+    
+    /**
+     * 检查用户是否可见此会话（用于查询过滤）
+     * @param userId 用户ID
+     * @return true表示可见，false表示不可见
+     */
+    public Boolean isVisibleToUser(String userId) {
+        return getVisibilityForUser(userId);
+    }
+    
+    public Boolean getUser1Visibility() {
+        return user1Visibility != null ? user1Visibility : true;
+    }
+    
+    public void setUser1Visibility(Boolean user1Visibility) {
+        this.user1Visibility = user1Visibility;
+    }
+    
+    public Boolean getUser2Visibility() {
+        return user2Visibility != null ? user2Visibility : true;
+    }
+    
+    public void setUser2Visibility(Boolean user2Visibility) {
+        this.user2Visibility = user2Visibility;
     }
 }

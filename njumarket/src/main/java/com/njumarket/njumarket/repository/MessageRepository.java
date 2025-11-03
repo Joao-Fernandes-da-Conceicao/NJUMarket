@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
-public interface MessageRepository extends JpaRepository<Message, String> {
+public interface MessageRepository extends JpaRepository<Message, String>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<Message> {
     
     // 获取对话的所有消息（过滤双向删除）
     @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
@@ -87,4 +87,32 @@ public interface MessageRepository extends JpaRepository<Message, String> {
            "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
            "ORDER BY m.createdAt DESC")
     List<Message> findLastMessageBySender(@Param("userId") String userId, Pageable pageable);
+    
+    // ✅ 管理端：获取对话的最后一条消息（不过滤双方都删除的，显示所有消息）
+    @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
+           "ORDER BY m.createdAt DESC")
+    List<Message> findLastMessageForAdmin(@Param("conversationId") String conversationId, Pageable pageable);
+    
+    // ✅ 用户端：获取对话的最后一条消息（过滤用户删除的）
+    // 如果用户是发送方，则不能是发送方已删除的；如果用户是接收方，则不能是接收方已删除的
+    @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
+           "AND NOT (" +
+           "  (m.senderId = :userId AND m.deletedBySender = true) OR " +
+           "  (m.receiverId = :userId AND m.deletedByReceiver = true)" +
+           ") " +
+           "ORDER BY m.createdAt DESC")
+    List<Message> findLastMessageForUser(@Param("conversationId") String conversationId, 
+                                         @Param("userId") String userId, 
+                                         Pageable pageable);
+    
+    // ✅ 查询对话中接收方的未读消息（用于已读回执）
+    // 查询条件：指定对话、指定接收方、未读、未被双方都删除
+    @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
+           "AND m.receiverId = :receiverId " +
+           "AND m.isRead = false " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
+           "ORDER BY m.createdAt ASC")
+    List<Message> findUnreadMessagesByConversationAndReceiver(
+            @Param("conversationId") String conversationId,
+            @Param("receiverId") String receiverId);
 }

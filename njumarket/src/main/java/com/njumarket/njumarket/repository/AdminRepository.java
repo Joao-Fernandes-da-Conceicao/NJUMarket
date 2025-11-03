@@ -14,7 +14,8 @@ import java.util.Optional;
  * 管理员数据访问层
  */
 @Repository
-public interface AdminRepository extends JpaRepository<Admin, String> {
+public interface AdminRepository extends JpaRepository<Admin, String>, 
+    org.springframework.data.jpa.repository.JpaSpecificationExecutor<Admin> {
     
     /**
      * 根据用户名查找管理员
@@ -66,7 +67,7 @@ public interface AdminRepository extends JpaRepository<Admin, String> {
     List<Admin> findByPermission(@Param("permission") String permission);
     
     /**
-     * 查找超级管理员
+     * 查找系统管理员
      */
     @Query("SELECT a FROM Admin a WHERE a.adminLevel = 'SUPER' AND a.accountStatus = 'ACTIVE'")
     List<Admin> findSuperAdmins();

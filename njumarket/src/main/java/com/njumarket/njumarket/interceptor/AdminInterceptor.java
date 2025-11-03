@@ -75,7 +75,7 @@ public class AdminInterceptor implements HandlerInterceptor {
             log.warn("管理员账户已被禁用: adminId={}, status={}", adminId, admin.getAccountStatus());
             response.setStatus(403);
             response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"code\":403,\"message\":\"管理员账户已被禁用，请联系超级管理员\"}");
+            response.getWriter().write("{\"code\":403,\"message\":\"管理员账户已被禁用，请联系系统管理员\"}");
             return false;
         }
         
@@ -205,17 +205,38 @@ public class AdminInterceptor implements HandlerInterceptor {
                 return false;
             }
             
-            // 7. 更新其他管理员的信息（只能更新自己的）
+            // 7. 更新其他管理员的信息（只能更新自己的，除非是system管理员）
             if (requestURI.matches("/api/admin/[^/]+$") && "PUT".equals(method)) {
                 // 提取目标管理员ID
                 String[] pathParts = requestURI.split("/");
                 if (pathParts.length >= 4) {
                     String targetAdminId = pathParts[3];
-                    // 如果不是更新自己的信息，则拒绝
-                    if (!admin.getAdminId().equals(targetAdminId)) {
+                    // system管理员可以更新所有管理员信息，普通管理员只能更新自己的
+                    if (!admin.isSystemAdmin() && !admin.getAdminId().equals(targetAdminId)) {
                         return false;
                     }
                 }
+            }
+            
+            // 8. 管理员列表和详情查询（只有system权限可用）
+            if (requestURI.equals("/api/admin/list") && "GET".equals(method)) {
+                return false; // 普通管理员不能查看管理员列表
+            }
+            if (requestURI.matches("/api/admin/[^/]+$") && "GET".equals(method)) {
+                // 提取目标管理员ID
+                String[] pathParts = requestURI.split("/");
+                if (pathParts.length >= 4) {
+                    String targetAdminId = pathParts[3];
+                    // system管理员可以查看所有管理员信息，普通管理员只能查看自己的
+                    if (!admin.isSystemAdmin() && !admin.getAdminId().equals(targetAdminId)) {
+                        return false;
+                    }
+                }
+            }
+            
+            // 9. 完整更新管理员信息（只有system权限可用）
+            if (requestURI.contains("/full") && "PUT".equals(method) && requestURI.contains("/api/admin/")) {
+                return false; // 普通管理员不能使用updateAdminFull
             }
         }
         
