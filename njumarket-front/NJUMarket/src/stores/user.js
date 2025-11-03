@@ -79,6 +79,14 @@ export const useUserStore = defineStore('user', {
             console.error('初始化 WebSocket 失败:', err)
           })
           
+          // ✅ 初始化订单变化提醒的 WebSocket 监听
+          import('./order').then(({ useOrderStore }) => {
+            const orderStore = useOrderStore()
+            orderStore.initWebSocketListeners()
+          }).catch(err => {
+            console.error('初始化订单 WebSocket 监听失败:', err)
+          })
+          
         } catch (error) {
           console.error('解析用户信息失败:', error)
           console.error('原始用户数据:', userStr)
@@ -168,6 +176,11 @@ export const useUserStore = defineStore('user', {
         const messageStore = useMessageStore()
         messageStore.initWebSocket()
         
+        // ✅ 初始化订单变化提醒的 WebSocket 监听
+        const { useOrderStore } = await import('./order')
+        const orderStore = useOrderStore()
+        orderStore.initWebSocketListeners()
+        
         return response
       } else {
         throw new Error(response.errorMsg)
@@ -189,6 +202,11 @@ export const useUserStore = defineStore('user', {
         const { useMessageStore } = await import('./message')
         const messageStore = useMessageStore()
         messageStore.initWebSocket()
+        
+        // ✅ 初始化订单变化提醒的 WebSocket 监听
+        const { useOrderStore } = await import('./order')
+        const orderStore = useOrderStore()
+        orderStore.initWebSocketListeners()
         
         return response
       } else {
@@ -212,6 +230,11 @@ export const useUserStore = defineStore('user', {
         const messageStore = useMessageStore()
         messageStore.initWebSocket()
         
+        // ✅ 初始化订单变化提醒的 WebSocket 监听
+        const { useOrderStore } = await import('./order')
+        const orderStore = useOrderStore()
+        orderStore.initWebSocketListeners()
+        
         return response
       } else {
         throw new Error(response.errorMsg)
@@ -229,6 +252,11 @@ export const useUserStore = defineStore('user', {
         const { useMessageStore } = await import('./message')
         const messageStore = useMessageStore()
         messageStore.disconnectWebSocket()
+        
+        // ✅ 清除订单变化提醒的 WebSocket 监听
+        const { useOrderStore } = await import('./order')
+        const orderStore = useOrderStore()
+        orderStore.clearWebSocketListeners()
         
         this.clearUserData()
         

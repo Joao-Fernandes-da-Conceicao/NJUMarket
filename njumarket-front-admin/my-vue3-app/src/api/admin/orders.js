@@ -5,6 +5,7 @@ export const ordersAPI = {
     http.get('/orders', { params: { page, size, ...query } }),
   get: (id) => http.get(`/orders/${id}`),
   update: (id, payload) => http.put(`/orders/${id}`, null, { params: payload }),
+  updateFull: (id, payload) => http.put(`/orders/${id}/full`, payload),
   remove: (id) => http.delete(`/orders/${id}`)
 }
 

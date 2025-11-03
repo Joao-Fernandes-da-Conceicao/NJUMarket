@@ -602,6 +602,8 @@ export default {
         return
       }
       
+      // 注意：不再在"我的主页"清除卖家订单角标，改为在"卖家订单"页面清除
+      
       // 正常加载数据
       fetchProfile()
       fetchCommodities()

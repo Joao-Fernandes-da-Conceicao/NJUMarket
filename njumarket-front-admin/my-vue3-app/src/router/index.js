@@ -6,6 +6,7 @@ const UserEdit = () => import('../views/UserEdit.vue')
 const Commodities = () => import('../views/Commodities.vue')
 const CommodityEdit = () => import('../views/CommodityEdit.vue')
 const Orders = () => import('../views/Orders.vue')
+const OrderEdit = () => import('../views/OrderEdit.vue')
 const Messages = () => import('../views/Messages.vue')
 const Login = () => import('../views/Login.vue')
 
@@ -17,6 +18,7 @@ const routes = [
   { path: '/commodities', name: 'Commodities', component: Commodities },
   { path: '/commodities/:commodityId/edit', name: 'CommodityEdit', component: CommodityEdit },
   { path: '/orders', name: 'Orders', component: Orders },
+  { path: '/orders/:orderId/edit', name: 'OrderEdit', component: OrderEdit },
   { path: '/messages', name: 'Messages', component: Messages }
 ]
 

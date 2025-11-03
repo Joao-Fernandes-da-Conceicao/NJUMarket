@@ -300,6 +300,12 @@ public class AdminController {
         return adminService.updateOrderFields(orderId, status, trackingNumber, remark);
     }
 
+    @PutMapping("/orders/{orderId}/full")
+    public Result updateOrderFull(@PathVariable String orderId,
+                                  @RequestBody java.util.Map<String, Object> payload) {
+        return adminService.updateOrderFull(orderId, payload);
+    }
+
     @DeleteMapping("/orders/{orderId}")
     public Result deleteOrder(@PathVariable String orderId) {
         return adminService.deleteOrder(orderId);

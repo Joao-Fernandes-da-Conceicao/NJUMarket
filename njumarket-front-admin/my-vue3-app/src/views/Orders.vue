@@ -15,6 +15,32 @@
               <p>地址：{{ row.shippingAddress || '-' }}</p>
               <p>备注：{{ row.remark || '-' }}</p>
               <p>可见性：卖家 {{ row.sellerVisibility || '-' }} / 买家 {{ row.buyerVisibility || '-' }}</p>
+              <!-- ✅ 买家信息 -->
+              <div class="user-info">
+                <h5>买家信息</h5>
+                <div class="user-detail">
+                  <el-avatar :size="40" :src="getAvatarUrl(getBuyerAvatar(row))" class="user-avatar">
+                    <span v-if="!getBuyerAvatar(row)">无头像</span>
+                  </el-avatar>
+                  <div class="user-text">
+                    <p class="user-name">{{ getBuyerName(row) }}</p>
+                    <p class="user-id">ID: {{ row.buyerId || '-' }}</p>
+                  </div>
+                </div>
+              </div>
+              <!-- ✅ 卖家信息 -->
+              <div class="user-info">
+                <h5>卖家信息</h5>
+                <div class="user-detail">
+                  <el-avatar :size="40" :src="getAvatarUrl(getSellerAvatar(row))" class="user-avatar">
+                    <span v-if="!getSellerAvatar(row)">无头像</span>
+                  </el-avatar>
+                  <div class="user-text">
+                    <p class="user-name">{{ getSellerName(row) }}</p>
+                    <p class="user-id">ID: {{ row.sellerId || '-' }}</p>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="expand-section">
               <h4>退货/退款</h4>
@@ -64,8 +90,9 @@
         </template>
       </el-table-column>
       <el-table-column prop="payAmount" label="金额" width="120"/>
-      <el-table-column label="操作" width="220">
+      <el-table-column label="操作" width="280">
         <template #default="{ row }">
+          <UnifiedButton size="small" @click="edit(row)">编辑</UnifiedButton>
           <UnifiedButton size="small" @click="mark(row,'PAID')">设为已支付</UnifiedButton>
           <UnifiedButton size="small" type="danger" @click="remove(row)">删除</UnifiedButton>
         </template>
@@ -89,7 +116,11 @@ import Pagination from '../components/common/Pagination.vue'
 export default {
   name: 'Orders',
   components:{ UnifiedButton, UnifiedInput, UnifiedTag, Pagination },
-  data(){ return { list: [], total: 0, page: 1, pageSize: 20, keyword: '', sortProp: '', sortOrder: '' } },
+  data(){ 
+    return { 
+      list: [], total: 0, page: 1, pageSize: 10, keyword: '', sortProp: '', sortOrder: ''
+    } 
+  },
   mounted(){ this.loadData() },
   methods:{
     statusText(status){
@@ -138,6 +169,45 @@ export default {
       const map = { PUBLIC:'success', PRIVATE:'info', HIDDEN:'default' }
       return map[v] || 'info'
     },
+    // ✅ 获取买家昵称（优先使用后端返回的buyer信息）
+    getBuyerName(row) {
+      if (row.buyer && row.buyer.nickname) {
+        return row.buyer.nickname
+      }
+      return row.buyerId || '-'
+    },
+    // ✅ 获取买家头像（优先使用后端返回的buyer信息）
+    getBuyerAvatar(row) {
+      if (row.buyer && row.buyer.avatar) {
+        return row.buyer.avatar
+      }
+      return ''
+    },
+    // ✅ 获取卖家昵称（优先使用后端返回的seller信息）
+    getSellerName(row) {
+      if (row.seller && row.seller.nickname) {
+        return row.seller.nickname
+      }
+      return row.sellerId || '-'
+    },
+    // ✅ 获取卖家头像（优先使用后端返回的seller信息）
+    getSellerAvatar(row) {
+      if (row.seller && row.seller.avatar) {
+        return row.seller.avatar
+      }
+      return ''
+    },
+    // ✅ 获取头像完整URL
+    getAvatarUrl(avatarUrl) {
+      if (!avatarUrl) return 'http://localhost:8080/uploads/avatars/default-avatar.png'
+      // 如果已经是完整URL，直接返回
+      if (avatarUrl.startsWith('http')) return avatarUrl
+      // 如果包含完整路径，直接返回
+      if (avatarUrl.includes('/')) return avatarUrl
+      // 从URL中提取文件名
+      const fileName = avatarUrl.split('/').pop()
+      return `http://localhost:8080/uploads/avatars/${fileName}`
+    },
     async loadData(){
       const { ordersAPI } = await import('../api/admin/orders')
       const res = await ordersAPI.list(this.page, this.pageSize, { keyword: (this.keyword||'').trim(), sortProp: this.sortProp, sortOrder: this.sortOrder === 'descending' ? 'desc' : (this.sortOrder === 'ascending' ? 'asc' : '') })
@@ -166,6 +236,9 @@ export default {
       this.page = 1
       this.loadData()
     },
+    edit(row) {
+      this.$router.push(`/orders/${row.orderId}/edit`)
+    },
     async mark(row, status){
       const { ordersAPI } = await import('../api/admin/orders')
       await ordersAPI.update(row.orderId, { status })
@@ -179,5 +252,93 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+/* 展开行样式 */
+.order-expand {
+  padding: 20px;
+  display: flex;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.expand-section {
+  flex: 1;
+  min-width: 300px;
+}
+
+.expand-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: normal;
+  color: var(--primary-color, #6a015e);
+}
+
+.expand-section p {
+  margin: 6px 0;
+  font-size: 14px;
+  color: #666;
+}
+
+/* ✅ 用户信息显示 */
+.user-info {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.user-info h5 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--primary-color, #6a015e);
+}
+
+.user-detail {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  flex-shrink: 0;
+  border: 2px solid var(--primary-color, #6a015e);
+}
+
+.user-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.user-id {
+  margin: 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.snapshot-images {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.snapshot-images img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+</style>
 
 

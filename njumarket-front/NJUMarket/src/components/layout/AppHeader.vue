@@ -33,9 +33,21 @@
             v-if="isLoggedIn" 
             to="/orders" 
             class="nav-link" 
-            :class="{ active: $route.path.startsWith('/orders') || $route.path.startsWith('/seller-orders') }"
+            :class="{ active: $route.path.startsWith('/orders') && !$route.path.startsWith('/seller-orders') }"
           >
-            我的订单
+            <UnreadBadge :count="buyerOrderHasNew ? 1 : 0" type="dot" :force-hide="!buyerOrderHasNew">
+              我的订单
+            </UnreadBadge>
+          </router-link>
+          <router-link 
+            v-if="isLoggedIn" 
+            to="/seller-orders" 
+            class="nav-link" 
+            :class="{ active: $route.path.startsWith('/seller-orders') }"
+          >
+            <UnreadBadge :count="sellerOrderHasNew ? 1 : 0" type="dot" :force-hide="!sellerOrderHasNew">
+              卖家订单
+            </UnreadBadge>
           </router-link>
           <router-link 
             v-if="isLoggedIn" 
@@ -145,6 +157,7 @@
               <div class="mobile-menu-item" @click="handleMobileItem('orders')">
                 <el-icon><ShoppingCart /></el-icon>
                 <span>我的订单</span>
+                <UnreadBadge :count="buyerOrderHasNew ? 1 : 0" type="dot" :force-hide="!buyerOrderHasNew" />
               </div>
               <div class="mobile-menu-item" @click="handleMobileItem('my-home')">
                 <el-icon><Box /></el-icon>
@@ -153,6 +166,7 @@
               <div class="mobile-menu-item" @click="handleMobileItem('seller-orders')">
                 <el-icon><Box /></el-icon>
                 <span>卖家订单</span>
+                <UnreadBadge :count="sellerOrderHasNew ? 1 : 0" type="dot" :force-hide="!sellerOrderHasNew" />
               </div>
               <div class="mobile-menu-item" @click="handleMobileItem('messages')">
                 <el-icon><Message /></el-icon>
@@ -192,6 +206,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../../stores/user'
 import { useMessageStore } from '../../stores/message'
+import { useOrderStore } from '../../stores/order'
 import { createSafeUserState } from '../../utils/userUtils'
 import { getAvatarUrl } from '../../utils/imageUtils'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -202,12 +217,17 @@ import UnreadBadge from '../common/UnreadBadge.vue'
 const router = useRouter()
 const userStore = useUserStore()
 const messageStore = useMessageStore()
+const orderStore = useOrderStore()
 
 // 使用安全的用户状态
 const { isLoggedIn, getUserDisplayName, getUserAvatar } = createSafeUserState(userStore)
 
 // 未读消息数 - 使用 store
 const unreadCount = computed(() => messageStore.totalUnreadCount)
+
+// 订单变化提醒角标状态
+const sellerOrderHasNew = computed(() => orderStore.hasSellerOrderChange)
+const buyerOrderHasNew = computed(() => orderStore.hasBuyerOrderChange)
 
 // 移动端检测
 const isMobile = ref(false)

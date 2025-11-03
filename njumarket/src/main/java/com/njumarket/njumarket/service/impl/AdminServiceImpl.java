@@ -21,7 +21,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -662,16 +661,76 @@ public class AdminServiceImpl implements AdminService {
             if (nickname instanceof String) profile.setNickname(((String) nickname).trim());
             Object avatar = payload.get("avatar");
             if (avatar instanceof String) profile.setAvatar(((String) avatar).trim());
+            // ✅ 信用分：支持 Number 和 String 类型
             Object creditScore = payload.get("creditScore");
-            if (creditScore instanceof Number) profile.setCreditScore(((Number) creditScore).intValue());
+            if (creditScore != null) {
+                try {
+                    int score = creditScore instanceof Number 
+                        ? ((Number) creditScore).intValue() 
+                        : Integer.parseInt(creditScore.toString().trim());
+                    if (score >= 0 && score <= 100) {
+                        profile.setCreditScore(score);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
+            // ✅ 买家评分：支持 Number 和 String 类型
             Object buyerRating = payload.get("buyerRating");
-            if (buyerRating instanceof Number) profile.setBuyerRating(((Number) buyerRating).doubleValue());
+            if (buyerRating != null) {
+                try {
+                    double rating = buyerRating instanceof Number 
+                        ? ((Number) buyerRating).doubleValue() 
+                        : Double.parseDouble(buyerRating.toString().trim());
+                    if (rating >= 0 && rating <= 5) {
+                        profile.setBuyerRating(rating);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
+            // ✅ 卖家评分：支持 Number 和 String 类型
             Object sellerRating = payload.get("sellerRating");
-            if (sellerRating instanceof Number) profile.setSellerRating(((Number) sellerRating).doubleValue());
+            if (sellerRating != null) {
+                try {
+                    double rating = sellerRating instanceof Number 
+                        ? ((Number) sellerRating).doubleValue() 
+                        : Double.parseDouble(sellerRating.toString().trim());
+                    if (rating >= 0 && rating <= 5) {
+                        profile.setSellerRating(rating);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
+            // ✅ 卖出次数：支持 Number 和 String 类型
             Object totalSales = payload.get("totalSales");
-            if (totalSales instanceof Number) profile.setTotalSales(((Number) totalSales).intValue());
+            if (totalSales != null) {
+                try {
+                    int sales = totalSales instanceof Number 
+                        ? ((Number) totalSales).intValue() 
+                        : Integer.parseInt(totalSales.toString().trim());
+                    if (sales >= 0) {
+                        profile.setTotalSales(sales);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
+            // ✅ 购入次数：支持 Number 和 String 类型
             Object totalPurchases = payload.get("totalPurchases");
-            if (totalPurchases instanceof Number) profile.setTotalPurchases(((Number) totalPurchases).intValue());
+            if (totalPurchases != null) {
+                try {
+                    int purchases = totalPurchases instanceof Number 
+                        ? ((Number) totalPurchases).intValue() 
+                        : Integer.parseInt(totalPurchases.toString().trim());
+                    if (purchases >= 0) {
+                        profile.setTotalPurchases(purchases);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
             Object vipLevel = payload.get("vipLevel");
             if (vipLevel instanceof String) {
                 String lvl = ((String) vipLevel).trim();
@@ -745,10 +804,27 @@ public class AdminServiceImpl implements AdminService {
             }
             Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, sort);
             Page<com.njumarket.njumarket.entity.Commodity> p = commodityRepository.findAll(spec, pageable);
-            List<Map<String, Object>> simpleList = new ArrayList<>();
-            for (com.njumarket.njumarket.entity.Commodity c : p.getContent()) {
-                simpleList.add(toSimpleCommodity(c));
+            
+            // ✅ 批量查询所有卖家的 UserProfile（避免 N+1 查询）
+            List<com.njumarket.njumarket.entity.Commodity> commodities = p.getContent();
+            Set<String> sellerIds = commodities.stream()
+                    .map(com.njumarket.njumarket.entity.Commodity::getSellerId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toSet());
+            
+            Map<String, com.njumarket.njumarket.entity.UserProfile> profileMap = new HashMap<>();
+            if (!sellerIds.isEmpty()) {
+                List<com.njumarket.njumarket.entity.UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(sellerIds));
+                profileMap = profiles.stream()
+                        .collect(java.util.stream.Collectors.toMap(com.njumarket.njumarket.entity.UserProfile::getUserId, profile -> profile));
             }
+            
+            // ✅ 转换为包含卖家信息的简单对象
+            final Map<String, com.njumarket.njumarket.entity.UserProfile> finalProfileMap = profileMap;
+            List<Map<String, Object>> simpleList = commodities.stream()
+                    .map(c -> toSimpleCommodityWithSeller(c, finalProfileMap.get(c.getSellerId())))
+                    .collect(java.util.stream.Collectors.toList());
+            
             Map<String, Object> result = new HashMap<>();
             result.put("list", simpleList);
             result.put("total", p.getTotalElements());
@@ -834,10 +910,30 @@ public class AdminServiceImpl implements AdminService {
             }
             Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, sort);
             Page<com.njumarket.njumarket.entity.Order> p = orderRepository.findAll(spec, pageable);
-            List<Map<String, Object>> simpleList = new ArrayList<>();
-            for (com.njumarket.njumarket.entity.Order o : p.getContent()) {
-                simpleList.add(toSimpleOrder(o));
+            
+            // ✅ 批量查询所有买家和卖家的 UserProfile（避免 N+1 查询，为将来显示用户信息做准备）
+            List<com.njumarket.njumarket.entity.Order> orders = p.getContent();
+            Set<String> userIds = new HashSet<>();
+            for (com.njumarket.njumarket.entity.Order o : orders) {
+                if (o.getBuyerId() != null) userIds.add(o.getBuyerId());
+                if (o.getSellerId() != null) userIds.add(o.getSellerId());
             }
+            
+            Map<String, com.njumarket.njumarket.entity.UserProfile> profileMap = new HashMap<>();
+            if (!userIds.isEmpty()) {
+                List<com.njumarket.njumarket.entity.UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                profileMap = profiles.stream()
+                        .collect(java.util.stream.Collectors.toMap(com.njumarket.njumarket.entity.UserProfile::getUserId, profile -> profile));
+            }
+            
+            // ✅ 转换为包含用户信息的简单对象
+            final Map<String, com.njumarket.njumarket.entity.UserProfile> finalProfileMap = profileMap;
+            List<Map<String, Object>> simpleList = orders.stream()
+                    .map(o -> toSimpleOrderWithUsers(o, 
+                            finalProfileMap.get(o.getBuyerId()), 
+                            finalProfileMap.get(o.getSellerId())))
+                    .collect(java.util.stream.Collectors.toList());
+            
             Map<String, Object> result = new HashMap<>();
             result.put("list", simpleList);
             result.put("total", p.getTotalElements());
@@ -882,6 +978,58 @@ public class AdminServiceImpl implements AdminService {
             return Result.ok("订单更新成功");
         } catch (Exception e) {
             log.error("更新订单异常: orderId={}, error={}", orderId, e.getMessage());
+            return Result.fail("更新订单失败");
+        }
+    }
+    
+    // ✅ 新增：更新订单完整字段（包括状态和可见性）
+    @Override
+    public Result updateOrderFull(String orderId, Map<String, Object> payload) {
+        try {
+            Optional<com.njumarket.njumarket.entity.Order> opt = orderRepository.findById(orderId);
+            if (opt.isEmpty()) {
+                return Result.fail("订单不存在");
+            }
+            com.njumarket.njumarket.entity.Order order = opt.get();
+            
+            // 状态
+            Object status = payload.get("orderStatus");
+            if (status instanceof String && StringUtils.hasText((String) status)) {
+                order.setOrderStatus(((String) status).trim());
+            }
+            
+            // 物流单号
+            Object trackingNumber = payload.get("trackingNumber");
+            if (trackingNumber instanceof String && StringUtils.hasText((String) trackingNumber)) {
+                order.setTrackingNumber(((String) trackingNumber).trim());
+            }
+            
+            // 卖家可见性
+            Object sellerVisibility = payload.get("sellerVisibility");
+            if (sellerVisibility instanceof String && StringUtils.hasText((String) sellerVisibility)) {
+                String vis = ((String) sellerVisibility).trim();
+                java.util.Set<String> allowedVis = new java.util.HashSet<>(java.util.Arrays.asList("PUBLIC", "PRIVATE", "HIDDEN"));
+                if (!allowedVis.contains(vis)) {
+                    return Result.fail("非法的卖家可见性");
+                }
+                order.setSellerVisibility(vis);
+            }
+            
+            // 买家可见性
+            Object buyerVisibility = payload.get("buyerVisibility");
+            if (buyerVisibility instanceof String && StringUtils.hasText((String) buyerVisibility)) {
+                String vis = ((String) buyerVisibility).trim();
+                java.util.Set<String> allowedVis = new java.util.HashSet<>(java.util.Arrays.asList("PUBLIC", "PRIVATE", "HIDDEN"));
+                if (!allowedVis.contains(vis)) {
+                    return Result.fail("非法的买家可见性");
+                }
+                order.setBuyerVisibility(vis);
+            }
+            
+            orderRepository.save(order);
+            return Result.ok("订单更新成功", toSimpleOrder(order));
+        } catch (Exception e) {
+            log.error("完整更新订单异常: orderId={}, error={}", orderId, e.getMessage());
             return Result.fail("更新订单失败");
         }
     }
@@ -983,6 +1131,16 @@ public class AdminServiceImpl implements AdminService {
     }
 
     private Map<String, Object> toSimpleCommodity(com.njumarket.njumarket.entity.Commodity c) {
+        return toSimpleCommodityWithSeller(c, null);
+    }
+    
+    /**
+     * 将商品实体转换为简单Map（包含卖家信息）
+     * @param c 商品实体
+     * @param sellerProfile 卖家Profile（可选，如果为null则不在结果中包含卖家信息）
+     * @return 简单Map对象
+     */
+    private Map<String, Object> toSimpleCommodityWithSeller(com.njumarket.njumarket.entity.Commodity c, com.njumarket.njumarket.entity.UserProfile sellerProfile) {
         Map<String, Object> m = new HashMap<>();
         m.put("commodityId", c.getCommodityId());
         m.put("sellerId", c.getSellerId());
@@ -1000,6 +1158,16 @@ public class AdminServiceImpl implements AdminService {
         m.put("sellerVisibility", c.getSellerVisibility());
         m.put("buyerVisibility", c.getBuyerVisibility());
         m.put("images", c.getImages());
+        
+        // ✅ 添加卖家信息（如果提供了Profile）
+        if (sellerProfile != null) {
+            Map<String, Object> sellerInfo = new HashMap<>();
+            sellerInfo.put("userId", c.getSellerId());
+            sellerInfo.put("nickname", sellerProfile.getNickname());
+            sellerInfo.put("avatar", sellerProfile.getAvatar());
+            m.put("seller", sellerInfo);
+        }
+        
         return m;
     }
 
@@ -1011,8 +1179,34 @@ public class AdminServiceImpl implements AdminService {
             com.njumarket.njumarket.entity.Commodity c = opt.get();
             Object title = payload.get("title"); if (title instanceof String) c.setTitle(((String) title).trim());
             Object description = payload.get("description"); if (description instanceof String) c.setDescription(((String) description).trim());
-            Object price = payload.get("price"); if (price instanceof Number) c.setPrice(((Number) price).doubleValue());
-            Object stock = payload.get("stock"); if (stock instanceof Number) c.setStock(((Number) stock).intValue());
+            // ✅ 价格：支持 Number 和 String 类型
+            Object price = payload.get("price");
+            if (price != null) {
+                try {
+                    double priceValue = price instanceof Number 
+                        ? ((Number) price).doubleValue() 
+                        : Double.parseDouble(price.toString().trim());
+                    if (priceValue >= 0) {
+                        c.setPrice(priceValue);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
+            // ✅ 库存：支持 Number 和 String 类型
+            Object stock = payload.get("stock");
+            if (stock != null) {
+                try {
+                    int stockValue = stock instanceof Number 
+                        ? ((Number) stock).intValue() 
+                        : Integer.parseInt(stock.toString().trim());
+                    if (stockValue >= 0) {
+                        c.setStock(stockValue);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
             Object location = payload.get("location"); if (location instanceof String) c.setLocation(((String) location).trim());
             Object category = payload.get("category"); if (category instanceof String) c.setCategory(((String) category).trim());
             Object conditionLevel = payload.get("conditionLevel");
@@ -1032,7 +1226,20 @@ public class AdminServiceImpl implements AdminService {
                 c.setCommodityStatus(st);
             }
             Object images = payload.get("images"); if (images instanceof String) c.setImages(((String) images).trim());
-            Object clickCount = payload.get("clickCount"); if (clickCount instanceof Number) c.setClickCount(((Number) clickCount).intValue());
+            // ✅ 点击量：支持 Number 和 String 类型
+            Object clickCount = payload.get("clickCount");
+            if (clickCount != null) {
+                try {
+                    int count = clickCount instanceof Number 
+                        ? ((Number) clickCount).intValue() 
+                        : Integer.parseInt(clickCount.toString().trim());
+                    if (count >= 0) {
+                        c.setClickCount(count);
+                    }
+                } catch (NumberFormatException | NullPointerException ignored) {
+                    // 忽略无效值
+                }
+            }
             // 分类校验（示例白名单，可根据业务扩展或改为从数据库/配置读取）
             if (category instanceof String) {
                 String cat = ((String) category).trim();
@@ -1067,6 +1274,19 @@ public class AdminServiceImpl implements AdminService {
     }
 
     private Map<String, Object> toSimpleOrder(com.njumarket.njumarket.entity.Order o) {
+        return toSimpleOrderWithUsers(o, null, null);
+    }
+    
+    /**
+     * 将订单实体转换为简单Map（包含买家和卖家信息）
+     * @param o 订单实体
+     * @param buyerProfile 买家Profile（可选，如果为null则不在结果中包含买家信息）
+     * @param sellerProfile 卖家Profile（可选，如果为null则不在结果中包含卖家信息）
+     * @return 简单Map对象
+     */
+    private Map<String, Object> toSimpleOrderWithUsers(com.njumarket.njumarket.entity.Order o, 
+                                                       com.njumarket.njumarket.entity.UserProfile buyerProfile,
+                                                       com.njumarket.njumarket.entity.UserProfile sellerProfile) {
         Map<String, Object> m = new HashMap<>();
         m.put("orderId", o.getOrderId());
         m.put("buyerId", o.getBuyerId());
@@ -1106,6 +1326,25 @@ public class AdminServiceImpl implements AdminService {
         m.put("commoditySnapshotSellerPhone", o.getCommoditySnapshotSellerPhone());
         m.put("commoditySnapshotSellerEmail", o.getCommoditySnapshotSellerEmail());
         m.put("commoditySnapshotTime", o.getCommoditySnapshotTime());
+        
+        // ✅ 添加买家信息（如果提供了Profile）
+        if (buyerProfile != null) {
+            Map<String, Object> buyerInfo = new HashMap<>();
+            buyerInfo.put("userId", o.getBuyerId());
+            buyerInfo.put("nickname", buyerProfile.getNickname());
+            buyerInfo.put("avatar", buyerProfile.getAvatar());
+            m.put("buyer", buyerInfo);
+        }
+        
+        // ✅ 添加卖家信息（如果提供了Profile）
+        if (sellerProfile != null) {
+            Map<String, Object> sellerInfo = new HashMap<>();
+            sellerInfo.put("userId", o.getSellerId());
+            sellerInfo.put("nickname", sellerProfile.getNickname());
+            sellerInfo.put("avatar", sellerProfile.getAvatar());
+            m.put("seller", sellerInfo);
+        }
+        
         return m;
     }
 

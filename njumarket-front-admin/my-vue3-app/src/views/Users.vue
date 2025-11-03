@@ -70,7 +70,7 @@ export default {
     UnifiedInput,
     Pagination
   },
-  data(){ return { list: [], total: 0, page: 1, pageSize: 20, keyword: '', sortKey: '', sortOrder: '', statusFilters: [
+  data(){ return { list: [], total: 0, page: 1, pageSize: 10, keyword: '', sortKey: '', sortOrder: '', statusFilters: [
     { text: 'ACTIVE', value: 'ACTIVE' },
     { text: 'SUSPENDED', value: 'SUSPENDED' },
     { text: 'BANNED', value: 'BANNED' }

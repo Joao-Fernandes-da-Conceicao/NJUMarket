@@ -54,6 +54,11 @@ const onUpdate = (val) => {
 /* 非多行：药丸型 */
 .unified-input--pill :deep(.el-input__wrapper) {
   border-radius: 9999px;
+  height: 34px;
+}
+.unified-input--pill :deep(.el-input__inner) {
+  height: 34px;
+  line-height: 34px;
 }
 
 /* 多行：圆角矩形 + 默认边框 */

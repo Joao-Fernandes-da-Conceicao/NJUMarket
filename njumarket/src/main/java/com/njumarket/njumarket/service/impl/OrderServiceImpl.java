@@ -38,6 +38,7 @@ public class OrderServiceImpl implements OrderService {
     private final CommodityRepository commodityRepository;
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final com.njumarket.njumarket.service.WebSocketRetryService webSocketRetryService;
 
     // ========== 买家功能 ==========
     @Override
@@ -122,6 +123,10 @@ public class OrderServiceImpl implements OrderService {
             commodity.updateStock(-orderDTO.getQuantity());
             commodityRepository.save(commodity);
             
+            // ✅ WebSocket 推送：订单创建通知给卖家（发送完整OrderDTO，类似消息发送完整MessageDTO）
+            OrderDTO orderDTOForNotification = convertToDTO(order);
+            pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_CREATED", order.getOrderStatus(), "SELLER", orderDTOForNotification);
+            
             log.info("订单创建成功 - orderId: {}", order.getOrderId());
             return Result.ok("订单创建成功");
             
@@ -164,6 +169,10 @@ public class OrderServiceImpl implements OrderService {
             // 支付订单
             if (order.payOrder()) {
                 orderRepository.save(order);
+                
+                // ✅ WebSocket 推送：订单支付通知给卖家
+                pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_PAID", order.getOrderStatus(), "SELLER");
+                
                 log.info("订单支付成功 - orderId: {}, payTime: {}", orderId, order.getPayTime());
                 return Result.ok("订单支付成功");
             } else {
@@ -209,6 +218,10 @@ public class OrderServiceImpl implements OrderService {
             // 确认收货
             if (order.completeOrder()) {
                 orderRepository.save(order);
+                
+                // ✅ WebSocket 推送：订单完成通知给卖家
+                pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED", order.getOrderStatus(), "SELLER");
+                
                 log.info("订单确认收货成功 - orderId: {}, deliveryTime: {}", 
                     orderId, order.getDeliveryTime());
                 return Result.ok("订单确认收货成功");
@@ -282,6 +295,15 @@ public class OrderServiceImpl implements OrderService {
                 }
                 
                 orderRepository.save(order);
+                
+                // ✅ WebSocket 推送：订单取消通知
+                // 如果是买家取消，通知卖家；如果是卖家取消，通知买家
+                if (order.getBuyerId().equals(currentUser.getUserId())) {
+                    pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "SELLER");
+                } else {
+                    pushOrderChangeNotification(order.getBuyerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "BUYER");
+                }
+                
                 log.info("订单取消成功 - orderId: {}", orderId);
                 return Result.ok("订单取消成功");
             } else {
@@ -329,12 +351,28 @@ public class OrderServiceImpl implements OrderService {
             order.setReturnReason(reason);
             order.setReturnRequestTime(LocalDateTime.now());
             
-            // 设置卖家可见性为可见，确保卖家能够看到退款申请
+            // ✅ 设置卖家可见性为可见，确保卖家能够看到退款申请（自动恢复可见性）
+            // 如果订单之前被卖家软删除（HIDDEN），此时会自动恢复可见性
+            // 注意：无论订单之前是从COMPLETED还是REFUND_REJECTED状态申请退款，都需要恢复可见性
+            boolean sellerVisibilityRestored = "HIDDEN".equals(order.getSellerVisibility());
             order.setSellerVisibility("PUBLIC");
             
             orderRepository.save(order);
             
-            log.info("退款/退货申请成功 - orderId: {}", orderId);
+            // ✅ WebSocket 推送：退款申请通知给卖家
+            pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED", order.getOrderStatus(), "SELLER");
+            
+            // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
+            // 这种情况可能发生在：
+            // 1. 从COMPLETED状态申请退款（卖家之前软删除了订单）
+            // 2. 从REFUND_REJECTED状态重新申请退款（卖家之前软删除了订单）
+            if (sellerVisibilityRestored) {
+                OrderDTO orderDTOForRestored = convertToDTO(order);
+                pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "SELLER", orderDTOForRestored);
+            }
+            
+            log.info("退款/退货申请成功 - orderId: {}, sellerVisibilityRestored: {}", 
+                    orderId, sellerVisibilityRestored);
             return Result.ok("退款/退货申请成功");
             
         } catch (Exception e) {
@@ -424,6 +462,10 @@ public class OrderServiceImpl implements OrderService {
             // 发货
             if (order.shipOrder(trackingNumber)) {
                 orderRepository.save(order);
+                
+                // ✅ WebSocket 推送：订单发货通知给买家
+                pushOrderChangeNotification(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED", order.getOrderStatus(), "BUYER");
+                
                 log.info("订单发货成功 - orderId: {}, shippingTime: {}, trackingNumber: {}", 
                     orderId, order.getShippingTime(), trackingNumber);
                 return Result.ok("订单发货成功");
@@ -468,12 +510,15 @@ public class OrderServiceImpl implements OrderService {
             }
             
             // 处理退款/退货申请
+            // ✅ 在修改前检测是否恢复可见性
+            boolean buyerVisibilityRestored = "HIDDEN".equals(order.getBuyerVisibility());
+            
             if ("APPROVE".equals(decision)) {
                 // 同意退款/退货
                 order.setOrderStatus("REFUND_APPROVED");
                 order.setReturnApprovalTime(LocalDateTime.now());
                 
-                // 设置买家可见性为可见，确保买家能够看到处理结果
+                // ✅ 设置买家可见性为可见，确保买家能够看到处理结果（自动恢复可见性）
                 order.setBuyerVisibility("PUBLIC");
                 
                 // 恢复商品库存
@@ -494,22 +539,32 @@ public class OrderServiceImpl implements OrderService {
                         orderId, order.getCommodityId());
                 }
                 
-                log.info("退款/退货申请已同意 - orderId: {}", orderId);
+                log.info("退款/退货申请已同意 - orderId: {}, buyerVisibilityRestored: {}", orderId, buyerVisibilityRestored);
             } else if ("REJECT".equals(decision)) {
                 // 拒绝退款/退货
                 order.setOrderStatus("REFUND_REJECTED");
                 order.setReturnRejectionReason(remark);
                 order.setReturnApprovalTime(LocalDateTime.now());
                 
-                // 设置买家可见性为可见，确保买家能够看到处理结果
+                // ✅ 设置买家可见性为可见，确保买家能够看到处理结果（自动恢复可见性）
                 order.setBuyerVisibility("PUBLIC");
                 
-                log.info("退款/退货申请已拒绝 - orderId: {}", orderId);
+                log.info("退款/退货申请已拒绝 - orderId: {}, buyerVisibilityRestored: {}", orderId, buyerVisibilityRestored);
             } else {
                 return Result.fail("无效的处理决定");
             }
             
             orderRepository.save(order);
+            
+            // ✅ WebSocket 推送：退款处理结果通知给买家
+            String notificationType = "APPROVE".equals(decision) ? "REFUND_APPROVED" : "REFUND_REJECTED";
+            pushOrderChangeNotification(order.getBuyerId(), order.getOrderId(), notificationType, order.getOrderStatus(), "BUYER");
+            
+            // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
+            if (buyerVisibilityRestored) {
+                OrderDTO orderDTOForRestored = convertToDTO(order);
+                pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "BUYER", orderDTOForRestored);
+            }
             
             return Result.ok("退款/退货申请处理成功");
             
@@ -1452,6 +1507,53 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception e) {
             log.error("批量查询订单状态失败: {}", e.getMessage(), e);
             return Result.fail("批量查询失败");
+        }
+    }
+    
+    /**
+     * 推送订单变化通知（轻量级，只包含基本信息）
+     * @param userId 接收通知的用户ID
+     * @param orderId 订单ID
+     * @param changeType 变化类型
+     * @param orderStatus 订单状态
+     * @param targetRole 目标角色（"SELLER" 或 "BUYER"），用于前端判断显示哪个角标
+     */
+    private void pushOrderChangeNotification(String userId, String orderId, String changeType, String orderStatus, String targetRole) {
+        pushOrderChangeNotificationWithDTO(userId, orderId, changeType, orderStatus, targetRole, null);
+    }
+    
+    /**
+     * 推送订单变化通知（支持发送完整OrderDTO）
+     * @param userId 接收通知的用户ID
+     * @param orderId 订单ID
+     * @param changeType 变化类型（ORDER_CREATED, ORDER_PAID, ORDER_SHIPPED, ORDER_COMPLETED, ORDER_CANCELLED, REFUND_REQUESTED, REFUND_APPROVED, REFUND_REJECTED）
+     * @param orderStatus 订单状态
+     * @param targetRole 目标角色（"SELLER" 或 "BUYER"），用于前端判断显示哪个角标
+     * @param orderDTO 完整的订单DTO（可选，ORDER_CREATED时发送完整订单信息，类似消息发送完整MessageDTO）
+     */
+    private void pushOrderChangeNotificationWithDTO(String userId, String orderId, String changeType, String orderStatus, String targetRole, OrderDTO orderDTO) {
+        try {
+            Map<String, Object> notification = new java.util.HashMap<>();
+            notification.put("type", "ORDER_CHANGE");
+            notification.put("orderId", orderId);
+            notification.put("changeType", changeType);
+            notification.put("orderStatus", orderStatus);
+            notification.put("targetRole", targetRole); // ✅ 添加目标角色字段，用于前端判断
+            notification.put("timestamp", LocalDateTime.now().toString());
+            
+            // ✅ 如果是订单创建或可见性恢复，发送完整OrderDTO（类似消息发送完整MessageDTO）
+            if (orderDTO != null && ("ORDER_CREATED".equals(changeType) || "ORDER_VISIBILITY_RESTORED".equals(changeType))) {
+                notification.put("order", orderDTO);
+            }
+            
+            // 使用重试服务推送订单变化通知（带重试机制）
+            webSocketRetryService.pushWithRetry(userId, notification, "ORDER_CHANGE");
+            log.debug("订单变化通知推送尝试（带重试）: userId={}, orderId={}, changeType={}, orderStatus={}, targetRole={}, hasOrderDTO={}", 
+                    userId, orderId, changeType, orderStatus, targetRole, orderDTO != null);
+        } catch (Exception e) {
+            log.error("推送订单变化通知失败: userId={}, orderId={}, changeType={}, error={}", 
+                    userId, orderId, changeType, e.getMessage(), e);
+            // WebSocket 推送失败不影响订单操作的成功返回
         }
     }
 }

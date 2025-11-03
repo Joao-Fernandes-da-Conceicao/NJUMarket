@@ -195,6 +195,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
+import { useOrderStore } from '../stores/order'
 import { orderAPI, imageAPI } from '../api'
 import { canPayOrder, canConfirmOrder, canCancelOrder } from '../utils/orderRules'
 import { ElMessage } from 'element-plus'
@@ -216,6 +217,7 @@ export default {
   setup() {
     const router = useRouter()
     const userStore = useUserStore()
+    const orderStore = useOrderStore()
     
     const loading = ref(false)
     const orders = ref([])
@@ -758,14 +760,142 @@ export default {
       }
     }
     
+    /**
+     * ✅ 智能更新订单（根据WebSocket通知）
+     * 根据changeType只更新变化的订单卡片，而不是重新加载整个列表
+     * @param {String} orderId - 订单ID
+     * @param {String} changeType - 变化类型
+     * @param {String} orderStatus - 订单状态
+     * @param {Object} orderDTO - 完整的订单DTO（可选，ORDER_CREATED时包含）
+     */
+    const smartUpdateOrder = async (orderId, changeType, orderStatus, orderDTO = null) => {
+      console.log('智能更新买家订单:', { orderId, changeType, orderStatus, hasOrderDTO: !!orderDTO })
+      
+      // 查找订单在列表中的位置
+      const orderIndex = orders.value.findIndex(o => o.orderId === orderId)
+      
+      // ✅ 如果是可见性恢复（极端情况），使用完整的orderDTO直接更新或添加
+      if (changeType === 'ORDER_VISIBILITY_RESTORED') {
+        console.log('订单可见性已恢复，使用完整OrderDTO更新:', orderId)
+        if (orderDTO) {
+          if (orderIndex !== -1) {
+            // 订单在列表中，直接更新
+            orders.value[orderIndex] = orderDTO
+            console.log('订单已更新:', orderDTO)
+          } else {
+            // 订单不在列表中，检查是否应该添加到当前筛选范围
+            if (activeTab.value === 'all' || activeTab.value === orderDTO.orderStatus) {
+              orders.value.unshift(orderDTO)
+              total.value = (total.value || 0) + 1
+              console.log('订单已添加到列表:', orderDTO)
+            }
+          }
+        } else {
+          // 如果没有提供完整OrderDTO，刷新列表（兼容旧版本）
+          console.warn('ORDER_VISIBILITY_RESTORED通知未包含完整OrderDTO，刷新列表')
+          fetchOrders()
+        }
+        return
+      }
+      
+      if (orderIndex === -1) {
+        // 订单不在当前列表中（可能是新订单或不在当前筛选范围内）
+        // 注意：买家不会收到ORDER_CREATED通知（订单是买家创建的），但保留此逻辑以防万一
+        if (changeType === 'ORDER_CREATED') {
+          if (orderDTO) {
+            // 如果提供了完整OrderDTO，直接添加到列表
+            if (activeTab.value === 'all' || activeTab.value === orderDTO.orderStatus) {
+              orders.value.unshift(orderDTO)
+              total.value = (total.value || 0) + 1
+              console.log('新订单已添加到列表:', orderDTO)
+            }
+          } else {
+            // 如果没有提供完整OrderDTO，刷新列表
+            if (activeTab.value === 'all') {
+              fetchOrders()
+            }
+          }
+        }
+        return
+      }
+      
+      // 订单在当前列表中，智能更新
+      const order = orders.value[orderIndex]
+      
+      // 根据changeType更新订单状态和相关字段
+      switch (changeType) {
+        case 'ORDER_PAID':
+          // 订单已支付（买家自己支付的，理论上不应该出现在买家订单通知中）
+          // 但为了完整性保留此case
+          order.orderStatus = 'PAID'
+          break
+          
+        case 'ORDER_SHIPPED':
+          // 订单已发货
+          order.orderStatus = 'SHIPPED'
+          // 注意：订单卡片不显示trackingNumber，因此不需要异步获取详情
+          // 如果将来需要在订单卡片中显示物流单号，可以取消以下注释：
+          // orderAPI.getDetail(orderId).then(response => {
+          //   if (response.success && response.data) {
+          //     const orderIndex = orders.value.findIndex(o => o.orderId === orderId)
+          //     if (orderIndex !== -1) {
+          //       Object.assign(orders.value[orderIndex], response.data)
+          //     }
+          //   }
+          // }).catch(err => {
+          //   console.error('获取订单详情失败:', err)
+          // })
+          break
+          
+        case 'ORDER_COMPLETED':
+          // 订单已完成
+          order.orderStatus = 'COMPLETED'
+          break
+          
+        case 'ORDER_CANCELLED':
+          // 订单已取消
+          order.orderStatus = 'CANCELLED'
+          break
+          
+        case 'REFUND_APPROVED':
+          // 退款已同意
+          order.orderStatus = 'REFUND_APPROVED'
+          break
+          
+        case 'REFUND_REJECTED':
+          // 退款已拒绝
+          order.orderStatus = 'REFUND_REJECTED'
+          break
+          
+        default:
+          // 其他变化类型，更新订单状态
+          order.orderStatus = orderStatus
+      }
+      
+      // 如果订单状态变化后不在当前筛选范围内，需要从列表中移除
+      if (activeTab.value !== 'all' && order.orderStatus !== activeTab.value) {
+        orders.value.splice(orderIndex, 1)
+        total.value = Math.max(0, total.value - 1)
+      } else {
+        // 更新响应式（Vue会自动检测到变化）
+        orders.value[orderIndex] = { ...order }
+      }
+    }
+    
     onMounted(() => {
       isMounted.value = true
+      // ✅ 清除买家订单变化提醒角标
+      orderStore.clearBuyerOrderNotification()
+      // ✅ 注册订单更新回调
+      orderStore.registerOrderUpdateCallback('buyer', smartUpdateOrder)
       fetchOrders()
     })
     
     // 组件卸载时清理
     onUnmounted(() => {
       isMounted.value = false
+      // ✅ 取消注册订单更新回调
+      orderStore.unregisterOrderUpdateCallback('buyer')
     })
     
     return {

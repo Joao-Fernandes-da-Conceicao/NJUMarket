@@ -380,28 +380,22 @@ public class Order {
     
     /**
      * 检查是否可以修改可见性
-     * 修改逻辑：允许已完成、已取消、退款完成状态的订单删除（软删除）
-     * 不允许退款请求中状态的订单删除，因为需要处理退款
+     * 修改逻辑：
+     * - 禁止删除：待支付、待发货、待收货、退款申请中（需要处理订单或退款）
+     * - 允许删除：已完成、已取消、退款完成、退款被拒绝（退款被拒绝后可以删除，但重新申请时会自动恢复可见性）
      * @return 是否可以修改
      */
     public Boolean canModifyVisibility() {
-        // 允许删除的状态：已完成、已取消、退款完成
-        String[] allowedStatuses = {"COMPLETED", "CANCELLED", "REFUND_APPROVED"};
-        for (String status : allowedStatuses) {
-            if (status.equals(this.orderStatus)) {
-                return true;
-            }
-        }
-        
-        // 禁止删除的状态：正在进行退款处理
-        String[] blockedStatuses = {"REFUND_REQUESTED", "REFUND_REJECTED"};
+        // 禁止删除的状态：待支付、待发货、待收货、退款申请中
+        // 这些状态需要买卖双方处理订单或退款，必须保持可见
+        String[] blockedStatuses = {"CREATED", "PAID", "SHIPPED", "REFUND_REQUESTED"};
         for (String status : blockedStatuses) {
             if (status.equals(this.orderStatus)) {
                 return false;
             }
         }
         
-        // 其他状态允许修改
+        // 其他状态允许修改（包括 COMPLETED, CANCELLED, REFUND_APPROVED, REFUND_REJECTED 等）
         return true;
     }
     

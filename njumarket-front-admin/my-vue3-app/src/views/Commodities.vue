@@ -104,7 +104,7 @@ export default {
   name: 'Commodities',
   components:{ UnifiedButton, UnifiedInput, UnifiedTag, Pagination },
   data(){ return {
-    list: [], total: 0, page: 1, pageSize: 20,
+    list: [], total: 0, page: 1, pageSize: 10,
     sellerMap: {},
     keyword: '',
     sortKey: '',
@@ -176,8 +176,24 @@ export default {
       if (res && res.success) {
         this.list = res.data?.list || res.data?.commodities || res.data || []
         this.total = res.data?.total ?? this.list.length
-        // 拉取卖家信息
-        this.list.forEach(row => this.fetchSeller(row))
+        // ✅ 后端已批量查询卖家信息，无需前端再次获取（优化后的代码）
+        // 如果后端返回的数据中包含seller信息，直接使用；否则回退到单独查询
+        this.list.forEach(row => {
+          if (row.seller && row.seller.nickname) {
+            // 后端已提供卖家信息，直接使用
+            if (!this.sellerMap[row.sellerId]) {
+              this.sellerMap[row.sellerId] = {
+                profile: {
+                  nickname: row.seller.nickname,
+                  avatar: row.seller.avatar
+                }
+              }
+            }
+          } else {
+            // 兼容旧版本：如果后端未提供seller信息，单独查询
+            this.fetchSeller(row)
+          }
+        })
       }
     },
     async fetchSeller(row){
@@ -187,11 +203,21 @@ export default {
       if (u && u.success) this.sellerMap[row.sellerId] = u.data
     },
     getSellerName(row){
+      // ✅ 优先使用后端返回的seller信息
+      if (row.seller && row.seller.nickname) {
+        return row.seller.nickname
+      }
+      // 回退到sellerMap（兼容旧版本或单独查询的情况）
       const u = this.sellerMap[row.sellerId]
       if (!u) return row.sellerId || '-'
       return (u.profile?.nickname) || u.username || u.userId
     },
     getSellerAvatar(row){
+      // ✅ 优先使用后端返回的seller信息
+      if (row.seller && row.seller.avatar) {
+        return row.seller.avatar
+      }
+      // 回退到sellerMap（兼容旧版本或单独查询的情况）
       const u = this.sellerMap[row.sellerId]
       return u?.profile?.avatar || ''
     },

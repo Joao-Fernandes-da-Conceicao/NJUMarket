@@ -4,9 +4,9 @@
 .pagination-wrapper { display: flex; justify-content: center; margin-top: var(--spacing-xl, 40px); }
 .pagination-content { display: flex; align-items: center; gap: var(--spacing-md, 20px); flex-wrap: wrap; justify-content: center; }
 .pagination-total { color: var(--primary-color); font-size: 14px; font-weight: normal; }
-.custom-page-size-select { position: relative; display: flex; align-items: center; padding: 8px 16px; background: white; border: 1px solid var(--primary-color); border-radius: var(--radius-pill, 20px); cursor: pointer; transition: all 0.3s ease; min-width: 120px; }
+.custom-page-size-select { position: relative; display: flex; align-items: center; padding: 8px 16px; background: white; border: 1px solid var(--primary-color); border-radius: var(--radius-pill, 20px); cursor: pointer; transition: all 0.3s ease; min-width: 120px; height: 34px; min-height: 34px; box-sizing: border-box; }
 .custom-page-size-select:hover { border-color: var(--primary-light); box-shadow: 0 4px 12px rgba(106, 1, 94, 0.15); }
-.custom-page-size-select .select-value { flex: 1; color: var(--text-primary, #333); font-size: 14px; font-weight: normal; min-height: 20px; display: flex; align-items: center; }
+.custom-page-size-select .select-value { flex: 1; color: var(--text-primary, #333); font-size: 14px; font-weight: normal; min-height: 20px; display: flex; align-items: center; justify-content: flex-start; text-align: left; }
 .custom-page-size-select .select-icon { color: var(--primary-color); font-size: 12px; margin-left: var(--spacing-xs, 8px); transition: transform 0.3s ease; }
 .custom-page-size-select:hover .select-icon { transform: rotate(180deg); }
 .select-popup { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--primary-color); border-radius: var(--radius-md, 16px); box-shadow: 0 4px 16px rgba(106, 1, 94, 0.2); z-index: 1000; margin-top: 4px; padding: var(--spacing-xs, 8px); }
