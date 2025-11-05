@@ -378,23 +378,18 @@ const fetchUserProfiles = async (userIds) => {
   
   if (uncachedUserIds.length > 0) {
     const queryPromises = uncachedUserIds.map(async (userId) => {
-      try {
-        const response = await profileAPI.getUser(userId)
-        if (response.success && response.data) {
-          profileMap.set(userId, response.data)
-          // ✅ 更新到缓存（如果缓存提供者存在）
-          if (profileCacheProvider?.conversationProfileCache) {
-            const conversationProfileCache = profileCacheProvider.conversationProfileCache
-            for (const [, cache] of conversationProfileCache.entries()) {
-              cache.set(userId, response.data)
-              break
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`获取用户 ${userId} 的profile失败:`, error)
+    try {
+      const response = await profileAPI.getUser(userId)
+      if (response.success && response.data) {
+        profileMap.set(userId, response.data)
+          // ✅ 保存到localStorage缓存
+          const { saveProfileToStorage } = await import('../../utils/profileCache')
+          saveProfileToStorage(userId, response.data)
       }
-    })
+    } catch (error) {
+      console.error(`获取用户 ${userId} 的profile失败:`, error)
+    }
+  })
     await Promise.all(queryPromises)
   }
   

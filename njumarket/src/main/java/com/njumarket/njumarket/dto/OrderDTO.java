@@ -46,7 +46,13 @@ public class OrderDTO {
     private String commoditySnapshotSellerEmail;
     private String commoditySnapshotTime;
     
-    // ========== 卖家详细信息 ==========
+    // ========== Profile字段（直接字段，类似商品） ==========
+    private String sellerNickname; // 卖家昵称（批量查询优化）
+    private String sellerAvatar;   // 卖家头像（批量查询优化）
+    private String buyerNickname;  // 买家昵称（批量查询优化）
+    private String buyerAvatar;    // 买家头像（批量查询优化）
+    
+    // ========== 卖家详细信息（保留用于详情接口，批量查询不返回） ==========
     private SellerInfo seller;
     private BuyerInfo buyer;
     

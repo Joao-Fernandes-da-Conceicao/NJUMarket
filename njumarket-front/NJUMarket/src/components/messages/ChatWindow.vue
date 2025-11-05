@@ -237,25 +237,151 @@ const scrollToBottom = (smooth = false) => {
     console.log('滚动后验证:', { scrollTop: afterScroll, scrollHeight: finalHeight, success: Math.abs(finalHeight - afterScroll - messagesListRef.value.clientHeight) < 10 })
   }, smooth ? 500 : 50)
 }
+// ✅ 检查卡片元素是否已渲染（通过检查消息中的卡片元素）
+const checkCardsRendered = () => {
+  if (!messagesListRef.value || !props.messages || props.messages.length === 0) {
+    // 没有消息，认为不需要渲染卡片
+    return true
+  }
+  
+  // ✅ 统计哪些消息应该有卡片（基于消息数据）
+  let expectedCardCount = 0
+  let renderedCardCount = 0
+  
+  // 遍历所有消息，检查哪些应该有卡片
+  props.messages.forEach((message, index) => {
+    const shouldHaveCommodityCard = message.commodityId && message.commodity
+    const shouldHaveOrderCard = message.orderId && message.order
+    
+    if (shouldHaveCommodityCard || shouldHaveOrderCard) {
+      expectedCardCount++
+      
+      // ✅ 找到对应的DOM元素（通过索引）
+      const messageItems = messagesListRef.value.querySelectorAll('.message-item')
+      const messageItem = messageItems[index]
+      
+      if (messageItem) {
+        // 检查card-wrapper是否存在
+        const cardWrapper = messageItem.querySelector('.card-wrapper')
+        if (cardWrapper) {
+          // ✅ 检查对应的卡片元素是否存在且已渲染（高度>0）
+          let cardFound = false
+          
+          if (shouldHaveCommodityCard) {
+            const commodityCard = cardWrapper.querySelector('.commodity-card')
+            if (commodityCard && commodityCard.offsetHeight > 0) {
+              cardFound = true
+            }
+          }
+          
+          if (shouldHaveOrderCard) {
+            const orderCard = cardWrapper.querySelector('.order-card')
+            if (orderCard && orderCard.offsetHeight > 0) {
+              cardFound = true
+            }
+          }
+          
+          if (cardFound) {
+            renderedCardCount++
+          }
+        }
+      }
+    }
+  })
+  
+  const allCardsRendered = expectedCardCount === 0 || renderedCardCount === expectedCardCount
+  return allCardsRendered
+}
+
+// ✅ 等待DOM稳定后再滚动（检测卡片渲染和DOM高度稳定性）
+const waitForStableScrollHeight = (maxWaitTime = 2000, checkInterval = 50, requiredStableChecks = 4, minWaitTime = 300) => {
+  return new Promise((resolve) => {
+    if (!messagesListRef.value) {
+      resolve()
+      return
+    }
+    
+    const startTime = Date.now()
+    let lastHeight = messagesListRef.value.scrollHeight
+    let stableCount = 0
+    let elapsed = 0
+    
+    const checkStability = () => {
+      if (!messagesListRef.value) {
+        resolve()
+        return
+      }
+      
+      const currentHeight = messagesListRef.value.scrollHeight
+      const timeElapsed = Date.now() - startTime
+      
+      // ✅ 检查卡片是否已渲染（如果消息中有卡片）
+      const cardsRendered = checkCardsRendered()
+      
+      // ✅ 检查高度是否稳定
+      const heightStable = currentHeight === lastHeight
+      
+      if (heightStable) {
+        stableCount++
+      } else {
+        // 高度还在变化，重置计数器
+        stableCount = 0
+        lastHeight = currentHeight
+      }
+      
+      // ✅ 同时满足以下条件才认为稳定：
+      // 1. 高度连续稳定多次（4次，200ms）
+      // 2. 卡片已渲染（如果有卡片）
+      // 3. 至少等待最小时间（300ms，避免空窗期误判）
+      const heightStableEnough = stableCount >= requiredStableChecks
+      const minTimePassed = timeElapsed >= minWaitTime
+      
+      if (heightStableEnough && cardsRendered && minTimePassed) {
+        resolve()
+        return
+      }
+      
+      elapsed += checkInterval
+      
+      if (elapsed >= maxWaitTime) {
+        // 超时后强制滚动（2秒）
+        resolve()
+        return
+      }
+      
+      setTimeout(checkStability, checkInterval)
+    }
+    
+    checkStability()
+  })
+}
 
 onMounted(async () => {
   await nextTick()
-  // ✅ 初始加载时滚动到底部（延迟一点确保 DOM 完全渲染）
+  // ✅ 设置滚动事件监听，实时更新 wasAtBottom 状态
+  if (messagesListRef.value) {
+    // 使用防抖监听滚动，避免频繁更新
+    let scrollTimeout
+    messagesListRef.value.addEventListener('scroll', () => {
+      clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(() => {
+        updateWasAtBottom()
+      }, 100)
+    }, { passive: true })
+  }
+  
+  // ✅ 初始加载时滚动到底部（等待卡片渲染完成）
   wasAtBottom.value = true // 初始状态设为在底部
-  setTimeout(() => {
-  scrollToBottom()
-    // ✅ 设置滚动事件监听，实时更新 wasAtBottom 状态
-    if (messagesListRef.value) {
-      // 使用防抖监听滚动，避免频繁更新
-      let scrollTimeout
-      messagesListRef.value.addEventListener('scroll', () => {
-        clearTimeout(scrollTimeout)
-        scrollTimeout = setTimeout(() => {
-          updateWasAtBottom()
-        }, 100)
-      }, { passive: true })
+  if (messagesListRef.value && props.messages && props.messages.length > 0) {
+    // 检查是否有卡片消息，需要等待渲染
+    const hasCardMessages = props.messages.some(m => m.commodityId || m.orderId)
+    await nextTick()
+    if (hasCardMessages) {
+      // 有卡片消息，等待DOM稳定和卡片渲染完成
+      await waitForStableScrollHeight(2000, 50, 4, 500)
     }
-  }, 100)
+    scrollToBottom()
+  }
 })
 
 // ✅ 监听 messages 变化，智能滚动到底部
@@ -268,10 +394,14 @@ watch(() => props.messages?.length, (newLength, oldLength) => {
     if (newLength && newLength > 0) {
       console.log('✅ 首次加载消息，滚动到底部')
       wasAtBottom.value = true // 首次加载时假设在底部
-      nextTick(() => {
-        setTimeout(() => {
-          scrollToBottom()
-        }, 100)
+      nextTick(async () => {
+        // 检查是否有卡片消息，需要等待渲染
+        const hasCardMessages = props.messages?.some(m => m.commodityId || m.orderId)
+        if (hasCardMessages) {
+          // 有卡片消息，等待DOM稳定和卡片渲染完成
+          await waitForStableScrollHeight(2000, 50, 4, 500)
+        }
+        scrollToBottom()
       })
     }
     return
@@ -303,35 +433,25 @@ watch(() => props.messages?.length, (newLength, oldLength) => {
       hasCardMessage
     })
     
-    // ✅ 延迟一点，确保DOM完全更新和滚动位置计算准确
-    // 特别是对于包含商品/订单卡片的消息，需要更长的渲染时间
-    nextTick(() => {
-      // ✅ 对于可能包含卡片的消息，增加延迟时间，确保卡片完全渲染
-      const delay = hasCardMessage ? 300 : 100 // 卡片消息延迟更久（300ms）
-      
-      setTimeout(() => {
-        // ✅ 使用之前保存的状态判断是否需要滚动
-        // 如果之前是在底部，则滚动到底部（即使现在检测不在底部，可能是渲染未完成导致的）
-        console.log('收到新消息，判断滚动:', { 
-          wasAtBottom: shouldScroll,
-          currentAtBottom: isAtBottom(),
-          hasCardMessage,
-          latestMessageType: hasCardMessage ? (latestMessage?.commodityId ? '商品卡片' : '订单卡片') : '文本',
-          newCount: newLength, 
-          oldCount: oldLength 
-        })
+    // ✅ 延迟一点，确保DOM完全更新（等待Vue渲染引擎完成卡片渲染）
+    nextTick(async () => {
+      if (shouldScroll) {
+        // ✅ 如果有卡片消息，等待DOM稳定和卡片渲染完成
+        if (hasCardMessage) {
+          await waitForStableScrollHeight(2000, 50, 4, 500)
+        }
         
-        if (shouldScroll) {
+        // ✅ 再次确认是否在底部（防止用户在等待期间手动滚动）
+        const stillAtBottom = wasAtBottom.value || isAtBottom()
+        
+        if (stillAtBottom) {
           scrollToBottom(true) // 使用平滑滚动，更自然
-          console.log('✅ 自动滚动到底部（基于之前保存的状态）')
           // 滚动后更新状态
           setTimeout(() => {
             wasAtBottom.value = true
           }, 300)
-        } else {
-          console.log('⚠️ 之前不在底部，不自动滚动（用户正在查看历史消息）')
         }
-      }, delay)
+      }
     })
   }
 }, { immediate: true })
@@ -347,15 +467,20 @@ watch(() => props.messages, (newMessages, oldMessages) => {
 }, { deep: false })
 
 // ✅ 监听对话切换，确保切换对话后滚动到底部
-watch(() => props.currentConversation, (newConv, oldConv) => {
+watch(() => props.currentConversation, async (newConv, oldConv) => {
   if (newConv && newConv.conversationId !== oldConv?.conversationId) {
-    // 切换到新对话时，重置状态并滚动到底部（延迟确保消息已加载）
+    // 切换到新对话时，重置状态并滚动到底部（等待卡片渲染完成）
     wasAtBottom.value = true // 切换对话时假设在底部
-    nextTick(() => {
-      setTimeout(() => {
-      scrollToBottom()
-      }, 200)
-    })
+    await nextTick()
+    // 检查是否有卡片消息，需要等待渲染
+    if (props.messages && props.messages.length > 0) {
+      const hasCardMessages = props.messages.some(m => m.commodityId || m.orderId)
+      if (hasCardMessages) {
+        // 有卡片消息，等待DOM稳定和卡片渲染完成
+        await waitForStableScrollHeight(2000, 50, 4, 500)
+      }
+    }
+    scrollToBottom()
   }
 }, { immediate: true })
 

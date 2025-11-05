@@ -47,7 +47,7 @@ public class UserAuthController {
         return userService.register(userDTO);
     }
 
-    @Operation(summary = "用户注册（新版）", description = "使用手机号、密码和验证码注册新用户")
+    @Operation(summary = "用户注册（新版）", description = "使用手机号和密码注册新用户（无需验证码，适用于安全要求较低的环境）")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "注册成功，返回用户信息和Token"),
         @ApiResponse(responseCode = "400", description = "注册失败，参数错误或手机号已存在")

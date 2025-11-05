@@ -90,6 +90,28 @@ public interface ConversationRepository extends JpaRepository<Conversation, Stri
                                             @Param("status") String status);
     
     /**
+     * ✅ 优化：查询用户作为userId1的对话（避免OR条件，提高索引使用效率）
+     * 按用户级别的最后消息时间排序（NULL值排在后面）
+     */
+    @Query("SELECT c FROM Conversation c WHERE " +
+           "c.userId1 = :userId AND c.status = :status AND c.user1Visibility = true " +
+           "ORDER BY c.user1LastMessageTime DESC")
+    List<Conversation> findByUserId1AndStatusOrderByUser1LastMessageTime(
+            @Param("userId") String userId, 
+            @Param("status") String status);
+    
+    /**
+     * ✅ 优化：查询用户作为userId2的对话（避免OR条件，提高索引使用效率）
+     * 按用户级别的最后消息时间排序（NULL值排在后面）
+     */
+    @Query("SELECT c FROM Conversation c WHERE " +
+           "c.userId2 = :userId AND c.status = :status AND c.user2Visibility = true " +
+           "ORDER BY c.user2LastMessageTime DESC")
+    List<Conversation> findByUserId2AndStatusOrderByUser2LastMessageTime(
+            @Param("userId") String userId, 
+            @Param("status") String status);
+    
+    /**
      * 获取用户未读消息总数
      * ✅ 添加可见性过滤：只统计用户可见的会话
      */

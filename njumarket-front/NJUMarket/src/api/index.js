@@ -26,6 +26,16 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   response => {
+    // ✅ 如果响应中success=false，也显示errorMsg弹窗
+    if (response.data && response.data.success === false) {
+      const errorMsg = response.data.errorMsg || response.data.message || '操作失败'
+      // 在浏览器环境中显示错误提示
+      if (typeof window !== 'undefined') {
+        import('element-plus').then(({ ElMessage }) => {
+          ElMessage.error(errorMsg)
+        })
+      }
+    }
     return response.data
   },
   error => {
@@ -38,8 +48,37 @@ api.interceptors.response.use(
           userStore.clearUserData() // 清除用户数据
         })
         
+        // ✅ 显示401错误提示
+        import('element-plus').then(({ ElMessage }) => {
+          const errorMsg = error.response?.data?.errorMsg || error.response?.data?.message || '用户未登录，请先登录'
+          ElMessage.error(errorMsg)
+        })
+        
         // 移除自动跳转逻辑，让页面自己处理未登录状态
         // window.location.href = '/login'
+      }
+    } else if (error.response?.status === 403) {
+      // ✅ 处理403禁止访问错误（账户被封禁/暂停）
+      if (typeof window !== 'undefined') {
+        // 动态导入ElMessage显示错误提示
+        import('element-plus').then(({ ElMessage }) => {
+          const errorMsg = error.response?.data?.errorMsg || error.response?.data?.message || '账户已被禁用，无法访问'
+          ElMessage.error(errorMsg)
+        })
+        
+        // 清除用户数据（账户被封禁，需要重新登录）
+        import('../stores/user').then(({ useUserStore }) => {
+          const userStore = useUserStore()
+          userStore.clearUserData()
+        })
+      }
+    } else if (error.response?.data) {
+      // ✅ 处理其他HTTP错误（400, 500等），显示errorMsg
+      if (typeof window !== 'undefined') {
+        import('element-plus').then(({ ElMessage }) => {
+          const errorMsg = error.response?.data?.errorMsg || error.response?.data?.message || '操作失败，请稍后重试'
+          ElMessage.error(errorMsg)
+        })
       }
     }
     return Promise.reject(error)

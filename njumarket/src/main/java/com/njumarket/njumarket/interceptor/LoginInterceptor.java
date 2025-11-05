@@ -31,6 +31,8 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (!StringUtils.hasText(token)) {
             log.warn("请求缺少Authorization头: {}", request.getRequestURI());
             response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"errorMsg\":\"用户未登录，请先登录\"}");
             return false;
         }
         
@@ -38,6 +40,8 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (!jwtUtils.validateToken(token)) {
             log.warn("Token验证失败: {}", request.getRequestURI());
             response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"errorMsg\":\"Token无效或已过期，请重新登录\"}");
             return false;
         }
         
@@ -46,6 +50,8 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (!StringUtils.hasText(userId)) {
             log.warn("Token中无法获取用户ID: {}", request.getRequestURI());
             response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"errorMsg\":\"Token格式错误，请重新登录\"}");
             return false;
         }
         
@@ -54,13 +60,18 @@ public class LoginInterceptor implements HandlerInterceptor {
         if (user == null) {
             log.warn("用户不存在: userId={}", userId);
             response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"errorMsg\":\"用户账号不存在，请重新登录\"}");
             return false;
         }
         
         // 5. 检查用户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
+            String statusMessage = getAccountStatusMessage(user.getAccountStatus());
             log.warn("用户账户已被禁用: userId={}, status={}", userId, user.getAccountStatus());
             response.setStatus(403);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write(String.format("{\"success\":false,\"errorMsg\":\"%s\"}", statusMessage));
             return false;
         }
         
@@ -97,5 +108,25 @@ public class LoginInterceptor implements HandlerInterceptor {
         }
         
         return null;
+    }
+    
+    /**
+     * 根据账户状态获取用户友好的提示信息
+     */
+    private String getAccountStatusMessage(String accountStatus) {
+        if (accountStatus == null) {
+            return "账户状态异常，请联系管理员";
+        }
+        
+        switch (accountStatus) {
+            case "SUSPENDED":
+                return "账户已被暂停，请联系管理员了解详情";
+            case "BANNED":
+                return "账户已被封禁，如有疑问请联系管理员";
+            case "DELETED":
+                return "账户已被删除，无法使用";
+            default:
+                return "账户状态异常，请联系管理员";
+        }
     }
 }

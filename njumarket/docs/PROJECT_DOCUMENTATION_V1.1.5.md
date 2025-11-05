@@ -24,6 +24,8 @@ v1.1.5 版本专注于**管理端功能完善**和**系统稳定性提升**，�
 ### 主要成就
 - ✅ **系统管理员账号管理**：实现了完整的系统管理员账号管理功能，只有system权限的管理员可以管理所有管理员账号
 - ✅ **订单管理功能增强**：实现了订单列表的搜索、筛选、排序功能，支持按买家/卖家昵称搜索和复合显示
+- ✅ **订单DTO优化**：订单数据直接包含profile字段，后端批量查询优化，WebSocket推送包含完整profile信息
+- ✅ **订单卡片显示优化**：订单卡片改为复合显示（头像+昵称+ID），统一数据获取方式
 - ✅ **搜索功能优化**：修复了数字型关键字搜索问题，放宽了数据类型限制
 - ✅ **UI/UX优化**：实现了响应式侧边栏、固定字段样式优化、提示词统一
 - ✅ **滚动检测修复**：修复了卡片消息发送后滚动检测失败的问题
@@ -208,12 +210,153 @@ list: (page = 1, size = 10, query = {}) => {
 - `api/admin/messages.js` - 消息管理
 - `api/admin/admins.js` - 管理员管理
 
-### 4. 滚动检测修复
+### 4. 订单DTO优化和前端显示改进
 
-#### 4.1 问题描述
+#### 4.1 功能概述
+优化了订单数据传输和显示方式，将订单相关的用户profile信息（卖家/买家的昵称和头像）直接包含在OrderDTO中，类似商品DTO的实现方式。后端使用批量查询优化，WebSocket推送包含完整profile信息，前端简化了数据获取逻辑，订单卡片改为复合显示。
+
+#### 4.2 后端优化
+
+**OrderDTO结构扩展**：
+```java
+// OrderDTO.java
+public class OrderDTO {
+    // ... 现有字段 ...
+    
+    // ✅ 新增：Profile字段（直接字段，类似商品）
+    private String sellerNickname; // 卖家昵称
+    private String sellerAvatar;   // 卖家头像
+    private String buyerNickname;  // 买家昵称
+    private String buyerAvatar;    // 买家头像
+}
+```
+
+**批量查询优化**：
+所有返回订单列表的接口都实现了批量查询profile，避免N+1查询问题：
+
+```java
+// OrderServiceImpl.getOrdersBatchStatus()
+// 批量查询所有seller和buyer的profile
+Set<String> userIds = new HashSet<>();
+for (Order order : orders) {
+    if (order.getSellerId() != null) userIds.add(order.getSellerId());
+    if (order.getBuyerId() != null) userIds.add(order.getBuyerId());
+}
+
+Map<String, UserProfile> profileMap = new HashMap<>();
+if (!userIds.isEmpty()) {
+    List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+    profileMap = profiles.stream()
+        .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+}
+
+// 转换为DTO时直接填充profile字段
+item.put("sellerNickname", sellerProfile.getNickname());
+item.put("sellerAvatar", sellerProfile.getAvatar());
+item.put("buyerNickname", buyerProfile.getNickname());
+item.put("buyerAvatar", buyerProfile.getAvatar());
+```
+
+**WebSocket推送优化**：
+所有订单变更通知（`ORDER_CREATED`, `ORDER_PAID`, `ORDER_SHIPPED`, `ORDER_COMPLETED`, `ORDER_CANCELLED`, `REFUND_REQUESTED`, `REFUND_APPROVED`, `REFUND_REJECTED`）都包含完整的OrderDTO（包含profile信息）：
+
+```java
+// 所有推送都使用convertToDTOWithProfile
+OrderDTO orderDTOForNotification = convertToDTOWithProfile(order);
+pushOrderChangeNotificationWithDTO(userId, orderId, changeType, orderStatus, targetRole, orderDTOForNotification);
+```
+
+**涉及接口**：
+- `getOrdersBatchStatus()` - 批量查询订单状态（用于聊天界面）
+- `getBuyerOrders()` - 买家订单列表
+- `getSellerOrders()` - 卖家订单列表
+- `getOrderDetail()` - 订单详情
+- 所有WebSocket订单变更推送
+
+#### 4.3 前端优化
+
+**移除profile查询逻辑**：
+- `updateCommoditiesAndOrders()` - 移除了订单profile查询和缓存逻辑
+- `enrichMessages()` - 移除了订单profile查询和缓存逻辑
+- 订单数据直接使用后端返回的`sellerNickname`, `sellerAvatar`, `buyerNickname`, `buyerAvatar`字段
+
+**代码简化**：
+```javascript
+// 之前：需要查询和合并profile
+const sellerProfile = profileMap.get(newOrder.sellerId)
+const orderWithProfile = {
+  ...newOrder,
+  sellerNickname: sellerProfile ? sellerProfile.nickname : newOrder.sellerNickname,
+  // ...
+}
+
+// 现在：直接使用后端返回的字段
+const orderWithProfile = {
+  ...newOrder
+  // sellerNickname, sellerAvatar, buyerNickname, buyerAvatar 已经由后端返回
+}
+```
+
+#### 4.4 订单卡片显示优化
+
+**复合显示实现**：
+订单列表的OrderCard组件改为复合显示对方用户信息（头像+昵称+ID）：
+
+```vue
+<!-- 买家订单显示卖家信息 -->
+<div v-if="type === 'buyer'" class="user-info seller-info">
+  <span class="user-label">卖家：</span>
+  <div class="user-profile">
+    <el-avatar :size="24" :src="getAvatarUrl(order.sellerAvatar)">
+      {{ (order.sellerNickname || order.sellerId || 'U')?.charAt(0) }}
+    </el-avatar>
+    <span class="user-name">{{ order.sellerNickname || '用户' + order.sellerId }}</span>
+    <span class="user-id">({{ order.sellerId }})</span>
+  </div>
+</div>
+
+<!-- 卖家订单显示买家信息 -->
+<div v-if="type === 'seller'" class="user-info buyer-info">
+  <span class="user-label">买家：</span>
+  <div class="user-profile">
+    <el-avatar :size="24" :src="getAvatarUrl(order.buyerAvatar)">
+      {{ (order.buyerNickname || order.buyerId || 'U')?.charAt(0) }}
+    </el-avatar>
+    <span class="user-name">{{ order.buyerNickname || '用户' + order.buyerId }}</span>
+    <span class="user-id">({{ order.buyerId }})</span>
+  </div>
+</div>
+```
+
+**显示效果**：
+- 买家订单卡片：显示 `卖家：[头像] 昵称 (ID)`
+- 卖家订单卡片：显示 `买家：[头像] 昵称 (ID)`
+- 头像缺失时显示首字母
+- 昵称缺失时显示 "用户+ID"
+
+#### 4.5 优化效果
+
+**性能提升**：
+- 后端：批量查询profile，避免N+1查询问题
+- 前端：减少了API调用次数，无需单独查询profile
+- WebSocket：推送包含完整profile，前端无需再次查询
+
+**代码简化**：
+- 前端移除了订单profile查询和缓存机制
+- 与商品实现保持一致，统一数据获取方式
+- 减少了代码复杂度，易于维护
+
+**用户体验**：
+- 订单卡片显示更丰富的信息（头像+昵称+ID）
+- 数据加载更快，减少等待时间
+- 显示格式统一，视觉效果更好
+
+### 5. 滚动检测修复
+
+#### 5.1 问题描述
 发送包含商品或订单卡片的消息后，聊天界面没有自动滚动到底部。原因是卡片消息渲染较慢，在滚动检测时虽然DOM已部分渲染，但scrollHeight已经变化，导致`isAtBottom()`检测失败。
 
-#### 4.2 解决方案
+#### 5.2 解决方案
 
 **保存滚动状态**：
 ```javascript
@@ -559,6 +702,51 @@ DELETE /api/admin/{adminId}
    - 添加全文搜索支持
    - 优化跨表查询性能
 
+5. **固定延迟优化（1.3.x 或 1.4.x）**：
+   - **问题描述**：项目中存在多处基于"假定浏览器性能足够好"的固定延迟逻辑，可能在低性能设备或网络环境下表现不佳
+   - **发现的问题**：
+     - **AppHeader.vue**：菜单导航使用固定延迟（桌面端100ms，移动端250ms），假定菜单关闭动画已完成
+     - **UnifiedSelect.vue**：下拉框关闭使用固定200ms延迟，假定点击事件处理完成
+     - **ChatWindow.vue**：滚动状态更新使用固定300ms延迟，假定平滑滚动已完成
+     - **Messages.vue**：强制轮询使用固定500ms延迟，假定后端变更记录已写入Redis
+     - **ChatWindow.vue**：滚动验证使用固定延迟（平滑滚动500ms，非平滑50ms）
+   - **优化方向**：
+     - 使用事件监听机制（`transitionend`、`scrollend`）代替固定延迟
+     - 使用`requestAnimationFrame`循环检测状态变化
+     - 实现重试机制和超时处理，而非固定等待时间
+     - 基于实际DOM状态判断，而非时间假设
+   - **预期收益**：
+     - 提升低性能设备用户体验
+     - 增强代码健壮性和适应性
+     - 减少不必要的等待时间
+     - 提高响应准确性
+
+6. **MyBatis/MyBatis Plus 混用（1.3.x 或 1.4.x）**：
+   - **问题描述**：当前项目使用JPA进行数据访问，但对于复杂的大型动态SQL查询，JPA的Specification可能不够灵活，维护成本较高
+   - **现状**：
+     - 项目已预留 `mybatis-spring-boot-starter` 依赖（版本 3.0.3）
+     - `application.properties` 中已配置MyBatis相关配置
+     - 当前项目未使用MyBatis，仅使用JPA
+   - **优化方案**：
+     - 引入MyBatis Plus（如需更多便捷功能）或直接使用MyBatis
+     - 与现有JPA混用，保留JPA用于简单CRUD操作
+     - 使用MyBatis/MyBatis Plus处理：
+       - 复杂的大型动态SQL查询
+       - 多表联合查询
+       - 需要精确控制SQL的场景
+       - 性能要求极高的查询
+     - 在Service层根据场景选择使用JPA或MyBatis
+   - **适用场景**：
+     - 管理员列表的复杂搜索和筛选（当前使用JPA Specification）
+     - 订单/商品的高级查询和统计
+     - 消息查询的复杂条件组合
+     - 报表和数据分析相关查询
+   - **预期收益**：
+     - 提高复杂查询的可维护性
+     - 更灵活的SQL控制能力
+     - 更好的性能优化空间
+     - 代码结构更清晰（简单查询用JPA，复杂查询用MyBatis）
+
 ---
 
 ## 总结
@@ -574,6 +762,8 @@ v1.1.5版本完成了管理端功能的重要补充，实现了系统管理员�
 **技术亮点**：
 - ✅ 使用JPA Specification实现动态查询
 - ✅ 使用子查询实现跨表搜索
+- ✅ 批量查询优化，避免N+1查询问题
 - ✅ 响应式布局设计
 - ✅ 状态保存机制解决渲染时序问题
+- ✅ DTO设计优化，统一数据获取方式
 

@@ -183,7 +183,9 @@ export const useUserStore = defineStore('user', {
         
         return response
       } else {
-        throw new Error(response.errorMsg)
+        // ✅ 优先使用errorMsg，如果为空则使用message
+        const errorMsg = response.errorMsg || response.message || '登录失败'
+        throw new Error(errorMsg)
       }
     },
     
@@ -210,7 +212,9 @@ export const useUserStore = defineStore('user', {
         
         return response
       } else {
-        throw new Error(response.errorMsg)
+        // ✅ 优先使用errorMsg，如果为空则使用message
+        const errorMsg = response.errorMsg || response.message || '登录失败'
+        throw new Error(errorMsg)
       }
     },
     

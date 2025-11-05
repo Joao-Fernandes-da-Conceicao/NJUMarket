@@ -1,14 +1,19 @@
 package com.njumarket.njumarket.repository;
 
 import com.njumarket.njumarket.entity.Commodity;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 商品数据访问层
@@ -112,4 +117,27 @@ public interface CommodityRepository extends JpaRepository<Commodity, String>, J
      */
     @Query("SELECT SUM(c.clickCount) FROM Commodity c WHERE c.sellerId = ?1")
     Long sumClickCountBySellerId(String sellerId);
+    
+    /**
+     * 使用悲观锁查询商品（用于防止库存超卖）
+     * 使用 SELECT ... FOR UPDATE 锁定商品行，防止并发修改
+     * 
+     * @param commodityId 商品ID
+     * @return 商品实体（已锁定）
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Commodity c WHERE c.commodityId = :commodityId")
+    Optional<Commodity> findByIdForUpdate(@Param("commodityId") String commodityId);
+    
+    /**
+     * 条件更新库存（双重保护，确保库存充足时才扣减）
+     * 使用数据库层面的条件判断，防止超卖
+     * 
+     * @param commodityId 商品ID
+     * @param quantity 扣减数量（正数）
+     * @return 更新行数（1表示成功，0表示库存不足）
+     */
+    @Modifying
+    @Query("UPDATE Commodity c SET c.stock = c.stock - :quantity WHERE c.commodityId = :commodityId AND c.stock >= :quantity")
+    int updateStockWithCondition(@Param("commodityId") String commodityId, @Param("quantity") Integer quantity);
 }

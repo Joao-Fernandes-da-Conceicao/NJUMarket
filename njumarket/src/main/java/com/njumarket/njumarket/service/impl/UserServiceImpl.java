@@ -63,7 +63,8 @@ public class UserServiceImpl implements UserService {
         
         // 4. 检查账户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
-            return Result.fail("账户已被禁用，请联系管理员");
+            String statusMessage = getAccountStatusMessage(user.getAccountStatus());
+            return Result.fail(statusMessage);
         }
         
         // 5. 验证密码
@@ -104,9 +105,7 @@ public class UserServiceImpl implements UserService {
         if (registerDTO.getPassword() == null || registerDTO.getPassword().trim().isEmpty()) {
             return Result.fail("密码不能为空");
         }
-        if (registerDTO.getCode() == null || registerDTO.getCode().trim().isEmpty()) {
-            return Result.fail("验证码不能为空");
-        }
+        // 注意：验证码已移除，不再需要验证码
         
         // 2. 校验手机号格式
         String phone = registerDTO.getPhone().trim();
@@ -126,23 +125,12 @@ public class UserServiceImpl implements UserService {
             return Result.fail("两次输入的密码不一致");
         }
         
-        // 5. 验证手机验证码
-        String code = registerDTO.getCode().trim();
-        String codeKey = RedisConstants.LOGIN_CODE_KEY + phone;
-        String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
-        if (cachedCode == null) {
-            return Result.fail("验证码已过期，请重新获取");
-        }
-        if (!cachedCode.equals(code)) {
-            return Result.fail("验证码错误");
-        }
-        
-        // 6. 检查手机号是否已注册
+        // 5. 检查手机号是否已注册
         if (userRepository.existsByPrimaryPhone(phone)) {
             return Result.fail("该手机号已注册");
         }
         
-        // 7. 检查用户名是否已存在（如果提供了用户名）
+        // 6. 检查用户名是否已存在（如果提供了用户名）
         String username = registerDTO.getUsername();
         if (username != null && !username.trim().isEmpty()) {
             username = username.trim();
@@ -158,31 +146,28 @@ public class UserServiceImpl implements UserService {
             }
         }
         
-        // 8. 创建新用户
+        // 7. 创建新用户
         User newUser = new User();
         newUser.setUserId(generateUserId());
         newUser.setPrimaryPhone(phone);
         newUser.setUsername(username);
         newUser.setAccountStatus("ACTIVE");
         
-        // 9. 加密密码
+        // 8. 加密密码
         String encodedPassword = passwordService.encodePassword(password);
         newUser.setPassword(encodedPassword);
         
-        // 10. 保存用户到数据库
+        // 9. 保存用户到数据库
         try {
             User savedUser = userRepository.save(newUser);
             
-            // 11. 创建用户档案
+            // 10. 创建用户档案
             createUserProfile(savedUser, registerDTO.getNickname());
             
-            // 12. 删除验证码
-            stringRedisTemplate.delete(codeKey);
-            
-            // 13. 生成并存储Token（自动登录）
+            // 11. 生成并存储Token（自动登录）
             Map<String, Object> tokenResult = generateAndStoreTokens(savedUser);
             
-            // 14. 返回注册结果
+            // 12. 返回注册结果
             Map<String, Object> result = new HashMap<>();
             result.put("token", tokenResult.get("accessToken"));
             result.put("refreshToken", tokenResult.get("refreshToken"));
@@ -259,7 +244,8 @@ public class UserServiceImpl implements UserService {
         
         // 6. 检查账户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
-            return Result.fail("账户已被禁用");
+            String statusMessage = getAccountStatusMessage(user.getAccountStatus());
+            return Result.fail(statusMessage);
         }
         
         // 7. 生成JWT Token
@@ -693,6 +679,26 @@ public class UserServiceImpl implements UserService {
         } catch (Exception e) {
             log.error("Token生成或存储失败: userId={}, error={}", user.getUserId(), e.getMessage());
             throw new RuntimeException("Token生成失败", e);
+        }
+    }
+    
+    /**
+     * 根据账户状态获取用户友好的提示信息
+     */
+    private String getAccountStatusMessage(String accountStatus) {
+        if (accountStatus == null) {
+            return "账户状态异常，请联系管理员";
+        }
+        
+        switch (accountStatus) {
+            case "SUSPENDED":
+                return "账户已被暂停，请联系管理员了解详情";
+            case "BANNED":
+                return "账户已被封禁，如有疑问请联系管理员";
+            case "DELETED":
+                return "账户已被删除，无法使用";
+            default:
+                return "账户状态异常，请联系管理员";
         }
     }
 }

@@ -13,6 +13,8 @@ import com.njumarket.njumarket.repository.UserProfileRepository;
 import com.njumarket.njumarket.service.OrderService;
 import com.njumarket.njumarket.service.ChangeRecordService;
 import com.njumarket.njumarket.utils.UserHolder;
+import com.njumarket.njumarket.utils.RedisLockUtil;
+import com.njumarket.njumarket.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -41,6 +43,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserProfileRepository userProfileRepository;
     private final com.njumarket.njumarket.service.WebSocketRetryService webSocketRetryService;
     private final ChangeRecordService changeRecordService;
+    private final RedisLockUtil redisLockUtil;
 
     // ========== 买家功能 ==========
     @Override
@@ -66,8 +69,25 @@ public class OrderServiceImpl implements OrderService {
                 return Result.fail("支付金额必须大于0");
             }
             
-            // 查找商品
-            Optional<Commodity> commodityOpt = commodityRepository.findById(orderDTO.getCommodityId());
+            // ✅ 第一步：获取分布式锁（跨服务器保护）
+            // 防止多台服务器同时处理同一商品的订单创建
+            String lockKey = RedisConstants.LOCK_COMMODITY_KEY + orderDTO.getCommodityId();
+            String lockValue = RedisLockUtil.generateLockValue();
+            long lockTimeout = RedisConstants.LOCK_COMMODITY_TTL;
+            
+            boolean lockAcquired = false;
+            try {
+                // 尝试获取分布式锁（最多等待1秒，重试间隔100ms）
+                lockAcquired = redisLockUtil.tryLock(lockKey, lockValue, lockTimeout, 1, 100);
+                
+                if (!lockAcquired) {
+                    log.warn("获取分布式锁失败 - commodityId: {}, 可能其他服务器正在处理", orderDTO.getCommodityId());
+                    return Result.fail("系统繁忙，请稍后重试");
+                }
+                
+                // ✅ 第二步：使用悲观锁查询商品（数据库层面保护）
+                // 使用 SELECT ... FOR UPDATE 锁定商品行，确保事务期间其他事务无法修改
+                Optional<Commodity> commodityOpt = commodityRepository.findByIdForUpdate(orderDTO.getCommodityId());
             if (commodityOpt.isEmpty()) {
                 return Result.fail("商品不存在");
             }
@@ -79,9 +99,9 @@ public class OrderServiceImpl implements OrderService {
                 return Result.fail("商品未上架，无法购买");
             }
             
-            // 检查库存
+                // 检查库存（在锁定的情况下再次检查，确保准确性）
             if (commodity.getStock() < orderDTO.getQuantity()) {
-                return Result.fail("商品库存不足");
+                    return Result.fail("商品库存不足，当前库存：" + commodity.getStock());
             }
             
             // 检查是否购买自己的商品
@@ -94,6 +114,20 @@ public class OrderServiceImpl implements OrderService {
             if (Math.abs(orderDTO.getPayAmount() - expectedAmount) > 0.01) {
                 return Result.fail("支付金额与商品价格不符");
             }
+                
+                // ✅ 第三步：使用数据库条件更新库存（三重保护）
+                // 即使分布式锁和悲观锁失效，数据库层面的条件判断也能防止超卖
+                int updateResult = commodityRepository.updateStockWithCondition(
+                    orderDTO.getCommodityId(), 
+                    orderDTO.getQuantity()
+                );
+                
+                if (updateResult == 0) {
+                    // 库存不足，条件更新失败
+                    log.warn("库存扣减失败 - commodityId: {}, quantity: {}, currentStock: {}", 
+                        orderDTO.getCommodityId(), orderDTO.getQuantity(), commodity.getStock());
+                    return Result.fail("商品库存不足，请刷新后重试");
+                }
             
             // 创建订单
             Order order = new Order();
@@ -121,20 +155,27 @@ public class OrderServiceImpl implements OrderService {
             // 保存订单
             orderRepository.save(order);
             
-            // 减少商品库存
-            commodity.updateStock(-orderDTO.getQuantity());
-            commodityRepository.save(commodity);
-            
             // ✅ 记录订单变更（用于增量轮询）
             LocalDateTime now = LocalDateTime.now();
             changeRecordService.recordOrderChange(order.getOrderId(), "CREATE", now);
             
-            // ✅ WebSocket 推送：订单创建通知给卖家（发送完整OrderDTO，类似消息发送完整MessageDTO）
-            OrderDTO orderDTOForNotification = convertToDTO(order);
+            // ✅ WebSocket 推送：订单创建通知给卖家（发送完整OrderDTO，包含profile信息）
+            OrderDTO orderDTOForNotification = convertToDTOWithProfile(order);
             pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_CREATED", order.getOrderStatus(), "SELLER", orderDTOForNotification);
             
             log.info("订单创建成功 - orderId: {}", order.getOrderId());
             return Result.ok("订单创建成功");
+                
+            } finally {
+                // ✅ 释放分布式锁（必须在finally中释放，确保锁一定会被释放）
+                if (lockAcquired) {
+                    boolean released = redisLockUtil.releaseLock(lockKey, lockValue);
+                    if (!released) {
+                        log.warn("释放分布式锁失败 - commodityId: {}, lockKey: {}", 
+                            orderDTO.getCommodityId(), lockKey);
+                    }
+                }
+            }
             
         } catch (Exception e) {
             log.error("创建订单失败", e);
@@ -180,8 +221,9 @@ public class OrderServiceImpl implements OrderService {
                 LocalDateTime now = LocalDateTime.now();
                 changeRecordService.recordOrderChange(order.getOrderId(), "PAY", now);
                 
-                // ✅ WebSocket 推送：订单支付通知给卖家
-                pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_PAID", order.getOrderStatus(), "SELLER");
+                // ✅ WebSocket 推送：订单支付通知给卖家（包含profile信息）
+                OrderDTO orderDTOForPay = convertToDTOWithProfile(order);
+                pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_PAID", order.getOrderStatus(), "SELLER", orderDTOForPay);
                 
                 log.info("订单支付成功 - orderId: {}, payTime: {}", orderId, order.getPayTime());
                 return Result.ok("订单支付成功");
@@ -233,8 +275,9 @@ public class OrderServiceImpl implements OrderService {
                 LocalDateTime now = LocalDateTime.now();
                 changeRecordService.recordOrderChange(order.getOrderId(), "COMPLETE", now);
                 
-                // ✅ WebSocket 推送：订单完成通知给卖家
-                pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED", order.getOrderStatus(), "SELLER");
+                // ✅ WebSocket 推送：订单完成通知给卖家（包含profile信息）
+                OrderDTO orderDTOForComplete = convertToDTOWithProfile(order);
+                pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED", order.getOrderStatus(), "SELLER", orderDTOForComplete);
                 
                 log.info("订单确认收货成功 - orderId: {}, deliveryTime: {}", 
                     orderId, order.getDeliveryTime());
@@ -314,12 +357,13 @@ public class OrderServiceImpl implements OrderService {
                 LocalDateTime now = LocalDateTime.now();
                 changeRecordService.recordOrderChange(order.getOrderId(), "CANCEL", now);
                 
-                // ✅ WebSocket 推送：订单取消通知
+                // ✅ WebSocket 推送：订单取消通知（包含profile信息）
                 // 如果是买家取消，通知卖家；如果是卖家取消，通知买家
+                OrderDTO orderDTOForCancel = convertToDTOWithProfile(order);
                 if (order.getBuyerId().equals(currentUser.getUserId())) {
-                    pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "SELLER");
+                    pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "SELLER", orderDTOForCancel);
                 } else {
-                    pushOrderChangeNotification(order.getBuyerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "BUYER");
+                    pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "BUYER", orderDTOForCancel);
                 }
                 
                 log.info("订单取消成功 - orderId: {}", orderId);
@@ -381,16 +425,16 @@ public class OrderServiceImpl implements OrderService {
             LocalDateTime now = LocalDateTime.now();
             changeRecordService.recordOrderChange(order.getOrderId(), "REFUND_REQUEST", now);
             
-            // ✅ WebSocket 推送：退款申请通知给卖家
-            pushOrderChangeNotification(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED", order.getOrderStatus(), "SELLER");
+            // ✅ WebSocket 推送：退款申请通知给卖家（包含profile信息）
+            OrderDTO orderDTOForRefundRequest = convertToDTOWithProfile(order);
+            pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED", order.getOrderStatus(), "SELLER", orderDTOForRefundRequest);
             
             // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
             // 这种情况可能发生在：
             // 1. 从COMPLETED状态申请退款（卖家之前软删除了订单）
             // 2. 从REFUND_REJECTED状态重新申请退款（卖家之前软删除了订单）
             if (sellerVisibilityRestored) {
-                OrderDTO orderDTOForRestored = convertToDTO(order);
-                pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "SELLER", orderDTOForRestored);
+                pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "SELLER", orderDTOForRefundRequest);
             }
             
             log.info("退款/退货申请成功 - orderId: {}, sellerVisibilityRestored: {}", 
@@ -417,28 +461,42 @@ public class OrderServiceImpl implements OrderService {
             // 创建分页对象
             Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createTime"));
             
-            // 查询订单
+            // ✅ 查询订单（在数据库层面过滤掉HIDDEN状态的订单）
             Page<Order> orderPage;
             if (StringUtils.hasText(status)) {
-                orderPage = orderRepository.findByBuyerIdAndOrderStatus(currentUser.getUserId(), status, pageable);
+                orderPage = orderRepository.findByBuyerIdAndOrderStatusAndBuyerVisibilityNotHidden(
+                    currentUser.getUserId(), status, pageable);
             } else {
-                orderPage = orderRepository.findByBuyerId(currentUser.getUserId(), pageable);
+                orderPage = orderRepository.findByBuyerIdAndBuyerVisibilityNotHidden(
+                    currentUser.getUserId(), pageable);
             }
             
-            // 过滤掉买家不可见的订单（HIDDEN状态的订单）
-            List<Order> visibleOrders = orderPage.getContent().stream()
-                    .filter(order -> !"HIDDEN".equals(order.getBuyerVisibility()))
-                    .collect(Collectors.toList());
+            List<Order> visibleOrders = orderPage.getContent();
             
-            // 转换为DTO
+            // ✅ 批量查询所有相关的UserProfile（避免N+1查询）
+            Set<String> userIds = new HashSet<>();
+            for (Order order : visibleOrders) {
+                if (order.getSellerId() != null) userIds.add(order.getSellerId());
+                if (order.getBuyerId() != null) userIds.add(order.getBuyerId());
+            }
+            
+            Map<String, UserProfile> profileMap = new HashMap<>();
+            if (!userIds.isEmpty()) {
+                List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                profileMap = profiles.stream()
+                    .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            }
+            
+            // ✅ 转换为DTO（包含profile信息）
+            final Map<String, UserProfile> finalProfileMap = profileMap;
             List<OrderDTO> orderDTOs = visibleOrders.stream()
-                    .map(this::convertToDTO)
+                    .map(order -> convertToDTOWithProfile(order, finalProfileMap))
                     .collect(Collectors.toList());
             
             Map<String, Object> result = new HashMap<>();
             result.put("orders", orderDTOs);
-            result.put("total", (long) visibleOrders.size()); // 使用过滤后的总数
-            result.put("pages", (int) Math.ceil((double) visibleOrders.size() / size));
+            result.put("total", orderPage.getTotalElements()); // ✅ 使用数据库查询的总数
+            result.put("pages", orderPage.getTotalPages());
             result.put("current", page);
             result.put("size", size);
             
@@ -489,8 +547,9 @@ public class OrderServiceImpl implements OrderService {
                 LocalDateTime now = LocalDateTime.now();
                 changeRecordService.recordOrderChange(order.getOrderId(), "SHIP", now);
                 
-                // ✅ WebSocket 推送：订单发货通知给买家
-                pushOrderChangeNotification(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED", order.getOrderStatus(), "BUYER");
+                // ✅ WebSocket 推送：订单发货通知给买家（包含profile信息）
+                OrderDTO orderDTOForShip = convertToDTOWithProfile(order);
+                pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED", order.getOrderStatus(), "BUYER", orderDTOForShip);
                 
                 log.info("订单发货成功 - orderId: {}, shippingTime: {}, trackingNumber: {}", 
                     orderId, order.getShippingTime(), trackingNumber);
@@ -587,14 +646,14 @@ public class OrderServiceImpl implements OrderService {
             String operation = "APPROVE".equals(decision) ? "REFUND_APPROVE" : "REFUND_REJECT";
             changeRecordService.recordOrderChange(order.getOrderId(), operation, now);
             
-            // ✅ WebSocket 推送：退款处理结果通知给买家
+            // ✅ WebSocket 推送：退款处理结果通知给买家（包含profile信息）
             String notificationType = "APPROVE".equals(decision) ? "REFUND_APPROVED" : "REFUND_REJECTED";
-            pushOrderChangeNotification(order.getBuyerId(), order.getOrderId(), notificationType, order.getOrderStatus(), "BUYER");
+            OrderDTO orderDTOForRefundHandle = convertToDTOWithProfile(order);
+            pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), notificationType, order.getOrderStatus(), "BUYER", orderDTOForRefundHandle);
             
             // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
             if (buyerVisibilityRestored) {
-                OrderDTO orderDTOForRestored = convertToDTO(order);
-                pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "BUYER", orderDTOForRestored);
+                pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "BUYER", orderDTOForRefundHandle);
             }
             
             return Result.ok("退款/退货申请处理成功");
@@ -619,28 +678,42 @@ public class OrderServiceImpl implements OrderService {
             // 创建分页对象
             Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createTime"));
             
-            // 查询订单
+            // ✅ 查询订单（在数据库层面过滤掉HIDDEN状态的订单）
             Page<Order> orderPage;
             if (StringUtils.hasText(status)) {
-                orderPage = orderRepository.findBySellerIdAndOrderStatus(currentUser.getUserId(), status, pageable);
+                orderPage = orderRepository.findBySellerIdAndOrderStatusAndSellerVisibilityNotHidden(
+                    currentUser.getUserId(), status, pageable);
             } else {
-                orderPage = orderRepository.findBySellerId(currentUser.getUserId(), pageable);
+                orderPage = orderRepository.findBySellerIdAndSellerVisibilityNotHidden(
+                    currentUser.getUserId(), pageable);
             }
             
-            // 过滤掉卖家不可见的订单（HIDDEN状态的订单）
-            List<Order> visibleOrders = orderPage.getContent().stream()
-                    .filter(order -> !"HIDDEN".equals(order.getSellerVisibility()))
-                    .collect(Collectors.toList());
+            List<Order> visibleOrders = orderPage.getContent();
             
-            // 转换为DTO
+            // ✅ 批量查询所有相关的UserProfile（避免N+1查询）
+            Set<String> userIds = new HashSet<>();
+            for (Order order : visibleOrders) {
+                if (order.getSellerId() != null) userIds.add(order.getSellerId());
+                if (order.getBuyerId() != null) userIds.add(order.getBuyerId());
+            }
+            
+            Map<String, UserProfile> profileMap = new HashMap<>();
+            if (!userIds.isEmpty()) {
+                List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                profileMap = profiles.stream()
+                    .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            }
+            
+            // ✅ 转换为DTO（包含profile信息）
+            final Map<String, UserProfile> finalProfileMap = profileMap;
             List<OrderDTO> orderDTOs = visibleOrders.stream()
-                    .map(this::convertToDTO)
+                    .map(order -> convertToDTOWithProfile(order, finalProfileMap))
                     .collect(Collectors.toList());
             
             Map<String, Object> result = new HashMap<>();
             result.put("orders", orderDTOs);
-            result.put("total", (long) visibleOrders.size()); // 使用过滤后的总数
-            result.put("pages", (int) Math.ceil((double) visibleOrders.size() / size));
+            result.put("total", orderPage.getTotalElements()); // ✅ 使用数据库查询的总数
+            result.put("pages", orderPage.getTotalPages());
             result.put("current", page);
             result.put("size", size);
             
@@ -678,8 +751,8 @@ public class OrderServiceImpl implements OrderService {
                 return Result.fail("无权限查看此订单");
             }
             
-            // 转换为DTO
-            OrderDTO orderDTO = convertToDTO(order);
+            // ✅ 转换为DTO（包含profile信息）
+            OrderDTO orderDTO = convertToDTOWithProfile(order);
             
             // 查询卖家详细信息
             Optional<User> sellerOpt = userRepository.findById(order.getSellerId());
@@ -768,7 +841,7 @@ public class OrderServiceImpl implements OrderService {
     // ========== 私有辅助方法 ==========
     
     /**
-     * 将订单实体转换为DTO
+     * 将订单实体转换为DTO（不包含profile信息，用于不需要profile的场景）
      */
     private OrderDTO convertToDTO(Order order) {
         OrderDTO dto = new OrderDTO();
@@ -810,6 +883,59 @@ public class OrderServiceImpl implements OrderService {
         dto.setCommoditySnapshotSellerPhone(order.getCommoditySnapshotSellerPhone());
         dto.setCommoditySnapshotSellerEmail(order.getCommoditySnapshotSellerEmail());
         dto.setCommoditySnapshotTime(order.getCommoditySnapshotTime() != null ? order.getCommoditySnapshotTime().toString() : null);
+        
+        return dto;
+    }
+    
+    /**
+     * 将订单实体转换为DTO（包含profile信息，使用批量查询的Map）
+     * @param order 订单实体
+     * @param profileMap profile Map（key: userId, value: UserProfile）
+     * @return OrderDTO
+     */
+    private OrderDTO convertToDTOWithProfile(Order order, Map<String, UserProfile> profileMap) {
+        OrderDTO dto = convertToDTO(order);
+        
+        // ✅ 从Map中获取seller profile
+        UserProfile sellerProfile = profileMap.get(order.getSellerId());
+        if (sellerProfile != null) {
+            dto.setSellerNickname(sellerProfile.getNickname());
+            dto.setSellerAvatar(sellerProfile.getAvatar());
+        }
+        
+        // ✅ 从Map中获取buyer profile
+        UserProfile buyerProfile = profileMap.get(order.getBuyerId());
+        if (buyerProfile != null) {
+            dto.setBuyerNickname(buyerProfile.getNickname());
+            dto.setBuyerAvatar(buyerProfile.getAvatar());
+        }
+        
+        return dto;
+    }
+    
+    /**
+     * 将订单实体转换为DTO（包含profile信息，单条订单查询场景）
+     * @param order 订单实体
+     * @return OrderDTO
+     */
+    private OrderDTO convertToDTOWithProfile(Order order) {
+        OrderDTO dto = convertToDTO(order);
+        
+        // ✅ 查询seller profile
+        Optional<UserProfile> sellerProfileOpt = userProfileRepository.findByUserId(order.getSellerId());
+        if (sellerProfileOpt.isPresent()) {
+            UserProfile sellerProfile = sellerProfileOpt.get();
+            dto.setSellerNickname(sellerProfile.getNickname());
+            dto.setSellerAvatar(sellerProfile.getAvatar());
+        }
+        
+        // ✅ 查询buyer profile
+        Optional<UserProfile> buyerProfileOpt = userProfileRepository.findByUserId(order.getBuyerId());
+        if (buyerProfileOpt.isPresent()) {
+            UserProfile buyerProfile = buyerProfileOpt.get();
+            dto.setBuyerNickname(buyerProfile.getNickname());
+            dto.setBuyerAvatar(buyerProfile.getAvatar());
+        }
         
         return dto;
     }
@@ -1415,25 +1541,58 @@ public class OrderServiceImpl implements OrderService {
                 return Result.fail("购买数量必须大于0");
             }
             
-            // 检查库存
-            if (commodity.getStock() < quantity) {
-                return Result.fail("商品库存不足，当前库存：" + commodity.getStock());
+            // ✅ 第一步：获取分布式锁（跨服务器保护）
+            String lockKey = RedisConstants.LOCK_COMMODITY_KEY + commodity.getCommodityId();
+            String lockValue = RedisLockUtil.generateLockValue();
+            long lockTimeout = RedisConstants.LOCK_COMMODITY_TTL;
+            
+            boolean lockAcquired = false;
+            try {
+                lockAcquired = redisLockUtil.tryLock(lockKey, lockValue, lockTimeout, 1, 100);
+                
+                if (!lockAcquired) {
+                    log.warn("获取分布式锁失败 - commodityId: {}", commodity.getCommodityId());
+                    return Result.fail("系统繁忙，请稍后重试");
+                }
+                
+                // ✅ 第二步：使用悲观锁重新查询商品（数据库层面保护）
+                Optional<Commodity> lockedCommodityOpt = commodityRepository.findByIdForUpdate(commodity.getCommodityId());
+                if (lockedCommodityOpt.isEmpty()) {
+                    return Result.fail("商品不存在");
+                }
+                Commodity lockedCommodity = lockedCommodityOpt.get();
+                
+                // 检查库存（在锁定的情况下再次检查）
+                if (lockedCommodity.getStock() < quantity) {
+                    return Result.fail("商品库存不足，当前库存：" + lockedCommodity.getStock());
             }
             
             // 检查是否购买自己的商品
-            if (commodity.getSellerId().equals(currentUser.getUserId())) {
+                if (lockedCommodity.getSellerId().equals(currentUser.getUserId())) {
                 return Result.fail("不能购买自己的商品");
             }
+                
+                // ✅ 第三步：使用数据库条件更新库存（三重保护）
+                int updateResult = commodityRepository.updateStockWithCondition(
+                    lockedCommodity.getCommodityId(), 
+                    quantity
+                );
+                
+                if (updateResult == 0) {
+                    log.warn("库存扣减失败 - commodityId: {}, quantity: {}, currentStock: {}", 
+                        lockedCommodity.getCommodityId(), quantity, lockedCommodity.getStock());
+                    return Result.fail("商品库存不足，请刷新后重试");
+                }
             
             // 计算价格
-            double payAmount = commodity.getPrice() * quantity;
+                double payAmount = lockedCommodity.getPrice() * quantity;
             
             // 创建新订单
             Order newOrder = new Order();
             newOrder.setOrderId(UUID.randomUUID().toString().replace("-", ""));
             newOrder.setBuyerId(currentUser.getUserId());
-            newOrder.setSellerId(commodity.getSellerId());
-            newOrder.setCommodityId(commodity.getCommodityId());
+                newOrder.setSellerId(lockedCommodity.getSellerId());
+                newOrder.setCommodityId(lockedCommodity.getCommodityId());
             newOrder.setOrderStatus("CREATED");
             newOrder.setSellerVisibility(originalOrder.getSellerVisibility());
             newOrder.setBuyerVisibility(originalOrder.getBuyerVisibility());
@@ -1444,20 +1603,27 @@ public class OrderServiceImpl implements OrderService {
             newOrder.setCreateTime(LocalDateTime.now());
             
             // 创建商品快照
-            Optional<User> sellerOpt = userRepository.findById(commodity.getSellerId());
+                Optional<User> sellerOpt = userRepository.findById(lockedCommodity.getSellerId());
             if (sellerOpt.isPresent()) {
-                newOrder.createCommoditySnapshot(commodity, sellerOpt.get());
+                    newOrder.createCommoditySnapshot(lockedCommodity, sellerOpt.get());
             }
             
             // 保存订单
             orderRepository.save(newOrder);
             
-            // 减少商品库存
-            commodity.updateStock(-quantity);
-            commodityRepository.save(commodity);
-            
             log.info("基于快照创建新订单成功 - 原订单: {}, 新订单: {}", orderId, newOrder.getOrderId());
-            return Result.ok("创建新订单成功", convertToDTO(newOrder));
+            return Result.ok("创建新订单成功", convertToDTOWithProfile(newOrder));
+                
+            } finally {
+                // ✅ 释放分布式锁
+                if (lockAcquired) {
+                    boolean released = redisLockUtil.releaseLock(lockKey, lockValue);
+                    if (!released) {
+                        log.warn("释放分布式锁失败 - commodityId: {}, lockKey: {}", 
+                            commodity.getCommodityId(), lockKey);
+                    }
+                }
+            }
             
         } catch (Exception e) {
             log.error("基于快照创建新订单失败", e);
@@ -1492,7 +1658,24 @@ public class OrderServiceImpl implements OrderService {
             // 批量查询订单
             List<Order> orders = orderRepository.findAllById(uniqueIds);
             
-            // 转换为轻量级DTO（只包含基本信息，并检查权限）
+            // ✅ 批量查询所有相关的UserProfile（避免N+1查询）
+            // 收集所有seller和buyer的userId（去重）
+            Set<String> userIds = new HashSet<>();
+            for (Order order : orders) {
+                if (order.getSellerId() != null) userIds.add(order.getSellerId());
+                if (order.getBuyerId() != null) userIds.add(order.getBuyerId());
+            }
+            
+            // ✅ 批量查询profile
+            Map<String, UserProfile> profileMap = new HashMap<>();
+            if (!userIds.isEmpty()) {
+                List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+                profileMap = profiles.stream()
+                    .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            }
+            
+            // ✅ 转换为轻量级DTO（包含profile信息，并检查权限）
+            final Map<String, UserProfile> finalProfileMap = profileMap;
             List<Map<String, Object>> result = orders.stream()
                 .filter(order -> {
                     // 权限检查：订单必须属于当前用户（买家或卖家）
@@ -1527,6 +1710,19 @@ public class OrderServiceImpl implements OrderService {
                     item.put("commoditySnapshotSellerPhone", order.getCommoditySnapshotSellerPhone());
                     item.put("commoditySnapshotSellerEmail", order.getCommoditySnapshotSellerEmail());
                     item.put("commoditySnapshotTime", order.getCommoditySnapshotTime() != null ? order.getCommoditySnapshotTime().toString() : null);
+                    
+                    // ✅ 添加profile字段（从批量查询的Map中获取）
+                    UserProfile sellerProfile = finalProfileMap.get(order.getSellerId());
+                    if (sellerProfile != null) {
+                        item.put("sellerNickname", sellerProfile.getNickname());
+                        item.put("sellerAvatar", sellerProfile.getAvatar());
+                    }
+                    
+                    UserProfile buyerProfile = finalProfileMap.get(order.getBuyerId());
+                    if (buyerProfile != null) {
+                        item.put("buyerNickname", buyerProfile.getNickname());
+                        item.put("buyerAvatar", buyerProfile.getAvatar());
+                    }
                     
                     return item;
                 })
@@ -1572,8 +1768,8 @@ public class OrderServiceImpl implements OrderService {
             notification.put("targetRole", targetRole); // ✅ 添加目标角色字段，用于前端判断
             notification.put("timestamp", LocalDateTime.now().toString());
             
-            // ✅ 如果是订单创建或可见性恢复，发送完整OrderDTO（类似消息发送完整MessageDTO）
-            if (orderDTO != null && ("ORDER_CREATED".equals(changeType) || "ORDER_VISIBILITY_RESTORED".equals(changeType))) {
+            // ✅ 所有订单变更通知都包含完整OrderDTO（包含profile信息）
+            if (orderDTO != null) {
                 notification.put("order", orderDTO);
             }
             

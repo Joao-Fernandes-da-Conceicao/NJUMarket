@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -375,11 +376,32 @@ public class ContactServiceImpl implements ContactService {
     @Override
     public Result getConversations(String userId, int page, int size) {
         try {
-            // ✅ 优化：由于需要使用用户级别的最后消息时间排序，先查询所有对话
-            // 然后在内存中按用户对应的最后消息时间排序和分页
-            List<Conversation> allConversations = conversationRepository.findByUserIdAndStatus(userId, "ACTIVE")
-                    .stream()
-                    .sorted((c1, c2) -> {
+            // ✅ 优化方案3：分别查询userId1和userId2的对话，避免OR条件导致的索引失效
+            // 查询用户作为userId1的对话（按user1LastMessageTime排序）
+            List<Conversation> conversationsAsUser1 = conversationRepository
+                    .findByUserId1AndStatusOrderByUser1LastMessageTime(userId, "ACTIVE");
+            
+            // 查询用户作为userId2的对话（按user2LastMessageTime排序）
+            List<Conversation> conversationsAsUser2 = conversationRepository
+                    .findByUserId2AndStatusOrderByUser2LastMessageTime(userId, "ACTIVE");
+            
+            // 合并两个列表（使用Map去重，避免重复对话）
+            Map<String, Conversation> conversationMap = new LinkedHashMap<>();
+            
+            // 先添加userId1的对话（已按时间排序）
+            for (Conversation conv : conversationsAsUser1) {
+                conversationMap.put(conv.getConversationId(), conv);
+            }
+            
+            // 再添加userId2的对话（已按时间排序），如果有重复会覆盖，但时间顺序已保证
+            for (Conversation conv : conversationsAsUser2) {
+                conversationMap.put(conv.getConversationId(), conv);
+            }
+            
+            // 转换为List并重新排序（合并后的最终排序）
+            // 因为两个列表都已按各自的时间字段排序，需要统一按用户级别时间排序
+            List<Conversation> allConversations = new ArrayList<>(conversationMap.values());
+            allConversations.sort((c1, c2) -> {
                         // 按用户对应的最后消息时间降序排序
                         LocalDateTime time1 = c1.getLastMessageTimeForUser(userId);
                         LocalDateTime time2 = c2.getLastMessageTimeForUser(userId);
@@ -387,8 +409,7 @@ public class ContactServiceImpl implements ContactService {
                         if (time1 == null) return 1; // null 排在后面
                         if (time2 == null) return -1;
                         return time2.compareTo(time1); // 降序
-                    })
-                    .collect(Collectors.toList());
+            });
             
             // 手动分页
             int total = allConversations.size();

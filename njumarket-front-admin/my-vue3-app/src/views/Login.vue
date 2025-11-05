@@ -105,10 +105,14 @@ export default {
             if (token) localStorage.setItem('adminToken', token)
             this.$router.replace('/')
           } else {
-            this.$message.error(res?.message || '登录失败')
+            // ✅ 显式弹窗显示errorMsg
+            const errorMsg = res?.errorMsg || res?.message || '登录失败'
+            this.$message.error(errorMsg)
           }
         } catch (e) {
-          this.$message.error('登录异常')
+          // ✅ 显式弹窗显示错误信息
+          const errorMsg = e.response?.data?.errorMsg || e.response?.data?.message || e.message || '登录异常'
+          this.$message.error(errorMsg)
         } finally {
           this.loginLoading = false
         }

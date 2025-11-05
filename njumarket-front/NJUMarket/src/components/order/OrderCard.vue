@@ -51,11 +51,37 @@
           <p class="commodity-price">¥{{ order.payAmount }}</p>
           <p class="commodity-quantity">数量：{{ order.quantity }}</p>
           
-          <!-- 买家订单显示卖家信息 -->
-          <p v-if="type === 'buyer'" class="seller-info">卖家：{{ order.seller?.nickname || '用户' + order.sellerId }}</p>
+          <!-- 买家订单显示卖家信息（复合显示：头像+昵称+ID） -->
+          <div v-if="type === 'buyer'" class="user-info seller-info">
+            <span class="user-label">卖家：</span>
+            <div class="user-profile">
+              <el-avatar 
+                :size="24" 
+                :src="getAvatarUrl(order.sellerAvatar)"
+                class="user-avatar"
+              >
+                {{ (order.sellerNickname || order.sellerId || 'U')?.charAt(0) }}
+              </el-avatar>
+              <span class="user-name">{{ order.sellerNickname || '用户' + order.sellerId }}</span>
+              <span class="user-id">({{ order.sellerId }})</span>
+            </div>
+          </div>
           
-          <!-- 卖家订单显示买家信息 -->
-          <p v-if="type === 'seller'" class="buyer-info">买家：{{ order.buyer?.nickname || '用户' + order.buyerId }}</p>
+          <!-- 卖家订单显示买家信息（复合显示：头像+昵称+ID） -->
+          <div v-if="type === 'seller'" class="user-info buyer-info">
+            <span class="user-label">买家：</span>
+            <div class="user-profile">
+              <el-avatar 
+                :size="24" 
+                :src="getAvatarUrl(order.buyerAvatar)"
+                class="user-avatar"
+              >
+                {{ (order.buyerNickname || order.buyerId || 'U')?.charAt(0) }}
+              </el-avatar>
+              <span class="user-name">{{ order.buyerNickname || '用户' + order.buyerId }}</span>
+              <span class="user-id">({{ order.buyerId }})</span>
+            </div>
+          </div>
           
           <!-- 显示商品快照信息 -->
           <p v-if="order.commoditySnapshotLocation" class="commodity-location">
@@ -84,6 +110,7 @@
 <script setup>
 import { defineProps, defineEmits, ref } from 'vue'
 import { ArrowDown } from '@element-plus/icons-vue'
+import { ElAvatar } from 'element-plus'
 import { formatTime } from '../../utils/formatUtils'
 import UnifiedTag from '../common/UnifiedTag.vue'
 import { imageAPI } from '../../api'
@@ -192,6 +219,13 @@ const getStatusText = (status) => {
     'RETURN_COMPLETED': '退货完成'
   }
   return statusMap[status] || status
+}
+
+// 获取头像URL
+const getAvatarUrl = (avatar) => {
+  if (!avatar) return ''
+  if (avatar.startsWith('http')) return avatar
+  return `http://localhost:8080/uploads/avatars/${avatar}`
 }
 </script>
 
@@ -359,13 +393,51 @@ const getStatusText = (status) => {
   margin-bottom: 5px;
 }
 
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.user-label {
+  color: #999;
+  flex-shrink: 0;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.user-avatar {
+  flex-shrink: 0;
+}
+
+.user-name {
+  color: #333;
+  font-weight: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.user-id {
+  color: #999;
+  font-size: 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .seller-info, .buyer-info {
   font-size: 14px;
   color: #666;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  margin: 8px 0;
 }
 
 .commodity-quantity {
@@ -376,10 +448,6 @@ const getStatusText = (status) => {
 .commodity-location {
   font-size: 14px;
   color: #666;
-  margin: 0;
-}
-
-.seller-info {
   margin: 0;
 }
 
@@ -478,8 +546,17 @@ const getStatusText = (status) => {
   }
   
   /* 移动端卖家/买家信息允许换行 */
-  .seller-info, .buyer-info {
+  .user-info {
+    flex-wrap: wrap;
+  }
+  
+  .user-profile {
+    flex-wrap: wrap;
+  }
+  
+  .user-name, .user-id {
     white-space: normal;
+    word-break: break-all;
   }
   
   /* 移动端订单操作区域和按钮布局 */

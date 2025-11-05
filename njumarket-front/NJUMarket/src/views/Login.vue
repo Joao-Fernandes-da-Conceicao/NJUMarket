@@ -192,7 +192,9 @@ export default {
             ElMessage.success('登录成功')
             router.push('/')
           } catch (error) {
-            ElMessage.error(error.message || '登录失败')
+            // ✅ 显式弹窗显示errorMsg
+            const errorMsg = error.message || error.errorMsg || '登录失败'
+            ElMessage.error(errorMsg)
           } finally {
             loginLoading.value = false
           }
@@ -234,7 +236,9 @@ export default {
             showCodeLogin.value = false
             router.push('/')
           } catch (error) {
-            ElMessage.error(error.message || '登录失败')
+            // ✅ 显式弹窗显示errorMsg
+            const errorMsg = error.message || error.errorMsg || '登录失败'
+            ElMessage.error(errorMsg)
           } finally {
             codeLoginLoading.value = false
           }

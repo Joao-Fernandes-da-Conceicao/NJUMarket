@@ -22,7 +22,7 @@ public class RegisterDTO {
     @Schema(description = "确认密码", example = "password123", required = true)
     private String confirmPassword;
     
-    @Schema(description = "手机验证码", example = "123456", required = true)
+    @Schema(description = "手机验证码（已废弃，不再需要）", example = "123456", required = false)
     private String code;
     
     @Schema(description = "昵称（可选）", example = "小明")

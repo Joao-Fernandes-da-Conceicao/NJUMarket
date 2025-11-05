@@ -1,0 +1,30 @@
+📁 scripts文件夹文件说明
+
+本文件夹包含所有测试相关的脚本和文档。
+
+📚 文档（按阅读顺序）：
+
+1. README.md - 总览文档（从这里开始）
+2. QUICK_START.md - 5分钟快速开始（最快上手）
+3. README_TESTING.md - 完整测试指南（详细步骤）
+4. README_BATCH_USERS.md - 用户创建脚本说明
+5. JMETER_GUIDE.md - JMeter使用指南
+6. STOCK_OVERSALE_SOLUTION.md - 库存超卖解决方案
+7. JMETER_STOCK_OVERSALE_TEST.md - JMeter详细技术文档
+
+🛠️ 脚本：
+
+1. batch_create_users_simple.py - 简化版用户创建脚本（推荐）
+2. batch_create_users.py - 完整版用户创建脚本
+
+📋 配置文件：
+
+1. requirements.txt - Python依赖包
+2. user_tokens_template.csv - CSV文件模板
+
+---
+
+快速开始：
+1. 阅读 README.md
+2. 运行 batch_create_users_simple.py
+3. 参考 README_TESTING.md 进行测试

@@ -2,25 +2,13 @@
 
 ## 概述
 
-本项目实现了完整的用户注册功能，支持手机号+密码+验证码的注册方式，为后期社交平台登录奠定基础。
+本项目实现了两种用户注册方式：
+1. **手动注册**：使用手机号+密码注册（无需验证码，适用于安全要求较低的环境）
+2. **自动注册**：使用验证码登录，如果用户不存在则自动注册（通过 `/api/user/auth/login-by-code` 接口）
 
-## 注册流程
+## 注册方式一：手动注册（无需验证码）
 
-### 1. 发送验证码
-```http
-POST /api/user/auth/send-code?phone=13800138000
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "message": "验证码发送成功",
-  "data": null
-}
-```
-
-### 2. 用户注册
+### 用户注册接口
 ```http
 POST /api/user/auth/register-new
 Content-Type: application/json
@@ -30,11 +18,12 @@ Content-Type: application/json
   "username": "user123",
   "password": "password123",
   "confirmPassword": "password123",
-  "code": "123456",
   "nickname": "小明",
   "inviteCode": "INV123456"
 }
 ```
+
+**注意**：`code` 字段已移除，不再需要验证码。
 
 **响应示例**:
 ```json
@@ -53,18 +42,47 @@ Content-Type: application/json
 }
 ```
 
+## 注册方式二：验证码登录自动注册
+
+### 1. 发送验证码
+```http
+POST /api/user/auth/send-code?phone=13800138000
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "验证码发送成功",
+  "data": null
+}
+```
+
+### 2. 验证码登录（自动注册）
+```http
+POST /api/user/auth/login-by-code
+Content-Type: application/json
+
+{
+  "phone": "13800138000",
+  "code": "123456"
+}
+```
+
+**说明**：如果用户不存在，系统会自动创建新用户并登录。
+
 ## 字段说明
 
-### 必填字段
+### 手动注册必填字段
 - **phone**: 手机号（11位中国大陆手机号）
 - **password**: 密码（最少6位）
-- **code**: 手机验证码（6位数字）
 
-### 可选字段
+### 手动注册可选字段
 - **username**: 用户名（3-20位，只能包含字母、数字、下划线）
 - **confirmPassword**: 确认密码（与password一致）
 - **nickname**: 昵称（用于显示）
 - **inviteCode**: 邀请码（预留功能）
+- **code**: 验证码（已废弃，不再需要）
 
 ## 验证规则
 
@@ -81,7 +99,7 @@ Content-Type: application/json
 - 长度：最少6位
 - 确认：两次输入必须一致
 
-### 4. 验证码验证
+### 4. 验证码验证（仅用于自动注册）
 - 有效期：5分钟
 - 一次性：使用后自动删除
 
