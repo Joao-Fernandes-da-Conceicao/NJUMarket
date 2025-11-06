@@ -1,9 +1,10 @@
 package com.njumarket.njumarket.controller.user;
 
+import com.njumarket.njumarket.annotation.CurrentUser;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
+import com.njumarket.njumarket.entity.User;
 import com.njumarket.njumarket.service.UserProfileService;
-import com.njumarket.njumarket.utils.UserHolder;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -66,10 +67,10 @@ public class UserProfileController {
     })
     @PostMapping(value = "/avatar", consumes = "multipart/form-data")
     public Result uploadAvatar(
+        @CurrentUser User user,
         @Parameter(description = "头像文件", required = true)
         @RequestParam("file") MultipartFile file) {
-        String currentUserId = UserHolder.getUser().getUserId();
-        return userProfileService.uploadAvatar(currentUserId, file);
+        return userProfileService.uploadAvatar(user.getUserId(), file);
     }
 
     @Operation(summary = "删除头像", description = "删除用户当前头像")
@@ -79,9 +80,8 @@ public class UserProfileController {
         @ApiResponse(responseCode = "404", description = "用户档案不存在")
     })
     @DeleteMapping("/avatar")
-    public Result deleteAvatar() {
-        String currentUserId = UserHolder.getUser().getUserId();
-        return userProfileService.deleteAvatar(currentUserId);
+    public Result deleteAvatar(@CurrentUser User user) {
+        return userProfileService.deleteAvatar(user.getUserId());
     }
 
     @Operation(summary = "搜索用户档案", description = "根据昵称搜索用户档案")
@@ -119,5 +119,40 @@ public class UserProfileController {
     @GetMapping("/vip-statistics")
     public Result getVipLevelStatistics() {
         return userProfileService.getVipLevelStatistics();
+    }
+    
+    // ✅ v1.3.x: 订单提醒相关接口（向后兼容）
+    @Operation(summary = "获取订单提醒状态", description = "获取当前用户的订单提醒状态")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "获取成功"),
+        @ApiResponse(responseCode = "401", description = "用户未登录")
+    })
+    @GetMapping("/order-reminder/status")
+    public Result getOrderReminderStatus(@CurrentUser User user) {
+        try {
+            java.util.Map<String, Boolean> status = userProfileService.getOrderReminderStatus(user.getUserId());
+            return Result.ok(status);
+        } catch (Exception e) {
+            return Result.fail("获取订单提醒状态失败: " + e.getMessage());
+        }
+    }
+    
+    @Operation(summary = "清除订单提醒状态", description = "清除指定角色的订单提醒状态（进入订单页面时调用）")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "清除成功"),
+        @ApiResponse(responseCode = "400", description = "参数错误"),
+        @ApiResponse(responseCode = "401", description = "用户未登录")
+    })
+    @PostMapping("/order-reminder/clear")
+    public Result clearOrderReminder(
+        @CurrentUser User user,
+        @Parameter(description = "角色", required = true, example = "SELLER")
+        @RequestParam String role) {
+        try {
+            userProfileService.clearOrderReminderStatus(user.getUserId(), role);
+            return Result.ok("订单提醒状态已清除");
+        } catch (Exception e) {
+            return Result.fail("清除订单提醒状态失败: " + e.getMessage());
+        }
     }
 }

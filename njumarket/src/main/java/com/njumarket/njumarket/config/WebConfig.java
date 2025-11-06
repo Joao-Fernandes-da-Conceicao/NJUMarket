@@ -1,51 +1,21 @@
 package com.njumarket.njumarket.config;
 
-import com.njumarket.njumarket.interceptor.LoginInterceptor;
-import com.njumarket.njumarket.interceptor.AdminInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
  * Web配置类
+ * 注意：用户和管理员认证已迁移到Spring Security Filter，不再使用Interceptor
  */
 @Configuration
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
-
-    private final LoginInterceptor loginInterceptor;
-    private final AdminInterceptor adminInterceptor;
-
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        // 用户拦截器 - 拦截用户相关路径和联系功能路径
-        registry.addInterceptor(loginInterceptor)
-                .addPathPatterns("/api/user/**", "/api/contact/**")
-                .excludePathPatterns(
-                    // 用户认证相关接口不需要拦截
-                    "/api/user/auth/login",
-                    "/api/user/auth/register", 
-                    "/api/user/auth/register-new",
-                    "/api/user/auth/send-code",
-                    "/api/user/auth/login-by-code",
-                    "/api/user/auth/login-third-party",
-                    "/api/user/auth/reset-password"
-                );
-        
-        // 管理员拦截器 - 只拦截管理员相关路径
-        registry.addInterceptor(adminInterceptor)
-                .addPathPatterns("/api/admin/**")
-                .excludePathPatterns(
-                    // 管理员登录接口不需要拦截
-                    "/api/admin/login"
-                );
-    }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {

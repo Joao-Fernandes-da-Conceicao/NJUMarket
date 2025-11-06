@@ -529,6 +529,72 @@ public class ContactServiceImpl implements ContactService {
     }
     
     @Override
+    public Result getMessagesBefore(String userId, String conversationId, String beforeTime, int size) {
+        try {
+            // 查询对话
+            Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
+            if (!convOpt.isPresent()) {
+                return Result.fail("对话不存在");
+            }
+            
+            Conversation conversation = convOpt.get();
+            
+            // 验证权限（使用 involvesUser 方法，基于 user_id_1 和 user_id_2）
+            if (!conversation.involvesUser(userId)) {
+                return Result.fail("无权访问此对话");
+            }
+            
+            // 解析时间参数
+            LocalDateTime beforeDateTime;
+            try {
+                beforeDateTime = LocalDateTime.parse(beforeTime);
+            } catch (Exception e) {
+                log.error("解析时间参数失败: beforeTime={}, error={}", beforeTime, e.getMessage());
+                return Result.fail("时间参数格式错误");
+            }
+            
+            // 查询指定时间之前的消息（按 DESC 排序，最新的在前）
+            Pageable pageable = PageRequest.of(0, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+            Page<Message> messagesPage = messageRepository.findMessagesBefore(conversationId, beforeDateTime, pageable);
+            
+            // ✅ 优化：批量查询两个用户的 UserProfile（只需要2次查询）
+            Set<String> userIds = new HashSet<>();
+            userIds.add(conversation.getUserId1());
+            userIds.add(conversation.getUserId2());
+            
+            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+            Map<String, UserProfile> profileMap = profiles.stream()
+                .collect(Collectors.toMap(UserProfile::getUserId, p -> p));
+            
+            // 转换消息为DTO，并过滤当前用户已删除的消息
+            List<MessageDTO> messageDTOs = new ArrayList<>();
+            for (Message message : messagesPage.getContent()) {
+                // 过滤：如果当前用户已删除此消息，则不显示
+                boolean isDeletedByCurrentUser = false;
+                if (userId.equals(message.getSenderId()) && Boolean.TRUE.equals(message.getDeletedBySender())) {
+                    isDeletedByCurrentUser = true;
+                } else if (userId.equals(message.getReceiverId()) && Boolean.TRUE.equals(message.getDeletedByReceiver())) {
+                    isDeletedByCurrentUser = true;
+                }
+                
+                if (!isDeletedByCurrentUser) {
+                    messageDTOs.add(convertMessageToDTOWithMap(message, userId, profileMap));
+                }
+            }
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("messages", messageDTOs);
+            result.put("hasMore", messagesPage.hasNext());
+            
+            return Result.ok("获取历史消息成功", result);
+        } catch (Exception e) {
+            log.error("获取历史消息失败: userId={}, conversationId={}, beforeTime={}, error={}", 
+                    userId, conversationId, beforeTime, e.getMessage(), e);
+            return Result.fail("获取历史消息失败：" + e.getMessage());
+        }
+    }
+    
+    @Override
     public Result getOrCreateConversation(String userId, String otherUserId) {
         try {
             // 查找现有活跃对话（基于用户对，确保唯一性）
@@ -675,7 +741,11 @@ public class ContactServiceImpl implements ContactService {
                 return Result.fail("无权删除此对话");
             }
             
-            conversationRepository.softDelete(conversationId);
+            // ✅ v1.3.x: 软删除对话（设置用户可见性为false，而不是修改status）
+            // 这样只影响当前用户的对话列表，不影响对方用户
+            conversation.setVisibilityForUser(userId, false);
+            conversationRepository.save(conversation);
+            
             return Result.ok("删除对话成功");
         } catch (Exception e) {
             log.error("删除对话失败: userId={}, conversationId={}, error={}", 
@@ -694,7 +764,7 @@ public class ContactServiceImpl implements ContactService {
             
             Message message = msgOpt.get();
             
-            // 验证权限：只能删除对话中自己的消息
+            // 验证权限：只能删除对话中的消息（发送方或接收方）
             if (!message.getSenderId().equals(userId) && !message.getReceiverId().equals(userId)) {
                 return Result.fail("无权删除此消息");
             }
@@ -706,47 +776,112 @@ public class ContactServiceImpl implements ContactService {
             }
             Conversation conversation = convOpt.get();
             
-            // 双向删除：根据用户身份设置对应的删除标记
+            // ✅ 保存原来的可见性状态（用于检测变化）
+            Boolean oldDeletedBySender = message.getDeletedBySender();
+            Boolean oldDeletedByReceiver = message.getDeletedByReceiver();
+            
+            // ✅ 根据用户身份设置对应的删除标记
             boolean isSender = message.getSenderId().equals(userId);
+            Boolean newDeletedBySender = null;
+            Boolean newDeletedByReceiver = null;
+            
             if (isSender) {
-                // 发送方删除
-                messageRepository.markDeletedBySender(messageId);
+                // 发送方删除：设置 deletedBySender = true
+                newDeletedBySender = true;
+                message.setDeletedBySender(true);
             } else {
-                // 接收方删除
-                messageRepository.markDeletedByReceiver(messageId);
+                // 接收方删除：设置 deletedByReceiver = true
+                newDeletedByReceiver = true;
+                message.setDeletedByReceiver(true);
             }
             
-            // ✅ 检查删除的消息是否为该用户可见的最后一条消息
-            // 注意：刚删除后，findLastMessageForUser不会返回这条消息，所以需要先检查
-            String userLastContent = conversation.getLastMessageContentForUser(userId);
-            LocalDateTime userLastTime = conversation.getLastMessageTimeForUser(userId);
+            // ✅ 保存消息的更改
+            messageRepository.save(message);
             
-            // 比较内容和时间（需要考虑null情况）
-            boolean isLastMessage = false;
-            if (userLastContent != null && userLastTime != null) {
-                isLastMessage = message.getContent().equals(userLastContent) && 
-                               message.getCreatedAt().equals(userLastTime);
-            }
-            
-            if (isLastMessage) {
-                // ✅ 查询倒数第二条可见消息并更新
-                // 注意：删除后，这条消息已经不可见了，所以查询会跳过它
-                Pageable pageable = PageRequest.of(0, 1); // 查询最新的1条（删除后的最新消息）
-                List<Message> lastMessages = messageRepository.findLastMessageForUser(
-                        message.getConversationId(), userId, pageable);
+            // ✅ 如果可见性发生变化，需要更新相关用户的最后消息字段
+            // 参考 AdminService.updateMessageFull 的逻辑
+            if (newDeletedBySender != null && !newDeletedBySender.equals(oldDeletedBySender)) {
+                // 发送方可见性发生了变化（从可见变为不可见）
+                boolean wasVisible = !Boolean.TRUE.equals(oldDeletedBySender);
+                boolean isNowVisible = !Boolean.TRUE.equals(newDeletedBySender);
                 
-                if (!lastMessages.isEmpty()) {
-                    // 有新的最后消息，更新
-                    Message newLastMessage = lastMessages.get(0);
-                    conversation.setLastMessageForUser(userId, 
-                            newLastMessage.getContent(), 
-                            newLastMessage.getCreatedAt());
-                } else {
-                    // 没有其他可见消息了，设置为空
-                    conversation.setLastMessageForUser(userId, null, null);
+                if (wasVisible && !isNowVisible) {
+                    // 从可见变为不可见（标记删除）
+                    // 检查是否是发送方的最后一条可见消息
+                    String senderId = message.getSenderId();
+                    String senderLastContent = conversation.getLastMessageContentForUser(senderId);
+                    LocalDateTime senderLastTime = conversation.getLastMessageTimeForUser(senderId);
+                    boolean isSenderLastMessage = senderLastContent != null && senderLastTime != null &&
+                        message.getContent().equals(senderLastContent) && 
+                        message.getCreatedAt().equals(senderLastTime);
+                    
+                    if (isSenderLastMessage) {
+                        // 查询发送方可见的倒数第二条消息（查询2条，取第二条）
+                        try {
+                            Pageable pageable = PageRequest.of(0, 2);
+                            List<Message> lastMessages = messageRepository.findLastMessageForUser(
+                                    message.getConversationId(), senderId, pageable);
+                            
+                            if (lastMessages.size() > 1) {
+                                // 有第二条消息，使用第二条作为新的最后消息
+                                Message newLastMessage = lastMessages.get(1);
+                                conversation.setLastMessageForUser(senderId, 
+                                        newLastMessage.getContent(), 
+                                        newLastMessage.getCreatedAt());
+                            } else {
+                                // 没有其他可见消息了，设置为空
+                                conversation.setLastMessageForUser(senderId, null, null);
+                            }
+                        } catch (Exception e) {
+                            log.warn("删除消息时更新发送方最后消息失败: conversationId={}, messageId={}, error={}", 
+                                    message.getConversationId(), messageId, e.getMessage());
+                        }
+                    }
                 }
-                conversationRepository.save(conversation);
             }
+            
+            if (newDeletedByReceiver != null && !newDeletedByReceiver.equals(oldDeletedByReceiver)) {
+                // 接收方可见性发生了变化（从可见变为不可见）
+                boolean wasVisible = !Boolean.TRUE.equals(oldDeletedByReceiver);
+                boolean isNowVisible = !Boolean.TRUE.equals(newDeletedByReceiver);
+                
+                if (wasVisible && !isNowVisible) {
+                    // 从可见变为不可见（标记删除）
+                    // 检查是否是接收方的最后一条可见消息
+                    String receiverId = message.getReceiverId();
+                    String receiverLastContent = conversation.getLastMessageContentForUser(receiverId);
+                    LocalDateTime receiverLastTime = conversation.getLastMessageTimeForUser(receiverId);
+                    boolean isReceiverLastMessage = receiverLastContent != null && receiverLastTime != null &&
+                        message.getContent().equals(receiverLastContent) && 
+                        message.getCreatedAt().equals(receiverLastTime);
+                    
+                    if (isReceiverLastMessage) {
+                        // 查询接收方可见的倒数第二条消息（查询2条，取第二条）
+                        try {
+                            Pageable pageable = PageRequest.of(0, 2);
+                            List<Message> lastMessages = messageRepository.findLastMessageForUser(
+                                    message.getConversationId(), receiverId, pageable);
+                            
+                            if (lastMessages.size() > 1) {
+                                // 有第二条消息，使用第二条作为新的最后消息
+                                Message newLastMessage = lastMessages.get(1);
+                                conversation.setLastMessageForUser(receiverId, 
+                                        newLastMessage.getContent(), 
+                                        newLastMessage.getCreatedAt());
+                            } else {
+                                // 没有其他可见消息了，设置为空
+                                conversation.setLastMessageForUser(receiverId, null, null);
+                            }
+                        } catch (Exception e) {
+                            log.warn("删除消息时更新接收方最后消息失败: conversationId={}, messageId={}, error={}", 
+                                    message.getConversationId(), messageId, e.getMessage());
+                        }
+                    }
+                }
+            }
+            
+            // ✅ 保存对话的更新（如果有任何字段被更新）
+            conversationRepository.save(conversation);
             
             return Result.ok("删除消息成功");
         } catch (Exception e) {

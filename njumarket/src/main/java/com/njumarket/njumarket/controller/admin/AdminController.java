@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -63,6 +64,7 @@ public class AdminController {
         @ApiResponse(responseCode = "409", description = "用户名已存在")
     })
     @PostMapping("/create")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以创建管理员
     public Result createAdmin(@RequestBody Admin admin) {
         return adminService.createAdmin(admin);
     }
@@ -73,6 +75,7 @@ public class AdminController {
         @ApiResponse(responseCode = "404", description = "管理员不存在")
     })
     @PutMapping("/{adminId}")
+    @PreAuthorize("hasRole('SYSTEM') or #adminId == authentication.principal.adminId") // system可以更新所有管理员，普通管理员只能更新自己的
     public Result updateAdmin(
         @Parameter(description = "管理员ID", required = true)
         @PathVariable String adminId,
@@ -87,6 +90,7 @@ public class AdminController {
         @ApiResponse(responseCode = "404", description = "管理员不存在")
     })
     @PutMapping("/{adminId}/full")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以完整更新管理员
     public Result updateAdminFull(
         @Parameter(description = "管理员ID", required = true)
         @PathVariable String adminId,
@@ -101,6 +105,7 @@ public class AdminController {
         @ApiResponse(responseCode = "403", description = "不能删除系统管理员")
     })
     @DeleteMapping("/{adminId}")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以删除管理员
     public Result deleteAdmin(
         @Parameter(description = "管理员ID", required = true)
         @PathVariable String adminId) {
@@ -112,6 +117,7 @@ public class AdminController {
         @ApiResponse(responseCode = "200", description = "获取成功")
     })
     @GetMapping("/list")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以查看管理员列表
     public Result getAdminList(
         @Parameter(description = "页码")
         @RequestParam(defaultValue = "1") Integer page,
@@ -134,6 +140,7 @@ public class AdminController {
         @ApiResponse(responseCode = "404", description = "管理员不存在")
     })
     @GetMapping("/{adminId}")
+    @PreAuthorize("hasRole('SYSTEM') or #adminId == authentication.principal.adminId") // system可以查看所有管理员，普通管理员只能查看自己的
     public Result getAdminById(
         @Parameter(description = "管理员ID", required = true)
         @PathVariable String adminId) {
@@ -146,6 +153,7 @@ public class AdminController {
         @ApiResponse(responseCode = "404", description = "管理员不存在")
     })
     @PutMapping("/{adminId}/status")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以更新管理员状态
     public Result updateAdminStatus(
         @Parameter(description = "管理员ID", required = true)
         @PathVariable String adminId,
@@ -160,6 +168,7 @@ public class AdminController {
         @ApiResponse(responseCode = "404", description = "管理员不存在")
     })
     @PutMapping("/{adminId}/reset-password")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以重置密码
     public Result resetPassword(
         @Parameter(description = "管理员ID", required = true)
         @PathVariable String adminId,
@@ -174,6 +183,7 @@ public class AdminController {
         @ApiResponse(responseCode = "400", description = "原密码错误")
     })
     @PutMapping("/change-password")
+    @PreAuthorize("#adminId == authentication.principal.adminId") // 只能修改自己的密码
     public Result changePassword(
         @Parameter(description = "管理员ID", required = true)
         @RequestParam String adminId,
@@ -189,6 +199,7 @@ public class AdminController {
         @ApiResponse(responseCode = "200", description = "获取成功")
     })
     @GetMapping("/statistics")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以查看统计信息
     public Result getAdminStatistics() {
         return adminService.getAdminStatistics();
     }
@@ -213,6 +224,7 @@ public class AdminController {
         @ApiResponse(responseCode = "404", description = "管理员不存在")
     })
     @PutMapping("/{adminId}/permissions")
+    @PreAuthorize("hasRole('SYSTEM')") // 只有system管理员可以更新权限
     public Result updatePermissions(
         @Parameter(description = "管理员ID", required = true)
         @PathVariable String adminId,

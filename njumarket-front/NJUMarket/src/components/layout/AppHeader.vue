@@ -156,8 +156,9 @@
               </div>
               <div class="mobile-menu-item" @click="handleMobileItem('orders')">
                 <el-icon><ShoppingCart /></el-icon>
-                <span>我的订单</span>
-                <UnreadBadge :count="buyerOrderHasNew ? 1 : 0" type="dot" :force-hide="!buyerOrderHasNew" />
+                <UnreadBadge :count="buyerOrderHasNew ? 1 : 0" type="dot" :force-hide="!buyerOrderHasNew" badge-class="mobile-order-badge">
+                  <span>我的订单</span>
+                </UnreadBadge>
               </div>
               <div class="mobile-menu-item" @click="handleMobileItem('my-home')">
                 <el-icon><Box /></el-icon>
@@ -165,8 +166,9 @@
               </div>
               <div class="mobile-menu-item" @click="handleMobileItem('seller-orders')">
                 <el-icon><Box /></el-icon>
-                <span>卖家订单</span>
-                <UnreadBadge :count="sellerOrderHasNew ? 1 : 0" type="dot" :force-hide="!sellerOrderHasNew" />
+                <UnreadBadge :count="sellerOrderHasNew ? 1 : 0" type="dot" :force-hide="!sellerOrderHasNew" badge-class="mobile-order-badge">
+                  <span>卖家订单</span>
+                </UnreadBadge>
               </div>
               <div class="mobile-menu-item" @click="handleMobileItem('messages')">
                 <el-icon><Message /></el-icon>

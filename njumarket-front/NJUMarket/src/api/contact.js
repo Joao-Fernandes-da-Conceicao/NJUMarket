@@ -27,6 +27,15 @@ export const contactAPI = {
   },
   
   /**
+   * ✅ v1.3.x: 获取指定时间之前的消息（用于无限滚动加载历史消息）
+   */
+  getMessagesBefore(conversationId, beforeTime, size = 50) {
+    return request.get(`/contact/conversations/${conversationId}/messages/before`, {
+      params: { beforeTime, size }
+    })
+  },
+  
+  /**
    * 创建或获取对话
    */
   createConversation(otherUserId, commodityId = null, orderId = null) {

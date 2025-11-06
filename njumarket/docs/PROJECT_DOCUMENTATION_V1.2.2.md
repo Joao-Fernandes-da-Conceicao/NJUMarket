@@ -324,7 +324,26 @@ Map<String, Conversation> conversationMap = new LinkedHashMap<>();
 
 ## 下一步规划
 
-### 10. v1.2.3 规划
+### 10. 后续版本
+
+#### v1.3.0：用户体验优化与数据持久化 ✅ **已完成**
+- ✅ 聊天无限滚动：移除200条消息限制，支持无限加载历史消息
+- ✅ 智能滚动管理：CSS反转显示 + 逻辑滚动，自动扩展功能
+- ✅ 消息软删除：点击消息显示删除选项，仅影响当前用户视图
+- ✅ 对话软删除：左滑删除对话，支持桌面端和移动端
+- ✅ 订单提醒持久化：订单提醒状态存储到数据库，跨会话保持
+- ✅ 应用启动扫描：启动时自动从profile加载订单提醒状态
+
+详见：[v1.3.0 项目文档](./PROJECT_DOCUMENTATION_V1.3.0.md)
+
+#### v2.0：微服务架构改造 📋 **规划中**
+- 微服务拆分：将单体应用拆分为5个核心微服务
+- Spring Cloud集成：服务注册、配置中心、API网关
+- 分布式系统：分布式事务、分布式锁、分布式ID
+- 消息队列：RabbitMQ/RocketMQ实现异步处理
+- 搜索引擎：Elasticsearch实现商品和消息搜索
+
+详见：[v2.0 规划文档](./PROJECT_DOCUMENTATION_V2.0.md)
 
 #### 10.1 聊天UI和功能综合优化
 
@@ -380,7 +399,17 @@ Map<String, Conversation> conversationMap = new LinkedHashMap<>();
 
 ---
 
-**文档版本**：v1.0  
+**文档版本**：v1.2.2  
 **创建日期**：2025-11-05  
+**最后更新**：2025-01-XX  
 **维护者**：NJUMarket 开发团队
+
+## 相关文档
+
+- [v1.2.0 项目文档](./PROJECT_DOCUMENTATION_V1.2.0.md) - 库存超卖防护
+- [v1.2.1 项目文档](./PROJECT_DOCUMENTATION_V1.2.1.md) - 分页总数修复
+- [v1.3.0 项目文档](./PROJECT_DOCUMENTATION_V1.3.0.md) - 用户体验优化与数据持久化
+- [v1.x 阶段总结](./PROJECT_DOCUMENTATION_V1.x_SUMMARY.md) - v1.x完整总结
+- [v2.0 规划文档](./PROJECT_DOCUMENTATION_V2.0.md) - v2.0微服务架构改造规划
+- [v1.3.0 代码审阅](./V1.3.0_CODE_REVIEW.md) - v1.3.0代码审阅报告
 

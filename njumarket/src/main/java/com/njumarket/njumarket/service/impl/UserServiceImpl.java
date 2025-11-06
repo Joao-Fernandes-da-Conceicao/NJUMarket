@@ -86,6 +86,19 @@ public class UserServiceImpl implements UserService {
         result.put("refreshToken", tokenResult.get("refreshToken"));
         result.put("userInfo", convertToUserDTO(user));
         
+        // ✅ v1.3.x: 添加订单提醒状态（向后兼容，如果字段不存在则返回false）
+        try {
+            Map<String, Boolean> orderReminderStatus = userProfileService.getOrderReminderStatus(user.getUserId());
+            result.put("orderReminderStatus", orderReminderStatus);
+        } catch (Exception e) {
+            log.debug("获取订单提醒状态失败（可能是旧版本数据库）: userId={}, error={}", user.getUserId(), e.getMessage());
+            // 兼容性处理：如果获取失败，返回默认值
+            Map<String, Boolean> defaultStatus = new HashMap<>();
+            defaultStatus.put("sellerOrderHasNew", false);
+            defaultStatus.put("buyerOrderHasNew", false);
+            result.put("orderReminderStatus", defaultStatus);
+        }
+        
         log.info("用户密码登录成功: userId={}, identifier={}", user.getUserId(), identifier);
         return Result.ok(result);
     }
@@ -262,6 +275,19 @@ public class UserServiceImpl implements UserService {
         result.put("token", token);
         result.put("refreshToken", refreshToken);
         result.put("userInfo", convertToUserDTO(user));
+        
+        // ✅ v1.3.x: 添加订单提醒状态（向后兼容，如果字段不存在则返回false）
+        try {
+            Map<String, Boolean> orderReminderStatus = userProfileService.getOrderReminderStatus(user.getUserId());
+            result.put("orderReminderStatus", orderReminderStatus);
+        } catch (Exception e) {
+            log.debug("获取订单提醒状态失败（可能是旧版本数据库）: userId={}, error={}", user.getUserId(), e.getMessage());
+            // 兼容性处理：如果获取失败，返回默认值
+            Map<String, Boolean> defaultStatus = new HashMap<>();
+            defaultStatus.put("sellerOrderHasNew", false);
+            defaultStatus.put("buyerOrderHasNew", false);
+            result.put("orderReminderStatus", defaultStatus);
+        }
         
         log.info("用户验证码登录成功: userId={}, phone={}", user.getUserId(), phone);
         return Result.ok(result);

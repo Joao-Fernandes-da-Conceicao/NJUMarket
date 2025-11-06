@@ -575,4 +575,62 @@ public class UserProfileServiceImpl implements UserProfileService {
             log.info("用户VIP等级自动升级: userId={}, newLevel={}", profile.getUserId(), newLevel);
         }
     }
+    
+    // ✅ v1.3.x: 订单提醒相关方法实现（向后兼容）
+    @Override
+    public java.util.Map<String, Boolean> getOrderReminderStatus(String userId) {
+        java.util.Map<String, Boolean> status = new java.util.HashMap<>();
+        status.put("sellerOrderHasNew", false);
+        status.put("buyerOrderHasNew", false);
+        
+        try {
+            Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
+            if (profileOpt.isPresent()) {
+                UserProfile profile = profileOpt.get();
+                // ✅ 兼容性处理：如果字段为null（旧版本数据），返回false
+                status.put("sellerOrderHasNew", 
+                    profile.getSellerOrderHasNew() != null && profile.getSellerOrderHasNew());
+                status.put("buyerOrderHasNew", 
+                    profile.getBuyerOrderHasNew() != null && profile.getBuyerOrderHasNew());
+            }
+        } catch (Exception e) {
+            // ✅ 兼容性处理：如果字段不存在（旧版本数据库），捕获异常并返回默认值
+            log.debug("获取订单提醒状态失败（可能是旧版本数据库）: userId={}, error={}", userId, e.getMessage());
+        }
+        
+        return status;
+    }
+    
+    @Override
+    public void setOrderReminderStatus(String userId, String role, boolean hasNew) {
+        try {
+            Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
+            if (profileOpt.isEmpty()) {
+                log.warn("用户档案不存在，无法设置订单提醒状态: userId={}", userId);
+                return;
+            }
+            
+            UserProfile profile = profileOpt.get();
+            if ("SELLER".equals(role)) {
+                profile.setSellerOrderHasNew(hasNew);
+            } else if ("BUYER".equals(role)) {
+                profile.setBuyerOrderHasNew(hasNew);
+            } else {
+                log.warn("无效的角色类型: role={}", role);
+                return;
+            }
+            
+            userProfileRepository.save(profile);
+            log.debug("订单提醒状态已更新: userId={}, role={}, hasNew={}", userId, role, hasNew);
+        } catch (Exception e) {
+            // ✅ 兼容性处理：如果字段不存在（旧版本数据库），记录警告但不抛出异常
+            log.warn("设置订单提醒状态失败（可能是旧版本数据库）: userId={}, role={}, error={}", 
+                userId, role, e.getMessage());
+        }
+    }
+    
+    @Override
+    public void clearOrderReminderStatus(String userId, String role) {
+        setOrderReminderStatus(userId, role, false);
+    }
 }

@@ -82,6 +82,15 @@ public interface MessageRepository extends JpaRepository<Message, String>, org.s
     List<Message> findMessagesAfter(@Param("conversationId") String conversationId, 
                                    @Param("afterTime") LocalDateTime afterTime);
     
+    // ✅ v1.3.x: 获取指定时间之前的消息（用于无限滚动加载历史消息）
+    @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
+           "AND m.createdAt < :beforeTime " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
+           "ORDER BY m.createdAt DESC")
+    Page<Message> findMessagesBefore(@Param("conversationId") String conversationId,
+                                     @Param("beforeTime") LocalDateTime beforeTime,
+                                     Pageable pageable);
+    
     // 获取用户发送的最后一条消息
     @Query("SELECT m FROM Message m WHERE m.senderId = :userId " +
            "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +

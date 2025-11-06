@@ -156,18 +156,47 @@ export const useMessageStore = defineStore('message', {
     },
     
     // 获取消息列表
-    async fetchMessages(conversationId) {
+    // ✅ v1.3.x: 改为 ASC 排序（最旧在前，最新在后），使用标准滚动方式
+    async fetchMessages(conversationId, page = 1, size = 50) {
       this.loading.messages = true
       try {
-        const response = await contactAPI.getConversationDetail(conversationId)
+        const response = await contactAPI.getConversationDetail(conversationId, page, size)
         if (response.success) {
-          // 后端已经过滤了双向删除的消息
-          this.messages = (response.data.messages || []).reverse()
+          // ✅ v1.3.x: 改为 ASC 排序（最旧在前，最新在后）
+          // 后端返回的是 DESC 排序（最新在前），需要 reverse
+          const messages = response.data.messages || []
+          this.messages = messages.reverse()
         }
         return response
       } catch (error) {
         console.error('获取消息失败:', error)
         ElMessage.error('获取消息失败')
+        throw error
+      } finally {
+        this.loading.messages = false
+      }
+    },
+    
+    // ✅ v1.3.x: 加载历史消息（更早的消息）
+    async loadMoreMessages(conversationId, beforeTime, size = 50) {
+      this.loading.messages = true
+      try {
+        const response = await contactAPI.getMessagesBefore(conversationId, beforeTime, size)
+        if (response.success) {
+          const newMessages = response.data.messages || []
+          const hasMore = response.data.hasMore !== undefined ? response.data.hasMore : (newMessages.length === size)
+          // ✅ v1.3.x: 将新消息插入到数组开头（更早的消息，ASC排序）
+          // 后端返回的是 DESC 排序，需要 reverse
+          if (newMessages.length > 0) {
+            const reversedMessages = newMessages.reverse()
+            this.messages = [...reversedMessages, ...this.messages]
+          }
+          return { success: true, hasMore }
+        }
+        return { success: false, hasMore: false }
+      } catch (error) {
+        console.error('加载历史消息失败:', error)
+        ElMessage.error('加载历史消息失败')
         throw error
       } finally {
         this.loading.messages = false
@@ -212,6 +241,7 @@ export const useMessageStore = defineStore('message', {
         const response = await contactAPI.sendMessage(messageData)
         
         if (response.success) {
+          // ✅ v1.3.x: 新消息添加到数组末尾（ASC排序，最新在后）
           this.messages.push(response.data)
           
           // 更新对话列表中的最后消息
@@ -397,6 +427,11 @@ export const useMessageStore = defineStore('message', {
         this.handleMessageRead(readData)
       })
       
+      // ✅ v1.3.x: 注册对话可见性恢复处理函数
+      wsClient.on('CONVERSATION_VISIBILITY_RESTORED', (restoreData) => {
+        this.handleConversationRestored(restoreData)
+      })
+      
       // 监听连接状态
       wsClient.onConnect(() => {
         console.log('WebSocket 已连接')
@@ -495,7 +530,7 @@ export const useMessageStore = defineStore('message', {
       
       // 2. 如果消息属于当前选中的对话，添加到消息列表
       if (message.conversationId === this.selectedConversationId) {
-        // ✅ 直接添加到响应式数组，自动触发 UI 更新
+        // ✅ v1.3.x: 新消息添加到数组末尾（ASC排序，最新在后）
         this.messages.push(message)
         
         // ✅ 如果正在查看此对话且确实在消息页面，延迟标记为已读
@@ -631,6 +666,100 @@ export const useMessageStore = defineStore('message', {
     },
     
     /**
+     * ✅ v1.3.x: 处理对话可见性恢复事件
+     * 当对方发送消息时，如果对话被软删除，会自动恢复可见性并推送此事件
+     * 使用增量更新：将恢复的对话添加到列表顶部，避免全量刷新
+     * 
+     * 注意：后端推送的 ConversationDTO 已经包含完整信息（通过 convertConversationToDTOWithMap），
+     * 包括：conversationId, lastMessageContent, lastMessageTime, unreadCount, 
+     * otherUserId, otherUserNickname, otherUserAvatar, otherUserIsDeleted 等
+     * 因此可以直接使用推送的数据，无需额外调用API
+     */
+    handleConversationRestored(restoreData) {
+      console.log('收到对话恢复通知:', restoreData)
+      
+      if (!restoreData || !restoreData.conversation) {
+        console.warn('对话恢复数据不完整:', restoreData)
+        return
+      }
+      
+      const conversation = restoreData.conversation
+      const conversationId = conversation.conversationId || restoreData.conversationId
+      
+      if (!conversationId) {
+        console.warn('对话ID缺失:', restoreData)
+        return
+      }
+      
+      // ✅ 增量更新：检查对话是否已存在
+      const existingIndex = this.conversations.findIndex(
+        c => c.conversationId === conversationId
+      )
+      
+      if (existingIndex >= 0) {
+        // 对话已存在，更新数据（可能只是可见性变化）
+        console.log('对话已存在，更新数据:', conversationId)
+        const existing = this.conversations[existingIndex]
+        
+        // ✅ 直接使用后端推送的完整数据更新（后端已通过 convertConversationToDTOWithMap 构建完整DTO）
+        Object.assign(existing, {
+          lastMessageContent: conversation.lastMessageContent || existing.lastMessageContent,
+          lastMessageTime: conversation.lastMessageTime || existing.lastMessageTime,
+          otherUserNickname: conversation.otherUserNickname || existing.otherUserNickname,
+          otherUserAvatar: conversation.otherUserAvatar || existing.otherUserAvatar,
+          otherUserId: conversation.otherUserId || existing.otherUserId,
+          otherUserIsDeleted: conversation.otherUserIsDeleted !== undefined 
+            ? conversation.otherUserIsDeleted 
+            : existing.otherUserIsDeleted,
+          unreadCount: conversation.unreadCount !== undefined 
+            ? conversation.unreadCount 
+            : existing.unreadCount,
+          status: conversation.status || existing.status
+        })
+        
+        // 更新未读数Map
+        if (conversation.unreadCount !== undefined) {
+          this.conversationUnreadMap.set(conversationId, conversation.unreadCount || 0)
+          this.totalUnreadCount = Array.from(this.conversationUnreadMap.values())
+            .reduce((sum, count) => sum + count, 0)
+        }
+        
+        // 将对话移到顶部（按最后消息时间排序）
+        if (existingIndex > 0) {
+          this.conversations.splice(existingIndex, 1)
+          this.conversations.unshift(existing)
+        }
+      } else {
+        // 对话不存在，添加到列表顶部
+        console.log('对话不存在，添加到列表顶部:', conversationId)
+        
+        // ✅ 直接使用后端推送的完整数据（后端已通过 convertConversationToDTOWithMap 构建完整DTO）
+        const newConversation = {
+          conversationId: conversationId,
+          otherUserId: conversation.otherUserId,
+          otherUserNickname: conversation.otherUserNickname || '用户',
+          otherUserAvatar: conversation.otherUserAvatar || null,
+          otherUserIsDeleted: conversation.otherUserIsDeleted || false,
+          lastMessageContent: conversation.lastMessageContent || '暂无消息',
+          lastMessageTime: conversation.lastMessageTime || new Date().toISOString(),
+          unreadCount: conversation.unreadCount || 0,
+          status: conversation.status || 'ACTIVE'
+        }
+        
+        // 添加到列表顶部
+        this.conversations.unshift(newConversation)
+        
+        // 更新未读数Map
+        this.conversationUnreadMap.set(conversationId, newConversation.unreadCount || 0)
+        this.totalUnreadCount = Array.from(this.conversationUnreadMap.values())
+          .reduce((sum, count) => sum + count, 0)
+        
+        // 显示提示
+        ElMessage.success(`对话 "${newConversation.otherUserNickname}" 已恢复`)
+      }
+    },
+    
+    /**
      * 断开 WebSocket 连接
      * 在用户登出时调用
      */
@@ -639,6 +768,7 @@ export const useMessageStore = defineStore('message', {
       wsClient.off('MESSAGE_NEW')
       wsClient.off('UNREAD_COUNT_UPDATE')
       wsClient.off('MESSAGE_READ')
+      wsClient.off('CONVERSATION_VISIBILITY_RESTORED')
       
       wsClient.disconnect()
       this.wsConnected = false

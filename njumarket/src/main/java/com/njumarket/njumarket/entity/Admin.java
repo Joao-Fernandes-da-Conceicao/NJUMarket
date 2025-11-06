@@ -116,4 +116,20 @@ public class Admin {
         this.lastLoginIp = loginIp;
         this.loginCount = (this.loginCount == null ? 0 : this.loginCount) + 1;
     }
+    
+    /**
+     * 重写toString方法，避免访问懒加载的字段
+     * 防止在Spring Security调用getName()时触发LazyInitializationException
+     */
+    @Override
+    public String toString() {
+        return "Admin{" +
+                "adminId='" + adminId + '\'' +
+                ", username='" + username + '\'' +
+                ", realName='" + realName + '\'' +
+                ", adminLevel='" + adminLevel + '\'' +
+                ", accountStatus='" + accountStatus + '\'' +
+                ", createTime=" + createTime +
+                '}';
+    }
 }

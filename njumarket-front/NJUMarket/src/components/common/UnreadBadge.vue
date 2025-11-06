@@ -98,10 +98,11 @@ const shouldHide = computed(() => {
 
 /* 数字角标样式（使用 Element Plus 的 el-badge，这里主要处理自定义样式） */
 .unread-badge-number {
-  /* Element Plus el-badge 的样式会自动应用，这里可以添加覆盖样式 */
+  /* Element Plus el-badge 的样式会自动应用 */
+  /* 如需添加自定义样式，可在此处添加 */
 }
 
-/* 点状角标样式 */
+/* 点状角标样式（默认：右上角） */
 .unread-badge-dot.has-unread::after {
   content: '';
   position: absolute;
@@ -113,6 +114,13 @@ const shouldHide = computed(() => {
   border-radius: 50%;
   border: 2px solid white;
   z-index: 1;
+}
+
+/* ✅ v1.3.x: 手机端订单提醒角标特殊样式（垂直居中 + 右移更多，避免遮挡文字） */
+.unread-badge-dot.mobile-order-badge.has-unread::after {
+  top: 50%;
+  right: -16px;
+  transform: translateY(-50%);
 }
 
 /* 文本角标样式（用于面板头部等场景） */
@@ -128,7 +136,7 @@ const shouldHide = computed(() => {
 
 /* 默认模式：仅容器，不添加额外样式 */
 .unread-badge-default {
-  /* 无额外样式 */
+  /* 默认模式无需额外样式，保持容器特性 */
 }
 </style>
 

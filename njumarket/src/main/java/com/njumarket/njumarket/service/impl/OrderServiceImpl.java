@@ -12,6 +12,7 @@ import com.njumarket.njumarket.repository.UserRepository;
 import com.njumarket.njumarket.repository.UserProfileRepository;
 import com.njumarket.njumarket.service.OrderService;
 import com.njumarket.njumarket.service.ChangeRecordService;
+import com.njumarket.njumarket.service.UserProfileService;
 import com.njumarket.njumarket.utils.UserHolder;
 import com.njumarket.njumarket.utils.RedisLockUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
@@ -43,6 +44,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserProfileRepository userProfileRepository;
     private final com.njumarket.njumarket.service.WebSocketRetryService webSocketRetryService;
     private final ChangeRecordService changeRecordService;
+    private final UserProfileService userProfileService;
     private final RedisLockUtil redisLockUtil;
 
     // ========== 买家功能 ==========
@@ -160,6 +162,7 @@ public class OrderServiceImpl implements OrderService {
             changeRecordService.recordOrderChange(order.getOrderId(), "CREATE", now);
             
             // ✅ WebSocket 推送：订单创建通知给卖家（发送完整OrderDTO，包含profile信息）
+            // 注意：pushOrderChangeNotificationWithDTO 内部已包含订单提醒状态更新逻辑
             OrderDTO orderDTOForNotification = convertToDTOWithProfile(order);
             pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_CREATED", order.getOrderStatus(), "SELLER", orderDTOForNotification);
             
@@ -1777,6 +1780,15 @@ public class OrderServiceImpl implements OrderService {
             webSocketRetryService.pushWithRetry(userId, notification, "ORDER_CHANGE");
             log.debug("订单变化通知推送尝试（带重试）: userId={}, orderId={}, changeType={}, orderStatus={}, targetRole={}, hasOrderDTO={}", 
                     userId, orderId, changeType, orderStatus, targetRole, orderDTO != null);
+            
+            // ✅ v1.3.x: 更新订单提醒状态（持久化）- 仅在用户不在对应页面时设置
+            // 注意：这里不检查用户是否在页面，因为WebSocket推送会处理，这里只负责持久化状态
+            try {
+                userProfileService.setOrderReminderStatus(userId, targetRole, true);
+            } catch (Exception e) {
+                log.warn("更新订单提醒状态失败（不影响订单操作）: userId={}, role={}, error={}", 
+                    userId, targetRole, e.getMessage());
+            }
         } catch (Exception e) {
             log.error("推送订单变化通知失败: userId={}, orderId={}, changeType={}, error={}", 
                     userId, orderId, changeType, e.getMessage(), e);

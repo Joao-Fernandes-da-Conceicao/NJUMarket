@@ -91,4 +91,27 @@ public interface UserProfileService {
      * 检查用户是否有档案
      */
     boolean hasUserProfile(String userId);
+    
+    // ✅ v1.3.x: 订单提醒相关方法（向后兼容，不影响现有功能）
+    /**
+     * 获取订单提醒状态
+     * @param userId 用户ID
+     * @return Map包含 sellerOrderHasNew 和 buyerOrderHasNew（如果字段不存在则返回false）
+     */
+    java.util.Map<String, Boolean> getOrderReminderStatus(String userId);
+    
+    /**
+     * 设置订单提醒状态
+     * @param userId 用户ID
+     * @param role 角色（"SELLER" 或 "BUYER"）
+     * @param hasNew 是否有新变化
+     */
+    void setOrderReminderStatus(String userId, String role, boolean hasNew);
+    
+    /**
+     * 清除订单提醒状态
+     * @param userId 用户ID
+     * @param role 角色（"SELLER" 或 "BUYER"）
+     */
+    void clearOrderReminderStatus(String userId, String role);
 }

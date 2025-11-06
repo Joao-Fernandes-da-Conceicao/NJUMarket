@@ -49,6 +49,13 @@ public class UserProfile {
     @Column(name = "vip_level", length = 20)
     private String vipLevel = "NORMAL"; // NORMAL, BRONZE, SILVER, GOLD, PLATINUM
     
+    // ✅ v1.3.x: 订单提醒字段（可选，向后兼容）
+    @Column(name = "seller_order_has_new", nullable = true)
+    private Boolean sellerOrderHasNew = false;
+    
+    @Column(name = "buyer_order_has_new", nullable = true)
+    private Boolean buyerOrderHasNew = false;
+    
     // 一对一关系：档案属于某个用户
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", insertable = false, updatable = false)

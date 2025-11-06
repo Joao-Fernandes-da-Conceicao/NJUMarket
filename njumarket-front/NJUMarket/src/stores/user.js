@@ -83,6 +83,11 @@ export const useUserStore = defineStore('user', {
           import('./order').then(({ useOrderStore }) => {
             const orderStore = useOrderStore()
             orderStore.initWebSocketListeners()
+            
+            // ✅ v1.3.x: 从后端获取订单提醒状态（应用启动时扫描profile）
+            orderStore.fetchOrderReminderStatus().catch(err => {
+              console.warn('获取订单提醒状态失败（不影响应用启动）:', err)
+            })
           }).catch(err => {
             console.error('初始化订单 WebSocket 监听失败:', err)
           })
@@ -181,6 +186,12 @@ export const useUserStore = defineStore('user', {
         const orderStore = useOrderStore()
         orderStore.initWebSocketListeners()
         
+        // ✅ v1.3.x: 从登录响应中初始化订单提醒状态（向后兼容）
+        if (response.data.orderReminderStatus) {
+          orderStore.setSellerOrderHasNew(response.data.orderReminderStatus.sellerOrderHasNew || false)
+          orderStore.setBuyerOrderHasNew(response.data.orderReminderStatus.buyerOrderHasNew || false)
+        }
+        
         return response
       } else {
         // ✅ 优先使用errorMsg，如果为空则使用message
@@ -209,6 +220,12 @@ export const useUserStore = defineStore('user', {
         const { useOrderStore } = await import('./order')
         const orderStore = useOrderStore()
         orderStore.initWebSocketListeners()
+        
+        // ✅ v1.3.x: 从登录响应中初始化订单提醒状态（向后兼容）
+        if (response.data.orderReminderStatus) {
+          orderStore.setSellerOrderHasNew(response.data.orderReminderStatus.sellerOrderHasNew || false)
+          orderStore.setBuyerOrderHasNew(response.data.orderReminderStatus.buyerOrderHasNew || false)
+        }
         
         return response
       } else {

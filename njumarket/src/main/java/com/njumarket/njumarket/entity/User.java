@@ -110,4 +110,19 @@ public class User {
     public Boolean canPublish() {
         return "ACTIVE".equals(this.accountStatus);
     }
+    
+    /**
+     * 重写toString方法，避免访问懒加载的集合字段
+     * 防止在Spring Security调用getName()时触发LazyInitializationException
+     */
+    @Override
+    public String toString() {
+        return "User{" +
+                "userId='" + userId + '\'' +
+                ", primaryPhone='" + primaryPhone + '\'' +
+                ", username='" + username + '\'' +
+                ", registerTime=" + registerTime +
+                ", accountStatus='" + accountStatus + '\'' +
+                '}';
+    }
 }

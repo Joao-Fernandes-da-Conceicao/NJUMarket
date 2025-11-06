@@ -327,7 +327,15 @@ export const profileAPI = {
   
   // 获取排行榜
   getRankings: (type, page = 1, size = 10) => 
-    api.get('/user/profile/rankings', { params: { type, page, size } })
+    api.get('/user/profile/rankings', { params: { type, page, size } }),
+  
+  // ✅ v1.3.x: 清除订单提醒状态
+  clearOrderReminder: (role) => 
+    api.post('/user/profile/order-reminder/clear', null, { params: { role } }),
+  
+  // ✅ v1.3.x: 获取订单提醒状态
+  getOrderReminderStatus: () => 
+    api.get('/user/profile/order-reminder/status')
 }
 
 // 图片相关API

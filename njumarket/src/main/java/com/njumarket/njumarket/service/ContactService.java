@@ -17,6 +17,9 @@ public interface ContactService {
     // 获取对话详情（包含消息历史）
     Result getConversationDetail(String userId, String conversationId, int page, int size);
     
+    // ✅ v1.3.x: 获取指定时间之前的消息（用于无限滚动加载历史消息）
+    Result getMessagesBefore(String userId, String conversationId, String beforeTime, int size);
+    
     // 获取或创建对话（基于用户对，确保唯一性，不再依赖商品/订单）
     Result getOrCreateConversation(String userId, String otherUserId);
     

@@ -61,6 +61,29 @@ export const useOrderStore = defineStore('order', {
   
   actions: {
     /**
+     * ✅ v1.3.x: 从后端获取订单提醒状态（应用启动时调用）
+     */
+    async fetchOrderReminderStatus() {
+      try {
+        const { profileAPI } = await import('../api')
+        const response = await profileAPI.getOrderReminderStatus()
+        if (response && response.success) {
+          const status = response.data || {}
+          this.sellerOrderHasNew = status.sellerOrderHasNew || false
+          this.buyerOrderHasNew = status.buyerOrderHasNew || false
+          console.log('订单提醒状态已从后端加载:', {
+            sellerOrderHasNew: this.sellerOrderHasNew,
+            buyerOrderHasNew: this.buyerOrderHasNew
+          })
+        }
+      } catch (error) {
+        // ✅ 兼容性处理：如果API失败（可能是旧版本后端），不影响应用启动
+        console.warn('获取订单提醒状态失败（不影响应用启动）:', error)
+        // 保持默认值 false
+      }
+    },
+    
+    /**
      * 设置卖家订单变化提醒
      */
     setSellerOrderHasNew(hasNew) {
@@ -77,8 +100,17 @@ export const useOrderStore = defineStore('order', {
     /**
      * 清除卖家订单变化提醒（进入"卖家订单"页面时调用）
      */
-    clearSellerOrderNotification() {
+    async clearSellerOrderNotification() {
       this.sellerOrderHasNew = false
+      
+      // ✅ v1.3.x: 同步清除后端数据库状态（向后兼容，如果API失败不影响前端状态）
+      try {
+        const { profileAPI } = await import('../api')
+        await profileAPI.clearOrderReminder('SELLER')
+      } catch (error) {
+        console.warn('清除卖家订单提醒状态失败（不影响前端状态）:', error)
+      }
+      
       // ✅ 预留：可选择清除卖家相关的通知（用于弹出式卡片）
       // 如果需要清除，可以取消下面的注释：
       // this.notifications = this.notifications.filter(n => n.targetRole !== 'SELLER')
@@ -87,8 +119,17 @@ export const useOrderStore = defineStore('order', {
     /**
      * 清除买家订单变化提醒（进入"我的订单"页面时调用）
      */
-    clearBuyerOrderNotification() {
+    async clearBuyerOrderNotification() {
       this.buyerOrderHasNew = false
+      
+      // ✅ v1.3.x: 同步清除后端数据库状态（向后兼容，如果API失败不影响前端状态）
+      try {
+        const { profileAPI } = await import('../api')
+        await profileAPI.clearOrderReminder('BUYER')
+      } catch (error) {
+        console.warn('清除买家订单提醒状态失败（不影响前端状态）:', error)
+      }
+      
       // ✅ 预留：可选择清除买家相关的通知（用于弹出式卡片）
       // 如果需要清除，可以取消下面的注释：
       // this.notifications = this.notifications.filter(n => n.targetRole !== 'BUYER')
