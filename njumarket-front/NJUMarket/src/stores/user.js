@@ -4,30 +4,35 @@ import { authAPI } from '../api'
 export const useUserStore = defineStore('user', {
   state: () => ({
     user: null,
-    token: null,
+    accessToken: null,
+    refreshToken: null,
     isLoggedIn: false
   }),
   
   getters: {
     userInfo: (state) => state.user,
-    isAuthenticated: (state) => state.isLoggedIn
+    isAuthenticated: (state) => state.isLoggedIn,
+    // 兼容旧代码：token指向accessToken
+    token: (state) => state.accessToken
   },
   
   actions: {
     // 初始化用户状态
     initUser() {
-      const token = localStorage.getItem('token')
+      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token') // 兼容旧版本
+      const refreshToken = localStorage.getItem('refreshToken')
       const userStr = localStorage.getItem('user')
       
       console.log('初始化用户状态:', { 
-        hasToken: !!token, 
+        hasAccessToken: !!accessToken, 
+        hasRefreshToken: !!refreshToken,
         hasUserStr: !!userStr,
-        tokenLength: token?.length,
-        userStrLength: userStr?.length,
-        userStrContent: userStr // 添加内容查看
+        accessTokenLength: accessToken?.length,
+        refreshTokenLength: refreshToken?.length,
+        userStrLength: userStr?.length
       })
       
-      if (token && userStr) {
+      if (accessToken && userStr) {
         try {
           // 检查用户数据是否为有效字符串
           if (userStr === 'undefined' || userStr === 'null' || userStr.trim() === '') {
@@ -36,11 +41,18 @@ export const useUserStore = defineStore('user', {
             return
           }
           
-          // 验证token是否过期
-          if (this.isTokenExpired(token)) {
-            console.warn('Token已过期，清除用户数据')
-            this.clearUserData()
-            return
+          // 验证accessToken是否过期
+          if (this.isTokenExpired(accessToken)) {
+            console.warn('AccessToken已过期')
+            // 如果有refreshToken，尝试刷新（但不阻塞初始化）
+            if (refreshToken && !this.isTokenExpired(refreshToken)) {
+              console.log('检测到RefreshToken有效，将在首次请求时自动刷新')
+              // 不在这里刷新，让响应拦截器处理
+            } else {
+              console.warn('RefreshToken也无效，清除用户数据')
+              this.clearUserData()
+              return
+            }
           }
           
           // 解析用户数据
@@ -60,9 +72,15 @@ export const useUserStore = defineStore('user', {
             return
           }
           
-          this.token = token
+          this.accessToken = accessToken
+          this.refreshToken = refreshToken
           this.user = userData
           this.isLoggedIn = true
+          
+          // 同步更新localStorage（如果旧版本只有token，迁移到accessToken）
+          if (accessToken && !localStorage.getItem('accessToken')) {
+            localStorage.setItem('accessToken', accessToken)
+          }
           
           console.log('用户状态初始化成功:', {
             userId: userData.userId,
@@ -156,24 +174,67 @@ export const useUserStore = defineStore('user', {
     clearUserData() {
       console.log('清除用户数据')
       this.user = null
-      this.token = null
+      this.accessToken = null
+      this.refreshToken = null
       this.isLoggedIn = false
       
       // 清理localStorage
-      localStorage.removeItem('token')
+      localStorage.removeItem('token') // 兼容旧版本
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
       localStorage.removeItem('user')
       
       console.log('用户数据已清除')
+    },
+    
+    // 保存Token（AccessToken和RefreshToken）
+    saveTokens(accessToken, refreshToken) {
+      this.accessToken = accessToken
+      this.refreshToken = refreshToken
+      localStorage.setItem('accessToken', accessToken)
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken)
+      }
+      // 兼容旧版本：同时保存token
+      localStorage.setItem('token', accessToken)
+    },
+    
+    // 刷新Token
+    async refreshAccessToken() {
+      if (!this.refreshToken) {
+        throw new Error('没有RefreshToken，无法刷新')
+      }
+      
+      try {
+        const response = await authAPI.refreshToken(this.refreshToken)
+        if (response.success && response.data) {
+          const { accessToken, refreshToken: newRefreshToken } = response.data
+          this.saveTokens(accessToken, newRefreshToken)
+          console.log('Token刷新成功')
+          return true
+        } else {
+          throw new Error(response.errorMsg || 'Token刷新失败')
+        }
+      } catch (error) {
+        console.error('Token刷新失败:', error)
+        this.clearUserData()
+        throw error
+      }
     },
     // 登录
     async login(loginData) {
       const response = await authAPI.login(loginData)
       if (response.success) {
-        this.token = response.data.token
+        // 保存AccessToken和RefreshToken
+        const accessToken = response.data.accessToken || response.data.token // 兼容旧版本
+        const refreshToken = response.data.refreshToken
+        this.saveTokens(accessToken, refreshToken)
+        
+        // 保存用户信息
         this.user = response.data.userInfo || response.data.user // 兼容两种数据结构
         this.isLoggedIn = true
-        localStorage.setItem('token', this.token)
         localStorage.setItem('user', JSON.stringify(this.user))
+        
         console.log('登录成功，用户数据:', this.user)
         
         // 初始化 WebSocket 连接
@@ -204,11 +265,16 @@ export const useUserStore = defineStore('user', {
     async loginByCode(phone, code) {
       const response = await authAPI.loginByCode(phone, code)
       if (response.success) {
-        this.token = response.data.token
+        // 保存AccessToken和RefreshToken
+        const accessToken = response.data.accessToken || response.data.token // 兼容旧版本
+        const refreshToken = response.data.refreshToken
+        this.saveTokens(accessToken, refreshToken)
+        
+        // 保存用户信息
         this.user = response.data.userInfo || response.data.user // 兼容两种数据结构
         this.isLoggedIn = true
-        localStorage.setItem('token', this.token)
         localStorage.setItem('user', JSON.stringify(this.user))
+        
         console.log('验证码登录成功，用户数据:', this.user)
         
         // 初始化 WebSocket 连接
@@ -239,11 +305,16 @@ export const useUserStore = defineStore('user', {
     async register(registerData) {
       const response = await authAPI.register(registerData)
       if (response.success) {
-        this.token = response.data.token
+        // 保存AccessToken和RefreshToken
+        const accessToken = response.data.accessToken || response.data.token // 兼容旧版本
+        const refreshToken = response.data.refreshToken
+        this.saveTokens(accessToken, refreshToken)
+        
+        // 保存用户信息
         this.user = response.data.userInfo || response.data.user // 兼容两种数据结构
         this.isLoggedIn = true
-        localStorage.setItem('token', this.token)
         localStorage.setItem('user', JSON.stringify(this.user))
+        
         console.log('注册成功，用户数据:', this.user)
         
         // 初始化 WebSocket 连接
@@ -356,12 +427,26 @@ export const useUserStore = defineStore('user', {
       console.log('手动清理localStorage中的无效数据')
       
       const token = localStorage.getItem('token')
+      const accessToken = localStorage.getItem('accessToken')
+      const refreshToken = localStorage.getItem('refreshToken')
       const userStr = localStorage.getItem('user')
       
-      // 检查token
+      // 检查token（兼容旧版本）
       if (token && (token === 'undefined' || token === 'null' || token.trim() === '')) {
         console.log('发现无效token，清理中...')
         localStorage.removeItem('token')
+      }
+      
+      // 检查accessToken
+      if (accessToken && (accessToken === 'undefined' || accessToken === 'null' || accessToken.trim() === '')) {
+        console.log('发现无效accessToken，清理中...')
+        localStorage.removeItem('accessToken')
+      }
+      
+      // 检查refreshToken
+      if (refreshToken && (refreshToken === 'undefined' || refreshToken === 'null' || refreshToken.trim() === '')) {
+        console.log('发现无效refreshToken，清理中...')
+        localStorage.removeItem('refreshToken')
       }
       
       // 检查用户数据

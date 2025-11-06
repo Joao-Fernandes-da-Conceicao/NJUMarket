@@ -48,8 +48,9 @@ class WebSocketClient {
       return
     }
     
-    const token = localStorage.getItem('token')
-    if (!token) {
+    // 优先使用accessToken，兼容旧版本的token
+    const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token')
+    if (!accessToken) {
       // Not logged in, cannot establish WebSocket connection
       return
     }
@@ -61,7 +62,7 @@ class WebSocketClient {
       : 'localhost:8080'      // 开发环境：直接连接后端
     
     // Spring WebSocket 使用 /api/ws 端点，SockJS 会自动处理协议升级
-    const wsUrl = `${protocol}//${host}/api/ws?token=${token}`
+    const wsUrl = `${protocol}//${host}/api/ws?token=${accessToken}`
     
     this.isConnecting = true
     

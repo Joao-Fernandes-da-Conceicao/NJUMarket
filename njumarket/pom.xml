@@ -95,6 +95,12 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 		
+		<!-- AOP支持 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
+		
 		<!-- 文件上传处理 -->
 		<dependency>
 			<groupId>commons-fileupload</groupId>

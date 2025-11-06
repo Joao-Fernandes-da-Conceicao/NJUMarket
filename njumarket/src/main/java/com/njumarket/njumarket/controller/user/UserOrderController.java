@@ -8,11 +8,11 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @Tag(name = "用户订单管理", description = "买家订单和卖家订单的完整管理功能")
 @RestController
@@ -29,7 +29,7 @@ public class UserOrderController {
         @ApiResponse(responseCode = "404", description = "商品不存在")
     })
     @PostMapping("/create")
-    public Result createOrder(@RequestBody OrderDTO orderDTO) {
+    public Result createOrder(@Valid @RequestBody OrderDTO orderDTO) {
         return orderService.createOrder(orderDTO);
     }
 
@@ -97,8 +97,8 @@ public class UserOrderController {
     })
     @PostMapping("/{orderId}/create-from-snapshot")
     public Result createOrderFromSnapshot(@Parameter(description = "订单ID", required = true) @PathVariable String orderId, 
-                                         @RequestBody Map<String, Object> orderData) {
-        return orderService.createOrderFromSnapshot(orderId, orderData);
+                                         @Valid @RequestBody com.njumarket.njumarket.dto.OrderSnapshotDTO orderSnapshotDTO) {
+        return orderService.createOrderFromSnapshot(orderId, orderSnapshotDTO);
     }
 
     @Operation(summary = "获取买家订单列表", description = "获取当前用户的买家订单列表")

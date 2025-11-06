@@ -1,5 +1,6 @@
 package com.njumarket.njumarket.dto;
 
+import jakarta.validation.constraints.*;
 import lombok.Data;
 
 /**
@@ -10,12 +11,23 @@ public class OrderDTO {
     private String orderId;
     private String buyerId;
     private String sellerId;
+    
+    @NotBlank(message = "商品ID不能为空")
     private String commodityId;
+    
     private String orderStatus;
     private String sellerVisibility;
     private String buyerVisibility;
+    
+    @NotNull(message = "支付金额不能为空")
+    @DecimalMin(value = "0.01", message = "支付金额必须大于0")
     private Double payAmount;
+    
+    @NotNull(message = "购买数量不能为空")
+    @Min(value = 1, message = "购买数量必须大于0")
     private Integer quantity;
+    
+    @NotBlank(message = "收货地址不能为空")
     private String shippingAddress;
     private String trackingNumber;
     private String remark;

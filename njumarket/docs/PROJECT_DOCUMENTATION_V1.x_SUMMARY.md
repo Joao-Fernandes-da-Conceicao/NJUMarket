@@ -115,6 +115,30 @@
 - ✅ 代码清理：删除冗余的拦截器和ThreadLocal代码
 - ✅ LazyInitializationException修复：修复User和Admin实体的toString方法
 
+### v1.4.0 - 代码标准化与架构规范化（2025-01-XX）
+
+**主要成就**：
+- ✅ 统一异常处理：所有Service方法统一使用`BusinessException`，移除冗余的`try-catch`
+- ✅ 统一日志记录：AOP统一记录Service层日志，移除手动日志，排除定时任务日志
+- ✅ 业务校验组件化：创建`BusinessValidator`工具类，复用常见业务校验逻辑
+- ✅ 参数验证标准化：Bean Validation + `@Valid`注解，统一参数验证
+- ✅ DTO强类型化：替换`Map<String, Object>`为强类型DTO（`OrderSnapshotDTO`）
+- ✅ 日志编码优化：解决Windows控制台中文乱码问题
+- ✅ 前端自动填充：编辑资料页面自动填充用户信息，提升用户体验
+
+**版本定位**：v1.x阶段的收官版本，实现真正的企业级代码标准
+
+### v1.4.1 - 双Token自动刷新机制（2025-01-XX）
+
+**主要成就**：
+- ✅ 双Token机制：实现AccessToken + RefreshToken自动刷新机制
+- ✅ 前端自动刷新：响应拦截器自动检测401并刷新Token，用户无感知
+- ✅ 防止并发刷新：多个请求同时触发时，只执行一次刷新操作
+- ✅ 移除冗余续期：移除Token续期逻辑，统一使用RefreshToken刷新机制
+- ✅ Admin端确认：确认Admin端无续期机制，符合设计预期
+
+**版本定位**：意外更新版本，完善Token管理策略
+
 ---
 
 ## 核心功能总结
@@ -298,6 +322,7 @@ v2.0 版本将专注于**微服务架构改造**，将单体应用拆分为多�
 4. **用户体验**：无限滚动、软删除、智能角标等用户体验优化
 5. **代码质量**：清晰的分层架构、统一的代码规范、完善的文档体系
 6. **技术栈规范化**：Spring Security标准实现，符合Spring生态最佳实践
+7. **代码标准化**：统一异常处理、统一日志记录、业务校验组件化，实现真正的企业级代码标准
 
 ### v1.x 阶段技术积累
 1. **Spring Boot**：深入理解Spring Boot生态
@@ -313,14 +338,43 @@ v2.0 版本将专注于**微服务架构改造**，将单体应用拆分为多�
 - ✅ 性能优化完成
 - ✅ 代码质量良好
 - ✅ 技术栈规范化（Spring Security标准实现）
+- ✅ 代码标准化（统一异常处理、统一日志记录、业务校验组件化）
 - ✅ 文档体系完善
 - ✅ 测试验证通过
 
-**项目状态**：✅ **v1.x 阶段已完成，基本功能彻底完成，可以进入 v2.0 微服务架构改造阶段**
+**项目状态**：✅ **v1.x 阶段正式结束，代码标准化完成，可以进入 v2.0 微服务架构改造阶段**
 
 ---
 
 **文档版本**：v1.x 总结  
 **最后更新**：2025-01-XX  
-**包含版本**：v1.0 → v1.1.0 → v1.1.1 → v1.1.2 → v1.1.3 → v1.1.4 → v1.1.5 → v1.2.0 → v1.2.1 → v1.2.2 → v1.3.0 → v1.3.1
+**包含版本**：v1.0 → v1.1.0 → v1.1.1 → v1.1.2 → v1.1.3 → v1.1.4 → v1.1.5 → v1.2.0 → v1.2.1 → v1.2.2 → v1.3.0 → v1.3.1 → v1.4.0 → v1.4.1
+
+## 📚 相关文档链接
+
+### 版本文档（按时间顺序）
+1. [v1.0 项目文档](./PROJECT_DOCUMENTATION_V1.0.md) - 项目初始版本
+2. [v1.1.0 项目文档](./PROJECT_DOCUMENTATION_V1.1.0.md) - 性能优化基础
+3. [v1.1.1 项目文档](./PROJECT_DOCUMENTATION_V1.1.1.md) - 消息系统完善
+4. [v1.1.2 项目文档](./PROJECT_DOCUMENTATION_V1.1.2.md) - 订单通知系统
+5. [v1.1.3 项目文档](./PROJECT_DOCUMENTATION_V1.1.3.md) - 管理端功能完善
+6. [v1.1.4 项目文档](./PROJECT_DOCUMENTATION_V1.1.4.md) - 消息管理和管理员管理
+7. [v1.1.5 项目文档](./PROJECT_DOCUMENTATION_V1.1.5.md) - 代码质量提升
+8. [v1.2.0 项目文档](./PROJECT_DOCUMENTATION_V1.2.0.md) - 库存超卖防护
+9. [v1.2.1 项目文档](./PROJECT_DOCUMENTATION_V1.2.1.md) - 分页总数修复
+10. [v1.2.2 项目文档](./PROJECT_DOCUMENTATION_V1.2.2.md) - 索引优化
+11. [v1.3.0 项目文档](./PROJECT_DOCUMENTATION_V1.3.0.md) - 用户体验优化与数据持久化
+12. [v1.3.1 项目文档](./PROJECT_DOCUMENTATION_V1.3.1.md) - Spring Security规范化迁移
+13. [v1.4 项目文档](./PROJECT_DOCUMENTATION_V1.4.md) - 代码标准化与架构规范化 ⭐
+
+### 技术文档
+- [代码结构改进建议](./CODE_STRUCTURE_IMPROVEMENTS.md) - 代码结构改进详细说明
+- [代码改进建议](./CODE_IMPROVEMENT_RECOMMENDATIONS.md) - 代码改进建议和完成情况
+- [异常处理统一指南](./EXCEPTION_HANDLING_UNIFICATION_GUIDE.md) - 异常处理统一指南
+- [日志记录标准](./LOGGING_STANDARD.md) - 日志记录标准规范
+- [AOP日志切面使用说明](./AOP_LOGGING_GUIDE.md) - AOP日志切面详细说明
+- [Spring Security实现文档](./SPRING_SECURITY_IMPLEMENTATION.md) - Spring Security详细实现说明
+
+### 规划文档
+- [v2.0 阶段规划](./PROJECT_DOCUMENTATION_V2.0.md) - 微服务架构改造规划
 

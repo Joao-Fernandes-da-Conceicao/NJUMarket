@@ -10,6 +10,8 @@ import com.njumarket.njumarket.repository.UserRepository;
 import com.njumarket.njumarket.service.UserService;
 import com.njumarket.njumarket.service.PasswordService;
 import com.njumarket.njumarket.service.UserProfileService;
+import com.njumarket.njumarket.exception.BusinessException;
+import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.UserHolder;
 import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.RedisConstants;
@@ -18,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.servlet.http.HttpSession;
 
@@ -48,33 +51,27 @@ public class UserServiceImpl implements UserService {
         String password = loginForm.getPassword();
         
         // 2. 校验输入参数
-        if (identifier == null || identifier.trim().isEmpty()) {
-            return Result.fail("用户名或手机号不能为空");
-        }
-        if (password == null || password.trim().isEmpty()) {
-            return Result.fail("密码不能为空");
-        }
+        BusinessValidator.requireNotBlank(identifier, "用户名或手机号不能为空");
+        BusinessValidator.requireNotBlank(password, "密码不能为空");
         
         // 3. 根据标识符查询用户（支持用户名或手机号登录）
-        User user = userRepository.findByUsernameOrPhone(identifier.trim()).orElse(null);
-        if (user == null) {
-            return Result.fail("用户名或手机号不存在");
-        }
+        User user = userRepository.findByUsernameOrPhone(identifier.trim())
+            .orElseThrow(() -> new BusinessException("用户名或手机号不存在"));
         
         // 4. 检查账户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
             String statusMessage = getAccountStatusMessage(user.getAccountStatus());
-            return Result.fail(statusMessage);
+            throw new BusinessException(statusMessage);
         }
         
         // 5. 验证密码
         if (user.getPassword() == null) {
-            return Result.fail("该账户未设置密码，请使用手机验证码登录");
+            throw new BusinessException("该账户未设置密码，请使用手机验证码登录");
         }
         
         if (!passwordService.matches(password, user.getPassword())) {
             log.warn("用户密码验证失败: identifier={}", identifier);
-            return Result.fail("密码错误");
+            throw new BusinessException("密码错误");
         }
         
         // 6. 生成并存储Token
@@ -82,8 +79,9 @@ public class UserServiceImpl implements UserService {
         
         // 7. 返回登录结果
         Map<String, Object> result = new HashMap<>();
-        result.put("token", tokenResult.get("accessToken"));
+        result.put("accessToken", tokenResult.get("accessToken"));
         result.put("refreshToken", tokenResult.get("refreshToken"));
+        result.put("expiresIn", tokenResult.get("expiresIn"));
         result.put("userInfo", convertToUserDTO(user));
         
         // ✅ v1.3.x: 添加订单提醒状态（向后兼容，如果字段不存在则返回false）
@@ -99,7 +97,6 @@ public class UserServiceImpl implements UserService {
             result.put("orderReminderStatus", defaultStatus);
         }
         
-        log.info("用户密码登录成功: userId={}, identifier={}", user.getUserId(), identifier);
         return Result.ok(result);
     }
 
@@ -112,35 +109,30 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result registerUser(RegisterDTO registerDTO) {
         // 1. 校验输入参数
-        if (registerDTO.getPhone() == null || registerDTO.getPhone().trim().isEmpty()) {
-            return Result.fail("手机号不能为空");
-        }
-        if (registerDTO.getPassword() == null || registerDTO.getPassword().trim().isEmpty()) {
-            return Result.fail("密码不能为空");
-        }
-        // 注意：验证码已移除，不再需要验证码
+        BusinessValidator.requireNotBlank(registerDTO.getPhone(), "手机号不能为空");
+        BusinessValidator.requireNotBlank(registerDTO.getPassword(), "密码不能为空");
         
         // 2. 校验手机号格式
         String phone = registerDTO.getPhone().trim();
         if (RegexUtils.isPhoneInvalid(phone)) {
-            return Result.fail("手机号格式错误");
+            throw new BusinessException("手机号格式错误");
         }
         
         // 3. 校验密码强度
         String password = registerDTO.getPassword().trim();
         if (password.length() < 6) {
-            return Result.fail("密码长度不能少于6位");
+            throw new BusinessException("密码长度不能少于6位");
         }
         
         // 4. 校验密码确认
         if (registerDTO.getConfirmPassword() != null && 
             !password.equals(registerDTO.getConfirmPassword().trim())) {
-            return Result.fail("两次输入的密码不一致");
+            throw new BusinessException("两次输入的密码不一致");
         }
         
         // 5. 检查手机号是否已注册
         if (userRepository.existsByPrimaryPhone(phone)) {
-            return Result.fail("该手机号已注册");
+            throw new BusinessException("该手机号已注册");
         }
         
         // 6. 检查用户名是否已存在（如果提供了用户名）
@@ -148,14 +140,14 @@ public class UserServiceImpl implements UserService {
         if (username != null && !username.trim().isEmpty()) {
             username = username.trim();
             if (userRepository.existsByUsername(username)) {
-                return Result.fail("用户名已存在");
+                throw new BusinessException("用户名已存在");
             }
             // 校验用户名格式
             if (username.length() < 3 || username.length() > 20) {
-                return Result.fail("用户名长度应在3-20位之间");
+                throw new BusinessException("用户名长度应在3-20位之间");
             }
             if (!username.matches("^[a-zA-Z0-9_]+$")) {
-                return Result.fail("用户名只能包含字母、数字和下划线");
+                throw new BusinessException("用户名只能包含字母、数字和下划线");
             }
         }
         
@@ -171,36 +163,29 @@ public class UserServiceImpl implements UserService {
         newUser.setPassword(encodedPassword);
         
         // 9. 保存用户到数据库
-        try {
-            User savedUser = userRepository.save(newUser);
-            
-            // 10. 创建用户档案
-            createUserProfile(savedUser, registerDTO.getNickname());
-            
-            // 11. 生成并存储Token（自动登录）
-            Map<String, Object> tokenResult = generateAndStoreTokens(savedUser);
-            
-            // 12. 返回注册结果
-            Map<String, Object> result = new HashMap<>();
-            result.put("token", tokenResult.get("accessToken"));
-            result.put("refreshToken", tokenResult.get("refreshToken"));
-            result.put("userInfo", convertToUserDTO(savedUser));
-            
-            log.info("用户注册成功: userId={}, phone={}, username={}", 
-                savedUser.getUserId(), phone, username);
-            return Result.ok(result);
-            
-        } catch (Exception e) {
-            log.error("用户注册失败: phone={}, error={}", phone, e.getMessage());
-            return Result.fail("注册失败，请稍后重试");
-        }
+        User savedUser = userRepository.save(newUser);
+        
+        // 10. 创建用户档案
+        createUserProfile(savedUser, registerDTO.getNickname());
+        
+        // 11. 生成并存储Token（自动登录）
+        Map<String, Object> tokenResult = generateAndStoreTokens(savedUser);
+        
+        // 12. 返回注册结果
+        Map<String, Object> result = new HashMap<>();
+        result.put("accessToken", tokenResult.get("accessToken"));
+        result.put("refreshToken", tokenResult.get("refreshToken"));
+        result.put("expiresIn", tokenResult.get("expiresIn"));
+        result.put("userInfo", convertToUserDTO(savedUser));
+        
+        return Result.ok(result);
     }
 
     @Override
     public Result sendCode(String phone) {
         // 1. 校验手机号格式
         if (RegexUtils.isPhoneInvalid(phone)) {
-            return Result.fail("手机号格式错误");
+            throw new BusinessException("手机号格式错误");
         }
         
         // 2. 生成6位数验证码
@@ -225,12 +210,12 @@ public class UserServiceImpl implements UserService {
     public Result loginByCode(String phone, String code, HttpSession session) {
         // 1. 校验手机号格式
         if (RegexUtils.isPhoneInvalid(phone)) {
-            return Result.fail("手机号格式错误");
+            throw new BusinessException("手机号格式错误");
         }
         
         // 2. 校验验证码格式
         if (RegexUtils.isCodeInvalid(code)) {
-            return Result.fail("验证码格式错误");
+            throw new BusinessException("验证码格式错误");
         }
         
         // 3. 从Redis获取验证码
@@ -238,11 +223,11 @@ public class UserServiceImpl implements UserService {
         String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
         
         if (cachedCode == null) {
-            return Result.fail("验证码已过期");
+            throw new BusinessException("验证码已过期");
         }
         
         if (!cachedCode.equals(code)) {
-            return Result.fail("验证码错误");
+            throw new BusinessException("验证码错误");
         }
         
         // 4. 验证码正确，删除Redis中的验证码
@@ -258,22 +243,17 @@ public class UserServiceImpl implements UserService {
         // 6. 检查账户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
             String statusMessage = getAccountStatusMessage(user.getAccountStatus());
-            return Result.fail(statusMessage);
+            throw new BusinessException(statusMessage);
         }
         
-        // 7. 生成JWT Token
-        String token = jwtUtils.generateToken(user.getUserId(), user.getPrimaryPhone());
-        String refreshToken = jwtUtils.generateRefreshToken(user.getUserId());
+        // 7. 生成并存储Token（AccessToken和RefreshToken）
+        Map<String, Object> tokenResult = generateAndStoreTokens(user);
         
-        // 8. 将Token存储到Redis
-        String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + user.getUserId();
-        stringRedisTemplate.opsForValue().set(tokenKey, token, 
-            RedisConstants.LOGIN_TOKEN_TTL, TimeUnit.MINUTES);
-        
-        // 9. 返回登录结果
+        // 8. 返回登录结果
         Map<String, Object> result = new HashMap<>();
-        result.put("token", token);
-        result.put("refreshToken", refreshToken);
+        result.put("accessToken", tokenResult.get("accessToken"));
+        result.put("refreshToken", tokenResult.get("refreshToken"));
+        result.put("expiresIn", tokenResult.get("expiresIn"));
         result.put("userInfo", convertToUserDTO(user));
         
         // ✅ v1.3.x: 添加订单提醒状态（向后兼容，如果字段不存在则返回false）
@@ -289,7 +269,6 @@ public class UserServiceImpl implements UserService {
             result.put("orderReminderStatus", defaultStatus);
         }
         
-        log.info("用户验证码登录成功: userId={}, phone={}", user.getUserId(), phone);
         return Result.ok(result);
     }
 
@@ -304,64 +283,84 @@ public class UserServiceImpl implements UserService {
         // 1. 获取当前用户
         User currentUser = UserHolder.getUser();
         if (currentUser == null) {
-            return Result.fail("用户未登录");
+            throw new BusinessException("用户未登录");
         }
         
-        // 2. 删除Redis中的Token
+        // 2. 删除Redis中的AccessToken
         String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + currentUser.getUserId();
         stringRedisTemplate.delete(tokenKey);
         
-        // 3. 清除ThreadLocal中的用户信息
+        // 3. 删除Redis中的RefreshToken
+        String refreshKey = RedisConstants.REFRESH_TOKEN_KEY + currentUser.getUserId();
+        stringRedisTemplate.delete(refreshKey);
+        
+        // 4. 清除ThreadLocal中的用户信息
         UserHolder.removeUser();
         
-        log.info("用户登出成功: userId={}", currentUser.getUserId());
+        log.debug("用户登出成功: userId={}", currentUser.getUserId());
         return Result.ok("登出成功");
     }
 
     @Override
     public Result refreshToken(String refreshToken) {
-        // 1. 验证刷新Token
+        // 1. 验证刷新Token（JWT本身）
         if (!jwtUtils.validateToken(refreshToken)) {
-            return Result.fail("刷新Token无效");
+            throw new BusinessException("刷新Token无效或已过期");
         }
         
         // 2. 检查是否为刷新Token
         if (!jwtUtils.isRefreshToken(refreshToken)) {
-            return Result.fail("Token类型错误");
+            throw new BusinessException("Token类型错误，请使用RefreshToken");
         }
         
         // 3. 从刷新Token中获取用户ID
         String userId = jwtUtils.getUserIdFromToken(refreshToken);
         if (userId == null) {
-            return Result.fail("无法获取用户信息");
+            throw new BusinessException("无法从Token中获取用户信息");
         }
         
-        // 4. 查询用户信息
-        User user = userRepository.findById(userId).orElse(null);
-        if (user == null) {
-            return Result.fail("用户不存在");
+        // 4. 验证Redis中的RefreshToken（检查是否被撤销）
+        String refreshKey = RedisConstants.REFRESH_TOKEN_KEY + userId;
+        String cachedRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
+        
+        if (!StringUtils.hasText(cachedRefreshToken)) {
+            throw new BusinessException("RefreshToken已被撤销，请重新登录");
         }
         
-        // 5. 检查用户状态
+        // 5. 验证Redis中的RefreshToken是否与请求中的一致
+        if (!refreshToken.equals(cachedRefreshToken)) {
+            throw new BusinessException("RefreshToken不匹配，可能在其他设备登录");
+        }
+        
+        // 6. 查询用户信息
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        
+        // 7. 检查用户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
-            return Result.fail("账户已被禁用");
+            throw new BusinessException("账户已被禁用");
         }
         
-        // 6. 生成新的Token
-        String newToken = jwtUtils.generateToken(user.getUserId(), user.getPrimaryPhone());
+        // 8. 生成新的AccessToken和RefreshToken
+        String newAccessToken = jwtUtils.generateToken(user.getUserId(), user.getPrimaryPhone());
         String newRefreshToken = jwtUtils.generateRefreshToken(user.getUserId());
         
-        // 7. 更新Redis中的Token
+        // 9. 更新Redis中的AccessToken
         String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + user.getUserId();
-        stringRedisTemplate.opsForValue().set(tokenKey, newToken, 
+        stringRedisTemplate.opsForValue().set(tokenKey, newAccessToken, 
             RedisConstants.LOGIN_TOKEN_TTL, TimeUnit.MINUTES);
         
-        // 8. 返回新Token
-        Map<String, Object> result = new HashMap<>();
-        result.put("token", newToken);
-        result.put("refreshToken", newRefreshToken);
+        // 10. 更新Redis中的RefreshToken
+        stringRedisTemplate.opsForValue().set(refreshKey, newRefreshToken, 
+            RedisConstants.REFRESH_TOKEN_TTL, TimeUnit.MINUTES);
         
-        log.info("Token刷新成功: userId={}", userId);
+        // 11. 返回新Token
+        Map<String, Object> result = new HashMap<>();
+        result.put("accessToken", newAccessToken);
+        result.put("refreshToken", newRefreshToken);
+        result.put("expiresIn", RedisConstants.LOGIN_TOKEN_TTL * 60); // 转换为秒
+        
+        log.debug("Token刷新成功: userId={}", userId);
         return Result.ok(result);
     }
 

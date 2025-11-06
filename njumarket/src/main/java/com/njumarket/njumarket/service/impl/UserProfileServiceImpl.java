@@ -13,6 +13,8 @@ import com.njumarket.njumarket.repository.UserRepository;
 import com.njumarket.njumarket.repository.UserProfileRepository;
 import com.njumarket.njumarket.service.UserProfileService;
 import com.njumarket.njumarket.service.ImageService;
+import com.njumarket.njumarket.exception.BusinessException;
+import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.UserHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,14 +38,10 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     @Override
     public Result getUserProfile(String userId) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-        if (profileOpt.isEmpty()) {
-            return Result.fail("用户档案不存在");
-        }
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
         // 检查是否是查看自己的资料
         User currentUser = UserHolder.getUser();
@@ -51,58 +49,44 @@ public class UserProfileServiceImpl implements UserProfileService {
         
         if (isSelf) {
             // 查看自己的资料，返回完整信息
-            UserProfileDTO profileDTO = convertToDTO(profileOpt.get());
+            UserProfileDTO profileDTO = convertToDTO(profile);
             return Result.ok(profileDTO);
         } else {
             // 查看他人资料，返回公开信息（不含敏感数据）
-            PublicUserProfileDTO publicDTO = convertToPublicDTO(profileOpt.get());
+            PublicUserProfileDTO publicDTO = convertToPublicDTO(profile);
             return Result.ok(publicDTO);
         }
     }
     
     @Override
     public Result getPublicUserProfile(String userId) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-        if (profileOpt.isEmpty()) {
-            return Result.fail("用户档案不存在");
-        }
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
-        PublicUserProfileDTO publicDTO = convertToPublicDTO(profileOpt.get());
+        PublicUserProfileDTO publicDTO = convertToPublicDTO(profile);
         return Result.ok(publicDTO);
     }
 
     @Override
     public Result getCurrentUserProfile() {
-        User currentUser = UserHolder.getUser();
-        if (currentUser == null) {
-            return Result.fail("用户未登录");
-        }
-
+        User currentUser = BusinessValidator.requireLogin();
         return getUserProfile(currentUser.getUserId());
     }
 
     @Override
     public Result updateUserProfile(String userId, UserProfileUpdateDTO updateDTO) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-        if (profileOpt.isEmpty()) {
-            return Result.fail("用户档案不存在");
-        }
-
-        UserProfile profile = profileOpt.get();
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
         
         // 更新档案信息
         if (updateDTO.getNickname() != null && !updateDTO.getNickname().trim().isEmpty()) {
             String nickname = updateDTO.getNickname().trim();
             if (nickname.length() > 50) {
-                return Result.fail("昵称长度不能超过50个字符");
+                throw new BusinessException("昵称长度不能超过50个字符");
             }
             profile.setNickname(nickname);
         }
@@ -111,41 +95,26 @@ public class UserProfileServiceImpl implements UserProfileService {
             profile.setAvatar(updateDTO.getAvatar().trim());
         }
 
-        try {
-            userProfileRepository.save(profile);
-            log.info("用户档案更新成功: userId={}", userId);
-            return Result.ok(convertToDTO(profile));
-        } catch (Exception e) {
-            log.error("用户档案更新失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("档案更新失败");
-        }
+        userProfileRepository.save(profile);
+        return Result.ok(convertToDTO(profile));
     }
 
     @Override
     public Result updateCurrentUserProfile(UserProfileUpdateDTO updateDTO) {
-        User currentUser = UserHolder.getUser();
-        if (currentUser == null) {
-            return Result.fail("用户未登录");
-        }
-
+        User currentUser = BusinessValidator.requireLogin();
         return updateUserProfile(currentUser.getUserId(), updateDTO);
     }
 
     @Override
     public Result createUserProfile(String userId, String nickname) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
 
         // 检查用户是否存在
-        Optional<User> userOpt = userRepository.findById(userId);
-        if (userOpt.isEmpty()) {
-            return Result.fail("用户不存在");
-        }
+        BusinessValidator.requireUser(userId, userRepository);
 
         // 检查是否已有档案
         if (userProfileRepository.existsByUserId(userId)) {
-            return Result.fail("用户档案已存在");
+            throw new BusinessException("用户档案已存在");
         }
 
         // 创建新档案
@@ -160,133 +129,89 @@ public class UserProfileServiceImpl implements UserProfileService {
         profile.setTotalPurchases(0);
         profile.setVipLevel("NORMAL");
 
-        try {
-            UserProfile savedProfile = userProfileRepository.save(profile);
-            log.info("用户档案创建成功: userId={}, profileId={}", userId, savedProfile.getProfileId());
-            return Result.ok(convertToDTO(savedProfile));
-        } catch (Exception e) {
-            log.error("用户档案创建失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("档案创建失败");
-        }
+        UserProfile savedProfile = userProfileRepository.save(profile);
+        return Result.ok(convertToDTO(savedProfile));
     }
 
     @Override
     public Result uploadAvatar(String userId, MultipartFile file) {
-        try {
-            // 1. 验证用户是否存在
-            Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-            if (profileOpt.isEmpty()) {
-                return Result.fail("用户档案不存在");
-            }
-            
-            UserProfile profile = profileOpt.get();
-            
-            // 2. 上传新头像（ImageService会自动删除旧头像）
-            ImageUploadDTO uploadResult = imageService.uploadAvatar(userId, file);
-            
-            if (!uploadResult.isSuccess()) {
-                return Result.fail(uploadResult.getMessage());
-            }
-            
-            // 3. 更新用户档案中的头像URL
-            profile.setAvatar(uploadResult.getImageUrl());
-            userProfileRepository.save(profile);
-            
-            log.info("用户头像上传成功: userId={}, newAvatarUrl={}", 
-                userId, uploadResult.getImageUrl());
-            return Result.ok("头像上传成功", uploadResult);
-            
-        } catch (Exception e) {
-            log.error("用户头像上传失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("头像上传失败: " + e.getMessage());
+        // 1. 验证用户是否存在
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
+        
+        // 2. 上传新头像（ImageService会自动删除旧头像）
+        ImageUploadDTO uploadResult = imageService.uploadAvatar(userId, file);
+        
+        if (!uploadResult.isSuccess()) {
+            throw new BusinessException(uploadResult.getMessage());
         }
+        
+        // 3. 更新用户档案中的头像URL
+        profile.setAvatar(uploadResult.getImageUrl());
+        userProfileRepository.save(profile);
+        
+        return Result.ok("头像上传成功", uploadResult);
     }
 
     @Override
     public Result deleteAvatar(String userId) {
-        try {
-            // 1. 验证用户是否存在
-            Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-            if (profileOpt.isEmpty()) {
-                return Result.fail("用户档案不存在");
-            }
-            
-            UserProfile profile = profileOpt.get();
-            String currentAvatarUrl = profile.getAvatar();
-            
-            // 2. 如果没有头像，直接返回成功
-            if (currentAvatarUrl == null || currentAvatarUrl.trim().isEmpty()) {
-                return Result.ok("用户没有头像，无需删除");
-            }
-            
-            // 3. 删除头像文件
-            boolean deleted = imageService.deleteAvatarByUrl(currentAvatarUrl);
-            if (!deleted) {
-                log.warn("头像文件删除失败: userId={}, avatarUrl={}", userId, currentAvatarUrl);
-            }
-            
-            // 4. 清空用户档案中的头像URL
-            profile.setAvatar(null);
-            userProfileRepository.save(profile);
-            
-            log.info("用户头像删除成功: userId={}, avatarUrl={}", userId, currentAvatarUrl);
-            return Result.ok("头像删除成功");
-            
-        } catch (Exception e) {
-            log.error("用户头像删除失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("头像删除失败: " + e.getMessage());
+        // 1. 验证用户是否存在
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
+        
+        String currentAvatarUrl = profile.getAvatar();
+        
+        // 2. 如果没有头像，直接返回成功
+        if (currentAvatarUrl == null || currentAvatarUrl.trim().isEmpty()) {
+            return Result.ok("用户没有头像，无需删除");
         }
+        
+        // 3. 删除头像文件
+        boolean deleted = imageService.deleteAvatarByUrl(currentAvatarUrl);
+        if (!deleted) {
+            log.warn("头像文件删除失败: userId={}, avatarUrl={}", userId, currentAvatarUrl);
+        }
+        
+        // 4. 清空用户档案中的头像URL
+        profile.setAvatar(null);
+        userProfileRepository.save(profile);
+        
+        return Result.ok("头像删除成功");
     }
 
     @Override
     public Result updateUserRating(String userId, Double rating, String role) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
         if (rating == null || rating < 0 || rating > 5) {
-            return Result.fail("评分必须在0-5之间");
+            throw new BusinessException("评分必须在0-5之间");
         }
         if (!"buyer".equals(role) && !"seller".equals(role)) {
-            return Result.fail("角色类型错误");
+            throw new BusinessException("角色类型错误");
         }
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-        if (profileOpt.isEmpty()) {
-            return Result.fail("用户档案不存在");
-        }
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
-        UserProfile profile = profileOpt.get();
         if ("buyer".equals(role)) {
             profile.setBuyerRating(rating);
         } else {
             profile.setSellerRating(rating);
         }
 
-        try {
-            userProfileRepository.save(profile);
-            log.info("用户评分更新成功: userId={}, role={}, rating={}", userId, role, rating);
-            return Result.ok("评分更新成功");
-        } catch (Exception e) {
-            log.error("用户评分更新失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("评分更新失败");
-        }
+        userProfileRepository.save(profile);
+        return Result.ok("评分更新成功");
     }
 
     @Override
     public Result updateCreditScore(String userId, Integer scoreChange, String reason) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
         if (scoreChange == null || scoreChange == 0) {
-            return Result.fail("分数变化不能为空或0");
+            throw new BusinessException("分数变化不能为空或0");
         }
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-        if (profileOpt.isEmpty()) {
-            return Result.fail("用户档案不存在");
-        }
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
-        UserProfile profile = profileOpt.get();
         int newScore = profile.getCreditScore() + scoreChange;
         
         // 信用分不能低于0
@@ -295,80 +220,51 @@ public class UserProfileServiceImpl implements UserProfileService {
         }
         
         profile.setCreditScore(newScore);
-
-        try {
-            userProfileRepository.save(profile);
-            log.info("用户信用分更新成功: userId={}, change={}, newScore={}, reason={}", 
-                userId, scoreChange, newScore, reason);
-            return Result.ok("信用分更新成功，当前分数：" + newScore);
-        } catch (Exception e) {
-            log.error("用户信用分更新失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("信用分更新失败");
-        }
+        userProfileRepository.save(profile);
+        
+        return Result.ok("信用分更新成功，当前分数：" + newScore);
     }
 
     @Override
     public Result updateTradeStatistics(String userId, String type, Integer count) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
         if (!"sale".equals(type) && !"purchase".equals(type)) {
-            return Result.fail("交易类型错误");
+            throw new BusinessException("交易类型错误");
         }
         if (count == null || count <= 0) {
-            return Result.fail("数量必须大于0");
+            throw new BusinessException("数量必须大于0");
         }
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-        if (profileOpt.isEmpty()) {
-            return Result.fail("用户档案不存在");
-        }
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
-        UserProfile profile = profileOpt.get();
         if ("sale".equals(type)) {
             profile.setTotalSales(profile.getTotalSales() + count);
         } else {
             profile.setTotalPurchases(profile.getTotalPurchases() + count);
         }
 
-        try {
-            userProfileRepository.save(profile);
-            log.info("用户交易统计更新成功: userId={}, type={}, count={}", userId, type, count);
-            
-            // 检查是否需要升级VIP
-            checkAndUpgradeVip(profile);
-            
-            return Result.ok("交易统计更新成功");
-        } catch (Exception e) {
-            log.error("用户交易统计更新失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("交易统计更新失败");
-        }
+        userProfileRepository.save(profile);
+        
+        // 检查是否需要升级VIP
+        checkAndUpgradeVip(profile);
+        
+        return Result.ok("交易统计更新成功");
     }
 
     @Override
     public Result upgradeVipLevel(String userId) {
-        if (userId == null || userId.trim().isEmpty()) {
-            return Result.fail("用户ID不能为空");
-        }
+        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
-        if (profileOpt.isEmpty()) {
-            return Result.fail("用户档案不存在");
-        }
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+            .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
-        UserProfile profile = profileOpt.get();
         String newLevel = calculateVipLevel(profile);
         
         if (!newLevel.equals(profile.getVipLevel())) {
             profile.setVipLevel(newLevel);
-            try {
-                userProfileRepository.save(profile);
-                log.info("用户VIP等级升级成功: userId={}, newLevel={}", userId, newLevel);
-                return Result.ok("VIP等级升级为：" + newLevel);
-            } catch (Exception e) {
-                log.error("用户VIP等级升级失败: userId={}, error={}", userId, e.getMessage());
-                return Result.fail("VIP等级升级失败");
-            }
+            userProfileRepository.save(profile);
+            return Result.ok("VIP等级升级为：" + newLevel);
         }
         
         return Result.ok("当前已是最高等级：" + profile.getVipLevel());
@@ -377,37 +273,30 @@ public class UserProfileServiceImpl implements UserProfileService {
     @Override
     public Result getUserRankings(String type, Integer limit) {
         if (!"seller".equals(type) && !"buyer".equals(type)) {
-            return Result.fail("排行榜类型错误");
+            throw new BusinessException("排行榜类型错误");
         }
         if (limit == null || limit <= 0) {
             limit = 10;
         }
 
-        try {
-            List<UserProfile> profiles;
-            if ("seller".equals(type)) {
-                profiles = userProfileRepository.findTopSellersByRating();
-            } else {
-                profiles = userProfileRepository.findTopBuyersByRating();
-            }
-
-            List<UserProfileDTO> rankings = profiles.stream()
-                .limit(limit)
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-
-            return Result.ok(rankings);
-        } catch (Exception e) {
-            log.error("获取用户排行榜失败: type={}, error={}", type, e.getMessage());
-            return Result.fail("获取排行榜失败");
+        List<UserProfile> profiles;
+        if ("seller".equals(type)) {
+            profiles = userProfileRepository.findTopSellersByRating();
+        } else {
+            profiles = userProfileRepository.findTopBuyersByRating();
         }
+
+        List<UserProfileDTO> rankings = profiles.stream()
+            .limit(limit)
+            .map(this::convertToDTO)
+            .collect(Collectors.toList());
+
+        return Result.ok(rankings);
     }
 
     @Override
     public Result searchUserProfiles(String keyword, Integer page, Integer size) {
-        if (keyword == null || keyword.trim().isEmpty()) {
-            return Result.fail("搜索关键词不能为空");
-        }
+        BusinessValidator.requireNotBlank(keyword, "搜索关键词不能为空");
         if (page == null || page < 0) {
             page = 0;
         }
@@ -415,51 +304,41 @@ public class UserProfileServiceImpl implements UserProfileService {
             size = 10;
         }
 
-        try {
-            List<UserProfile> profiles = userProfileRepository.findByNicknameContaining(keyword.trim());
-            
-            // 简单分页处理
-            int start = page * size;
-            int end = Math.min(start + size, profiles.size());
-            
-            if (start >= profiles.size()) {
-                return Result.ok(Collections.emptyList());
-            }
-            
-            List<UserProfileDTO> result = profiles.subList(start, end).stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("profiles", result);
-            response.put("total", profiles.size());
-            response.put("page", page);
-            response.put("size", size);
-
-            return Result.ok(response);
-        } catch (Exception e) {
-            log.error("搜索用户档案失败: keyword={}, error={}", keyword, e.getMessage());
-            return Result.fail("搜索失败");
+        List<UserProfile> profiles = userProfileRepository.findByNicknameContaining(keyword.trim());
+        
+        // 简单分页处理
+        int start = page * size;
+        int end = Math.min(start + size, profiles.size());
+        
+        if (start >= profiles.size()) {
+            return Result.ok(Collections.emptyList());
         }
+        
+        List<UserProfileDTO> result = profiles.subList(start, end).stream()
+            .map(this::convertToDTO)
+            .collect(Collectors.toList());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("profiles", result);
+        response.put("total", profiles.size());
+        response.put("page", page);
+        response.put("size", size);
+
+        return Result.ok(response);
     }
 
     @Override
     public Result getVipLevelStatistics() {
-        try {
-            List<Object[]> statistics = userProfileRepository.countByVipLevel();
-            Map<String, Long> result = new HashMap<>();
-            
-            for (Object[] stat : statistics) {
-                String level = (String) stat[0];
-                Long count = (Long) stat[1];
-                result.put(level, count);
-            }
-            
-            return Result.ok(result);
-        } catch (Exception e) {
-            log.error("获取VIP等级统计失败: error={}", e.getMessage());
-            return Result.fail("获取统计信息失败");
+        List<Object[]> statistics = userProfileRepository.countByVipLevel();
+        Map<String, Long> result = new HashMap<>();
+        
+        for (Object[] stat : statistics) {
+            String level = (String) stat[0];
+            Long count = (Long) stat[1];
+            result.put(level, count);
         }
+        
+        return Result.ok(result);
     }
 
     @Override

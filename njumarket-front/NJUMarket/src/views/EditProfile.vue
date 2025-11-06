@@ -11,7 +11,7 @@
           </div>
         </div>
 
-        <div class="profile-form-wrapper">
+        <div class="profile-form-wrapper" v-loading="loading">
           <el-form
             ref="editFormRef"
             :model="editForm"
@@ -94,6 +94,7 @@ export default {
     
     const editFormRef = ref()
     const editLoading = ref(false)
+    const loading = ref(false)
     
     const editForm = reactive({
       nickname: '',
@@ -109,18 +110,31 @@ export default {
       ]
     }
     
-    // 获取用户资料
+    // 获取用户资料（自动填充）
     const fetchProfile = async () => {
+      loading.value = true
       try {
-        const response = await profileAPI.getUser(userStore.userId)
-        if (response.success) {
-          editForm.nickname = response.data.nickname || ''
-          editForm.bio = response.data.bio || ''
-          editForm.contact = response.data.contact || ''
-          editForm.location = response.data.location || ''
+        // 使用 getMe() 获取当前用户的完整资料
+        const response = await profileAPI.getMe()
+        if (response.success && response.data) {
+          const profileData = response.data
+          
+          // 填充表单数据（类似编辑商品的实现）
+          editForm.nickname = profileData.nickname || ''
+          // 注意：bio, contact, location 字段在后端可能不存在，先尝试获取
+          editForm.bio = profileData.bio || ''
+          editForm.contact = profileData.contact || ''
+          editForm.location = profileData.location || ''
+          
+          console.log('用户资料已自动填充:', editForm)
+        } else {
+          ElMessage.error(response.errorMsg || '获取用户资料失败')
         }
       } catch (error) {
+        console.error('获取用户资料失败:', error)
         ElMessage.error('获取用户资料失败')
+      } finally {
+        loading.value = false
       }
     }
     
@@ -163,6 +177,7 @@ export default {
       editForm,
       editRules,
       editLoading,
+      loading,
       handleSave,
       handleCancel
     }

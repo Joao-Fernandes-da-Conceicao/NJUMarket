@@ -3,6 +3,7 @@ package com.njumarket.njumarket.filter;
 import com.njumarket.njumarket.entity.User;
 import com.njumarket.njumarket.repository.UserRepository;
 import com.njumarket.njumarket.utils.JwtUtils;
+import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.njumarket.utils.UserHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -10,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,6 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtils jwtUtils;
     private final UserRepository userRepository;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request, 
@@ -63,9 +66,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         
-        // 2. 验证Token有效性
+        // 2. 验证Token有效性（先验证JWT本身）
         if (!jwtUtils.validateToken(token)) {
-            log.warn("Token验证失败: {}", requestURI);
+            log.warn("Token验证失败（JWT过期）: {}", requestURI);
             response.setStatus(401);
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"success\":false,\"errorMsg\":\"Token无效或已过期，请重新登录\"}");
@@ -82,7 +85,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         
-        // 4. 查询用户信息
+        // 4. 验证Redis中的Token（检查是否被撤销或登出）
+        String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
+        String cachedToken = stringRedisTemplate.opsForValue().get(tokenKey);
+        
+        // 如果Redis中没有Token，说明用户已登出或Token被撤销
+        if (!StringUtils.hasText(cachedToken)) {
+            log.warn("Token已被撤销或用户已登出: userId={}, uri={}", userId, requestURI);
+            response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"errorMsg\":\"Token已失效，请重新登录\"}");
+            return;
+        }
+        
+        // 5. 验证Redis中的Token是否与请求中的Token一致（防止Token被替换）
+        if (!token.equals(cachedToken)) {
+            log.warn("Token不匹配（可能在其他设备登录）: userId={}, uri={}", userId, requestURI);
+            response.setStatus(401);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"success\":false,\"errorMsg\":\"Token已失效，请重新登录\"}");
+            return;
+        }
+        
+        // 注意：不再进行Token续期
+        // JWT本身已有24小时过期时间，过期后应使用RefreshToken刷新，而不是续期
+        // Redis的作用是验证Token是否被撤销（登出）和防止Token被替换，不需要续期
+        
+        // 6. 查询用户信息
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
             log.warn("用户不存在: userId={}", userId);
@@ -92,7 +121,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         
-        // 5. 检查用户状态
+        // 8. 检查用户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
             String statusMessage = getAccountStatusMessage(user.getAccountStatus());
             log.warn("用户账户已被禁用: userId={}, status={}", userId, user.getAccountStatus());
@@ -102,7 +131,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         
-        // 6. 设置Spring Security的Authentication
+        // 9. 设置Spring Security的Authentication
         UsernamePasswordAuthenticationToken authentication = 
             new UsernamePasswordAuthenticationToken(
                 user, null, Collections.emptyList()
@@ -110,14 +139,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         
-        // 7. 保持向后兼容：设置UserHolder（Service层等非Controller场景仍可能使用）
+        // 10. 保持向后兼容：设置UserHolder（Service层等非Controller场景仍可能使用）
         UserHolder.saveUser(user);
         
         try {
-            // 9. 继续Filter链
+            // 11. 继续Filter链
             filterChain.doFilter(request, response);
         } finally {
-            // 10. 清理ThreadLocal（与原有LoginInterceptor的afterCompletion一致）
+            // 12. 清理ThreadLocal（与原有LoginInterceptor的afterCompletion一致）
             UserHolder.removeUser();
         }
     }
@@ -151,7 +180,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                requestURI.equals("/api/user/auth/send-code") ||
                requestURI.equals("/api/user/auth/login-by-code") ||
                requestURI.equals("/api/user/auth/login-third-party") ||
-               requestURI.equals("/api/user/auth/reset-password");
+               requestURI.equals("/api/user/auth/reset-password") ||
+               requestURI.equals("/api/user/auth/refresh-token"); // ✅ Token刷新接口不需要JWT验证
     }
     
     /**

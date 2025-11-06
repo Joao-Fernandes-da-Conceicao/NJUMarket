@@ -46,7 +46,8 @@ public class SecurityConfig {
                     "/api/user/auth/send-code",
                     "/api/user/auth/login-by-code",
                     "/api/user/auth/login-third-party",
-                    "/api/user/auth/reset-password"
+                    "/api/user/auth/reset-password",
+                    "/api/user/auth/refresh-token" // ✅ Token刷新接口允许未认证访问
                 ).permitAll()
                 // 管理员登录接口公开访问
                 .requestMatchers("/api/admin/login").permitAll()

@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpSession;
+import java.util.Map;
 
 /**
  * 用户认证控制器
@@ -104,9 +105,18 @@ public class UserAuthController {
         return userService.logout(session);
     }
     
+    @Operation(summary = "刷新Token", description = "使用RefreshToken刷新AccessToken")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "刷新成功，返回新的AccessToken和RefreshToken"),
+        @ApiResponse(responseCode = "400", description = "RefreshToken无效或已过期")
+    })
     @PostMapping("/refresh-token")
-    public Result refreshToken(@RequestParam String refreshToken) {
-        return userService.refreshToken(refreshToken);
+    public Result refreshToken(@RequestBody Map<String, String> request) {
+        String refreshToken = request.get("refreshToken");
+        if (refreshToken == null || refreshToken.trim().isEmpty()) {
+            return Result.fail("RefreshToken不能为空");
+        }
+        return userService.refreshToken(refreshToken.trim());
     }
 
     @Operation(summary = "重置密码", description = "通过手机验证码重置密码")

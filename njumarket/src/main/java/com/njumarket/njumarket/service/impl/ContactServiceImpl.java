@@ -5,6 +5,7 @@ import com.njumarket.njumarket.dto.MessageDTO;
 import com.njumarket.njumarket.dto.SendMessageRequest;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.entity.*;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.njumarket.repository.*;
 import com.njumarket.njumarket.service.ContactService;
 
@@ -59,42 +60,34 @@ public class ContactServiceImpl implements ContactService {
             // ✅ 鉴权检查：验证当前登录用户
             User currentUser = com.njumarket.njumarket.utils.UserHolder.getUser();
             if (currentUser == null) {
-                log.warn("发送消息失败：用户未登录");
-                return Result.fail("用户未登录");
+                throw new BusinessException("用户未登录");
             }
             
             // ✅ 鉴权检查：验证传入的userId与当前登录用户匹配（防止用户冒充）
             if (!currentUser.getUserId().equals(userId)) {
-                log.warn("发送消息失败：用户ID不匹配，当前登录用户={}, 传入userId={}", 
-                        currentUser.getUserId(), userId);
-                return Result.fail("无权操作：用户ID不匹配");
+                throw new BusinessException("无权操作：用户ID不匹配");
             }
             
             // ✅ 鉴权检查：验证用户状态是否为ACTIVE
             if (!"ACTIVE".equals(currentUser.getAccountStatus())) {
-                log.warn("发送消息失败：用户账户已被禁用，userId={}, status={}", 
-                        userId, currentUser.getAccountStatus());
-                return Result.fail("账户已被禁用，无法发送消息");
+                throw new BusinessException("账户已被禁用，无法发送消息");
             }
             
             // 验证接收者是否存在
             Optional<User> receiverOpt = userRepository.findById(request.getReceiverId());
             if (!receiverOpt.isPresent()) {
-                return Result.fail("接收者不存在");
+                throw new BusinessException("接收者不存在");
             }
             
             // ✅ 鉴权检查：验证接收者状态是否为ACTIVE
             User receiver = receiverOpt.get();
             if (!"ACTIVE".equals(receiver.getAccountStatus())) {
-                log.warn("发送消息失败：接收者账户已被禁用，receiverId={}, status={}", 
-                        request.getReceiverId(), receiver.getAccountStatus());
-                return Result.fail("接收者账户已被禁用");
+                throw new BusinessException("接收者账户已被禁用");
             }
             
             // ✅ 鉴权检查：防止用户向自己发送消息（可选，根据业务需求）
             if (userId.equals(request.getReceiverId())) {
-                log.warn("发送消息失败：不能向自己发送消息，userId={}", userId);
-                return Result.fail("不能向自己发送消息");
+                throw new BusinessException("不能向自己发送消息");
             }
             
             // 获取或创建对话
@@ -102,13 +95,13 @@ public class ContactServiceImpl implements ContactService {
             if (request.getConversationId() != null) {
                 Optional<Conversation> convOpt = conversationRepository.findById(request.getConversationId());
                 if (!convOpt.isPresent()) {
-                    return Result.fail("对话不存在");
+                    throw new BusinessException("对话不存在");
                 }
                 conversation = convOpt.get();
                 
                 // 验证用户是否属于这个对话
                 if (!conversation.involvesUser(userId)) {
-                    return Result.fail("无权访问此对话");
+                    throw new BusinessException("无权访问此对话");
                 }
                 
                 // ✅ 如果接收方（B）删除了会话（不可见），自动恢复接收方的可见性
@@ -117,7 +110,7 @@ public class ContactServiceImpl implements ContactService {
                 if (!conversation.getVisibilityForUser(request.getReceiverId())) {
                     conversation.restoreVisibilityForUser(request.getReceiverId());
                     visibilityRestored = true;
-                    log.info("恢复接收方会话可见性: conversationId={}, receiverId={}", 
+                    log.debug("恢复接收方会话可见性: conversationId={}, receiverId={}", 
                             conversation.getConversationId(), request.getReceiverId());
                 }
                 
@@ -168,8 +161,6 @@ public class ContactServiceImpl implements ContactService {
                     if (!conversation.getVisibilityForUser(request.getReceiverId())) {
                         conversation.restoreVisibilityForUser(request.getReceiverId());
                         visibilityRestored = true;
-                        log.info("恢复接收方会话可见性: conversationId={}, receiverId={}", 
-                                conversation.getConversationId(), request.getReceiverId());
                     }
                     
                     // ✅ 如果恢复了可见性，需要推送完整会话信息（用于前端自动添加到会话列表）
@@ -234,7 +225,7 @@ public class ContactServiceImpl implements ContactService {
                 // ✅ 商品卡片鉴权：验证商品是否存在
                 Optional<Commodity> commodityOpt = commodityRepository.findById(request.getCommodityId());
                 if (commodityOpt.isEmpty()) {
-                    return Result.fail("商品不存在");
+                    throw new BusinessException("商品不存在");
                 }
                 Commodity commodity = commodityOpt.get();
                 
@@ -242,7 +233,7 @@ public class ContactServiceImpl implements ContactService {
                 // 获取对话的对方用户
                 String otherUserId = conversation.getOtherUserId(userId);
                 if (otherUserId == null) {
-                    return Result.fail("无法确定对话对方用户");
+                    throw new BusinessException("无法确定对话对方用户");
                 }
                 
                 // ✅ 验证商品的卖家必须匹配对话的双方用户之一
@@ -253,17 +244,13 @@ public class ContactServiceImpl implements ContactService {
                 
                 // 商品卖家必须是对话双方之一
                 if (!sellerIsSender && !sellerIsReceiver) {
-                    log.warn("发送商品卡片失败：商品卖家不属于对话双方，commodityId={}, sellerId={}, userId={}, otherUserId={}", 
-                            request.getCommodityId(), commodity.getSellerId(), userId, otherUserId);
-                    return Result.fail("无权发送此商品卡片：商品不属于当前对话双方");
+                    throw new BusinessException("无权发送此商品卡片：商品不属于当前对话双方");
                 }
                 
                 // ✅ 商品卡片鉴权：验证商品状态（可选，根据业务需求）
                 // 已下架或草稿状态的商品可能不允许发送
                 if ("OFF_SHELF".equals(commodity.getCommodityStatus()) || "DRAFT".equals(commodity.getCommodityStatus())) {
-                    log.warn("发送商品卡片失败：商品状态不允许发送，commodityId={}, status={}", 
-                            request.getCommodityId(), commodity.getCommodityStatus());
-                    return Result.fail("商品状态不允许发送：商品已下架或为草稿状态");
+                    throw new BusinessException("商品状态不允许发送：商品已下架或为草稿状态");
                 }
                 
                 // 设置商品卡片相关字段
@@ -278,19 +265,19 @@ public class ContactServiceImpl implements ContactService {
                 // 验证订单是否属于对话双方
                 Optional<Order> orderOpt = orderRepository.findById(request.getOrderId());
                 if (orderOpt.isEmpty()) {
-                    return Result.fail("订单不存在");
+                    throw new BusinessException("订单不存在");
                 }
                 Order order = orderOpt.get();
                 String otherUserId = conversation.getOtherUserId(userId);
                 if (otherUserId == null) {
-                    return Result.fail("无法确定对话对方用户");
+                    throw new BusinessException("无法确定对话对方用户");
                 }
                 
                 // 验证订单的买卖双方必须匹配对话的双方用户
                 boolean buyerMatches = order.getBuyerId().equals(userId) || order.getBuyerId().equals(otherUserId);
                 boolean sellerMatches = order.getSellerId().equals(userId) || order.getSellerId().equals(otherUserId);
                 if (!buyerMatches || !sellerMatches) {
-                    return Result.fail("无权发送此订单卡片：订单不属于当前对话双方");
+                    throw new BusinessException("无权发送此订单卡片：订单不属于当前对话双方");
                 }
                 
                 // 设置订单卡片相关字段
@@ -362,14 +349,12 @@ public class ContactServiceImpl implements ContactService {
             
             // 使用重试服务推送未读数更新
             webSocketRetryService.pushWithRetry(receiverId, unreadCountUpdate, "UNREAD_COUNT_UPDATE");
-            log.debug("未读数更新推送尝试（带重试）: receiverId={}, totalUnreadCount={}, conversationUnreadCount={}", 
-                    receiverId, totalUnreadCount, conversationUnreadCount);
             
             return Result.ok("消息发送成功", messageDTO);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("发送消息失败: userId={}, receiverId={}, conversationId={}, error={}", 
-                    userId, request.getReceiverId(), request.getConversationId(), e.getMessage(), e);
-            return Result.fail("发送消息失败：" + e.getMessage());
+            throw new BusinessException("发送消息失败，请稍后重试", e);
         }
     }
     
@@ -460,9 +445,10 @@ public class ContactServiceImpl implements ContactService {
             Page<ConversationDTO> dtoPage = new PageImpl<>(dtoList, pageable, total);
             
             return Result.ok("获取对话列表成功", dtoPage);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("获取对话列表失败: userId={}, error={}", userId, e.getMessage());
-            return Result.fail("获取对话列表失败：" + e.getMessage());
+            throw new BusinessException("获取对话列表失败，请稍后重试", e);
         }
     }
     
@@ -472,14 +458,14 @@ public class ContactServiceImpl implements ContactService {
             // 查询对话
             Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
             if (!convOpt.isPresent()) {
-                return Result.fail("对话不存在");
+                throw new BusinessException("对话不存在");
             }
             
             Conversation conversation = convOpt.get();
             
             // 验证权限（使用 involvesUser 方法，基于 user_id_1 和 user_id_2）
             if (!conversation.involvesUser(userId)) {
-                return Result.fail("无权访问此对话");
+                throw new BusinessException("无权访问此对话");
             }
             
             // 查询消息列表
@@ -521,10 +507,10 @@ public class ContactServiceImpl implements ContactService {
             dto.setTotalMessages(messageDTOs.size());
             
             return Result.ok("获取对话详情成功", dto);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("获取对话详情失败: userId={}, conversationId={}, error={}", 
-                    userId, conversationId, e.getMessage(), e);
-            return Result.fail("获取对话详情失败：" + e.getMessage());
+            throw new BusinessException("获取对话详情失败，请稍后重试", e);
         }
     }
     
@@ -534,14 +520,14 @@ public class ContactServiceImpl implements ContactService {
             // 查询对话
             Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
             if (!convOpt.isPresent()) {
-                return Result.fail("对话不存在");
+                throw new BusinessException("对话不存在");
             }
             
             Conversation conversation = convOpt.get();
             
             // 验证权限（使用 involvesUser 方法，基于 user_id_1 和 user_id_2）
             if (!conversation.involvesUser(userId)) {
-                return Result.fail("无权访问此对话");
+                throw new BusinessException("无权访问此对话");
             }
             
             // 解析时间参数
@@ -549,8 +535,7 @@ public class ContactServiceImpl implements ContactService {
             try {
                 beforeDateTime = LocalDateTime.parse(beforeTime);
             } catch (Exception e) {
-                log.error("解析时间参数失败: beforeTime={}, error={}", beforeTime, e.getMessage());
-                return Result.fail("时间参数格式错误");
+                throw new BusinessException("时间参数格式错误");
             }
             
             // 查询指定时间之前的消息（按 DESC 排序，最新的在前）
@@ -587,10 +572,10 @@ public class ContactServiceImpl implements ContactService {
             result.put("hasMore", messagesPage.hasNext());
             
             return Result.ok("获取历史消息成功", result);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("获取历史消息失败: userId={}, conversationId={}, beforeTime={}, error={}", 
-                    userId, conversationId, beforeTime, e.getMessage(), e);
-            return Result.fail("获取历史消息失败：" + e.getMessage());
+            throw new BusinessException("获取历史消息失败，请稍后重试", e);
         }
     }
     
@@ -613,9 +598,10 @@ public class ContactServiceImpl implements ContactService {
             
             ConversationDTO dto = convertConversationToDTO(conversation, userId);
             return Result.ok("获取对话成功", dto);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("获取或创建对话失败: userId={}, otherUserId={}, error={}", userId, otherUserId, e.getMessage());
-            return Result.fail("获取或创建对话失败：" + e.getMessage());
+            throw new BusinessException("获取或创建对话失败，请稍后重试", e);
         }
     }
     
@@ -624,14 +610,14 @@ public class ContactServiceImpl implements ContactService {
         try {
             Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
             if (!convOpt.isPresent()) {
-                return Result.fail("对话不存在");
+                throw new BusinessException("对话不存在");
             }
             
             Conversation conversation = convOpt.get();
             
             // 验证权限（使用 involvesUser 方法，基于 user_id_1 和 user_id_2）
             if (!conversation.involvesUser(userId)) {
-                return Result.fail("无权访问此对话");
+                throw new BusinessException("无权访问此对话");
             }
             
             // 标记对话为已读
@@ -669,11 +655,9 @@ public class ContactServiceImpl implements ContactService {
                     
                     // 向发送者推送已读通知（使用重试机制）
                     webSocketRetryService.pushWithRetry(otherUserId, readNotification, "MESSAGE_READ");
-                    log.debug("已读通知推送尝试（带重试）: senderId={}, conversationId={}, messageCount={}", 
-                            otherUserId, conversationId, readMessageIds.size());
                 } catch (Exception e) {
-                    log.error("推送已读通知失败: senderId={}, conversationId={}, error={}", 
-                            otherUserId, conversationId, e.getMessage(), e);
+                    log.warn("推送已读通知失败: senderId={}, conversationId={}, error={}", 
+                            otherUserId, conversationId, e.getMessage());
                     // WebSocket 推送失败不影响标记已读的成功返回
                 }
             }
@@ -702,18 +686,16 @@ public class ContactServiceImpl implements ContactService {
                 
                 // 使用重试服务推送未读数更新（带重试机制）
                 webSocketRetryService.pushWithRetry(userId, unreadCountUpdate, "UNREAD_COUNT_UPDATE");
-                log.debug("未读数更新推送尝试（带重试）: userId={}, totalUnreadCount={}, conversationUnreadCount={}", 
-                        userId, totalUnreadCount, conversationUnreadCount);
             } catch (Exception e) {
-                log.error("推送未读数更新失败: userId={}, error={}", userId, e.getMessage(), e);
+                log.warn("推送未读数更新失败: userId={}, error={}", userId, e.getMessage());
                 // WebSocket 推送失败不影响标记已读的成功返回
             }
             
             return Result.ok("标记已读成功");
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("标记已读失败: userId={}, conversationId={}, error={}", 
-                    userId, conversationId, e.getMessage(), e);
-            return Result.fail("标记已读失败：" + e.getMessage());
+            throw new BusinessException("标记已读失败，请稍后重试", e);
         }
     }
     
@@ -722,9 +704,10 @@ public class ContactServiceImpl implements ContactService {
         try {
             Integer count = conversationRepository.getTotalUnreadCount(userId);
             return Result.ok("获取未读数成功", count != null ? count : 0);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("获取未读数失败: userId={}, error={}", userId, e.getMessage(), e);
-            return Result.fail("获取未读数失败：" + e.getMessage());
+            throw new BusinessException("获取未读数失败，请稍后重试", e);
         }
     }
     
@@ -733,12 +716,12 @@ public class ContactServiceImpl implements ContactService {
         try {
             Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
             if (!convOpt.isPresent()) {
-                return Result.fail("对话不存在");
+                throw new BusinessException("对话不存在");
             }
             
             Conversation conversation = convOpt.get();
             if (!conversation.involvesUser(userId)) {
-                return Result.fail("无权删除此对话");
+                throw new BusinessException("无权删除此对话");
             }
             
             // ✅ v1.3.x: 软删除对话（设置用户可见性为false，而不是修改status）
@@ -747,10 +730,10 @@ public class ContactServiceImpl implements ContactService {
             conversationRepository.save(conversation);
             
             return Result.ok("删除对话成功");
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("删除对话失败: userId={}, conversationId={}, error={}", 
-                    userId, conversationId, e.getMessage(), e);
-            return Result.fail("删除对话失败：" + e.getMessage());
+            throw new BusinessException("删除对话失败，请稍后重试", e);
         }
     }
     
@@ -759,20 +742,20 @@ public class ContactServiceImpl implements ContactService {
         try {
             Optional<Message> msgOpt = messageRepository.findById(messageId);
             if (!msgOpt.isPresent()) {
-                return Result.fail("消息不存在");
+                throw new BusinessException("消息不存在");
             }
             
             Message message = msgOpt.get();
             
             // 验证权限：只能删除对话中的消息（发送方或接收方）
             if (!message.getSenderId().equals(userId) && !message.getReceiverId().equals(userId)) {
-                return Result.fail("无权删除此消息");
+                throw new BusinessException("无权删除此消息");
             }
             
             // 获取对话信息
             Optional<Conversation> convOpt = conversationRepository.findById(message.getConversationId());
             if (!convOpt.isPresent()) {
-                return Result.fail("对话不存在");
+                throw new BusinessException("对话不存在");
             }
             Conversation conversation = convOpt.get();
             
@@ -884,10 +867,10 @@ public class ContactServiceImpl implements ContactService {
             conversationRepository.save(conversation);
             
             return Result.ok("删除消息成功");
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("删除消息失败: userId={}, messageId={}, error={}", 
-                    userId, messageId, e.getMessage(), e);
-            return Result.fail("删除消息失败：" + e.getMessage());
+            throw new BusinessException("删除消息失败，请稍后重试", e);
         }
     }
     
@@ -898,13 +881,13 @@ public class ContactServiceImpl implements ContactService {
             // 验证对话权限
             Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
             if (!convOpt.isPresent()) {
-                return Result.fail("对话不存在");
+                throw new BusinessException("对话不存在");
             }
             
             Conversation conversation = convOpt.get();
             // 验证权限（使用 involvesUser 方法，基于 user_id_1 和 user_id_2）
             if (!conversation.involvesUser(userId)) {
-                return Result.fail("无权访问此对话");
+                throw new BusinessException("无权访问此对话");
             }
             
             // 搜索消息
@@ -924,10 +907,10 @@ public class ContactServiceImpl implements ContactService {
             Page<MessageDTO> dtoPage = messagesPage.map(message -> convertMessageToDTOWithMap(message, userId, profileMap));
             
             return Result.ok("搜索消息成功", dtoPage);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("搜索消息失败: userId={}, conversationId={}, keyword={}, error={}", 
-                    userId, conversationId, keyword, e.getMessage(), e);
-            return Result.fail("搜索消息失败：" + e.getMessage());
+            throw new BusinessException("搜索消息失败，请稍后重试", e);
         }
     }
     
@@ -940,12 +923,12 @@ public class ContactServiceImpl implements ContactService {
                 ConversationDTO dto = convertConversationToDTO(convOpt.get(), userId);
                 return Result.ok("获取对话成功", dto);
             } else {
-                return Result.fail("对话不存在");
+                throw new BusinessException("对话不存在");
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("获取对话失败: userId={}, otherUserId={}, error={}", 
-                    userId, otherUserId, e.getMessage(), e);
-            return Result.fail("获取对话失败：" + e.getMessage());
+            throw new BusinessException("获取对话失败，请稍后重试", e);
         }
     }
     

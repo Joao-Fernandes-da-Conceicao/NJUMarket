@@ -307,10 +307,21 @@ ADD COLUMN buyer_order_has_new BOOLEAN DEFAULT FALSE COMMENT '买家订单是否
 
 ## 下一步规划
 
-### v1.3.1（已完成）
-- ✅ **Spring Security规范化迁移**：从拦截器迁移到Spring Security Filter
-- ✅ **代码清理**：删除冗余拦截器，优化代码结构
-- ✅ **方法级权限控制**：使用@PreAuthorize实现细粒度权限控制
+### v1.3.1 - Spring Security规范化迁移 ✅
+详见 [v1.3.1 项目文档](./PROJECT_DOCUMENTATION_V1.3.1.md)
+
+**v1.3.1 核心任务**：
+- ✅ Spring Security规范化迁移：从拦截器迁移到Spring Security Filter
+- ✅ 代码清理：删除冗余拦截器，优化代码结构
+- ✅ 方法级权限控制：使用@PreAuthorize实现细粒度权限控制
+
+### v1.4 - 代码标准化与架构规范化 ✅
+详见 [v1.4 项目文档](./PROJECT_DOCUMENTATION_V1.4.md)
+
+**v1.4 核心任务**：
+- ✅ 统一异常处理：所有Service方法统一使用`BusinessException`
+- ✅ 统一日志记录：AOP统一记录，移除手动日志
+- ✅ 业务校验组件化：创建`BusinessValidator`工具类
 
 ### v2.0 阶段规划
 详见 [v2.0 规划文档](./PROJECT_DOCUMENTATION_V2.0.md)
@@ -319,10 +330,11 @@ ADD COLUMN buyer_order_has_new BOOLEAN DEFAULT FALSE COMMENT '买家订单是否
 
 ## 相关文档
 
-- [v1.3.1 项目文档](./PROJECT_DOCUMENTATION_V1.3.1.md) - Spring Security规范化迁移
-- [v1.2.2 项目文档](./PROJECT_DOCUMENTATION_V1.2.2.md) - 索引优化
+### 版本演进
+- [v1.4 项目文档](./PROJECT_DOCUMENTATION_V1.4.md) - 代码标准化与架构规范化 ⭐ **最新版本**
+- [v1.3.1 项目文档](./PROJECT_DOCUMENTATION_V1.3.1.md) - Spring Security规范化迁移 ⬅️ **下一版本**
+- [v1.2.2 项目文档](./PROJECT_DOCUMENTATION_V1.2.2.md) - 索引优化 ⬅️ **上一版本**
 - [v1.2.0 项目文档](./PROJECT_DOCUMENTATION_V1.2.0.md) - 库存超卖防护
-- [v1.1.2 项目文档](./PROJECT_DOCUMENTATION_V1.1.2.md) - 订单通知系统
 - [v1.x 阶段总结](./PROJECT_DOCUMENTATION_V1.x_SUMMARY.md) - v1.x完整总结
 
 ---

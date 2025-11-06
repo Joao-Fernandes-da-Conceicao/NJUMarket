@@ -6,6 +6,7 @@ import com.njumarket.njumarket.service.CommodityService;
 import com.njumarket.njumarket.service.CommodityQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,13 +28,13 @@ public class UserCommodityController {
 
     @Operation(summary = "发布商品", description = "发布新商品")
     @PostMapping("/publish")
-    public Result publishCommodity(@RequestBody CommodityDTO commodityDTO) {
+    public Result publishCommodity(@Valid @RequestBody CommodityDTO commodityDTO) {
         return commodityService.publishCommodity(commodityDTO);
     }
     
     @Operation(summary = "创建草稿商品", description = "创建草稿商品")
     @PostMapping("/draft")
-    public Result createDraftCommodity(@RequestBody CommodityDTO commodityDTO) {
+    public Result createDraftCommodity(@Valid @RequestBody CommodityDTO commodityDTO) {
         return commodityService.createDraftCommodity(commodityDTO);
     }
     

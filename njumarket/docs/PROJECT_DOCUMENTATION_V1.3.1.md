@@ -398,10 +398,15 @@ public String toString() {
 
 ## 下一步规划
 
-### v1.3.2（可选小修补）
-- **代码审查**：全面代码审查，修复潜在问题
-- **文档完善**：补充API文档、部署文档
-- **性能测试**：压力测试，验证性能表现
+### v1.4 - 代码标准化与架构规范化 ✅
+详见 [v1.4 项目文档](./PROJECT_DOCUMENTATION_V1.4.md)
+
+**v1.4 核心任务**：
+- ✅ 统一异常处理：所有Service方法统一使用`BusinessException`
+- ✅ 统一日志记录：AOP统一记录，移除手动日志
+- ✅ 业务校验组件化：创建`BusinessValidator`工具类
+- ✅ 参数验证标准化：Bean Validation + `@Valid`注解
+- ✅ DTO强类型化：替换`Map<String, Object>`
 
 ### v2.0 阶段规划
 详见 [v2.0 规划文档](./PROJECT_DOCUMENTATION_V2.0.md)
@@ -417,15 +422,38 @@ public String toString() {
 
 ## 相关文档
 
-- [v1.3.0 项目文档](./PROJECT_DOCUMENTATION_V1.3.0.md) - 用户体验优化与数据持久化
+### 版本演进
+- [v1.4 项目文档](./PROJECT_DOCUMENTATION_V1.4.md) - 代码标准化与架构规范化 ⭐ **下一版本**
+- [v1.3.0 项目文档](./PROJECT_DOCUMENTATION_V1.3.0.md) - 用户体验优化与数据持久化 ⬅️ **上一版本**
 - [v1.2.2 项目文档](./PROJECT_DOCUMENTATION_V1.2.2.md) - 索引优化
 - [v1.2.0 项目文档](./PROJECT_DOCUMENTATION_V1.2.0.md) - 库存超卖防护
 - [v1.x 阶段总结](./PROJECT_DOCUMENTATION_V1.x_SUMMARY.md) - v1.x完整总结
+
+### 技术文档
 - [Spring Security实现文档](./SPRING_SECURITY_IMPLEMENTATION.md) - Spring Security详细实现说明
+- [Spring Security冗余分析](./SPRING_SECURITY_REDUNDANCY_ANALYSIS.md) - @PreAuthorize冗余分析
 
 ---
 
 **文档版本**：v1.3.1  
 **最后更新**：2025-01-XX  
 **项目状态**：✅ **v1.x 阶段已完成，基本功能彻底完成，可以进入 v2.0 微服务架构改造阶段**
+
+---
+
+## 📚 文档导航
+
+### 版本演进路径
+```
+v1.0 → v1.1.x → v1.2.x → v1.3.0 → v1.3.1 → v1.4 ⭐ (v1.x收官)
+                                              ↓
+                                          v2.0 (微服务架构)
+```
+
+### 快速导航
+- **当前版本**：v1.3.1 - Spring Security规范化迁移
+- **下一版本**：[v1.4](./PROJECT_DOCUMENTATION_V1.4.md) - 代码标准化与架构规范化
+- **上一版本**：[v1.3.0](./PROJECT_DOCUMENTATION_V1.3.0.md) - 用户体验优化与数据持久化
+- **阶段总结**：[v1.x总结](./PROJECT_DOCUMENTATION_V1.x_SUMMARY.md) - v1.x完整总结
+- **未来规划**：[v2.0规划](./PROJECT_DOCUMENTATION_V2.0.md) - 微服务架构改造规划
 

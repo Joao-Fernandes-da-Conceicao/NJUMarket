@@ -1,9 +1,17 @@
 package com.njumarket.njumarket.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
 public class SendMessageRequest {
     private String conversationId;
+    
+    @NotBlank(message = "接收者ID不能为空")
     private String receiverId;
+    
     private String messageType;
+    
+    @NotBlank(message = "消息内容不能为空")
     private String content;
     private String imageUrl;
     private String commodityId;

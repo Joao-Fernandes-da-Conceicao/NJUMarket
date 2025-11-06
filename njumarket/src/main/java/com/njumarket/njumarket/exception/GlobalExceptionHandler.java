@@ -2,12 +2,17 @@ package com.njumarket.njumarket.exception;
 
 import com.njumarket.njumarket.dto.Result;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import java.util.stream.Collectors;
 
 /**
  * 全局异常处理器
@@ -40,6 +45,32 @@ public class GlobalExceptionHandler {
             // 忽略获取请求信息失败的情况
         }
         return "unknown";
+    }
+
+    /**
+     * 处理Bean Validation验证失败异常（@Valid注解触发）
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Result handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
+        String requestInfo = getRequestInfo();
+        String errorMessage = e.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+        log.warn("参数验证失败: {}, request={}", errorMessage, requestInfo);
+        return Result.fail("参数验证失败：" + errorMessage);
+    }
+
+    /**
+     * 处理ConstraintViolationException（@Validated注解触发）
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Result handleConstraintViolationException(ConstraintViolationException e) {
+        String requestInfo = getRequestInfo();
+        String errorMessage = e.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.joining(", "));
+        log.warn("参数验证失败: {}, request={}", errorMessage, requestInfo);
+        return Result.fail("参数验证失败：" + errorMessage);
     }
 
     /**

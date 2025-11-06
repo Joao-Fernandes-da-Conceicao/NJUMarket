@@ -9,12 +9,16 @@ const api = axios.create({
   }
 })
 
+// 刷新Token的Promise（防止并发刷新）
+let refreshTokenPromise = null
+
 // 请求拦截器
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+    // 优先使用accessToken，兼容旧版本的token
+    const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token')
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`
     }
     return config
   },
@@ -38,24 +42,86 @@ api.interceptors.response.use(
     }
     return response.data
   },
-  error => {
-    if (error.response?.status === 401) {
-      // 如果是在浏览器环境中，更新Pinia状态但不自动跳转
-      if (typeof window !== 'undefined') {
-        // 动态导入Pinia store以避免循环依赖
-        import('../stores/user').then(({ useUserStore }) => {
-          const userStore = useUserStore()
-          userStore.clearUserData() // 清除用户数据
-        })
-        
-        // ✅ 显示401错误提示
-        import('element-plus').then(({ ElMessage }) => {
-          const errorMsg = error.response?.data?.errorMsg || error.response?.data?.message || '用户未登录，请先登录'
-          ElMessage.error(errorMsg)
-        })
-        
-        // 移除自动跳转逻辑，让页面自己处理未登录状态
-        // window.location.href = '/login'
+  async error => {
+    const originalRequest = error.config
+    
+    // ✅ 处理401错误：尝试自动刷新Token
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // 排除刷新Token接口本身，避免无限循环
+      if (originalRequest.url === '/user/auth/refresh-token') {
+        // RefreshToken也失效了，清除数据并跳转登录
+        if (typeof window !== 'undefined') {
+          import('../stores/user').then(({ useUserStore }) => {
+            const userStore = useUserStore()
+            userStore.clearUserData()
+          })
+          
+          import('element-plus').then(({ ElMessage }) => {
+            ElMessage.error('登录已过期，请重新登录')
+          })
+        }
+        return Promise.reject(error)
+      }
+      
+      // 标记请求，防止重复刷新
+      originalRequest._retry = true
+      
+      // 获取RefreshToken
+      const refreshToken = localStorage.getItem('refreshToken')
+      
+      if (refreshToken && typeof window !== 'undefined') {
+        try {
+          // 如果已经有刷新请求在进行，等待它完成
+          if (refreshTokenPromise) {
+            await refreshTokenPromise
+          } else {
+            // 创建新的刷新请求
+            refreshTokenPromise = (async () => {
+              try {
+                const { useUserStore } = await import('../stores/user')
+                const userStore = useUserStore()
+                await userStore.refreshAccessToken()
+              } finally {
+                refreshTokenPromise = null
+              }
+            })()
+            await refreshTokenPromise
+          }
+          
+          // 刷新成功，使用新的AccessToken重试原请求
+          const newAccessToken = localStorage.getItem('accessToken')
+          if (newAccessToken) {
+            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+            return api(originalRequest)
+          }
+        } catch (refreshError) {
+          // 刷新失败，清除数据
+          console.error('Token自动刷新失败:', refreshError)
+          if (typeof window !== 'undefined') {
+            import('../stores/user').then(({ useUserStore }) => {
+              const userStore = useUserStore()
+              userStore.clearUserData()
+            })
+            
+            import('element-plus').then(({ ElMessage }) => {
+              ElMessage.error('登录已过期，请重新登录')
+            })
+          }
+          return Promise.reject(refreshError)
+        }
+      } else {
+        // 没有RefreshToken，清除数据
+        if (typeof window !== 'undefined') {
+          import('../stores/user').then(({ useUserStore }) => {
+            const userStore = useUserStore()
+            userStore.clearUserData()
+          })
+          
+          import('element-plus').then(({ ElMessage }) => {
+            const errorMsg = error.response?.data?.errorMsg || error.response?.data?.message || '用户未登录，请先登录'
+            ElMessage.error(errorMsg)
+          })
+        }
       }
     } else if (error.response?.status === 403) {
       // ✅ 处理403禁止访问错误（账户被封禁/暂停）
@@ -108,7 +174,10 @@ export const authAPI = {
   resetPassword: (data) => api.post('/user/auth/reset-password', data),
   
   // 获取当前用户信息
-  getCurrentUser: () => api.get('/user/auth/me')
+  getCurrentUser: () => api.get('/user/auth/me'),
+  
+  // ✅ 刷新Token
+  refreshToken: (refreshToken) => api.post('/user/auth/refresh-token', { refreshToken })
 }
 
 // 商品相关API

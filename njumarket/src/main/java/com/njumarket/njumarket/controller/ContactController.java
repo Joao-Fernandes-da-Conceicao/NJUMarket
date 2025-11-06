@@ -8,6 +8,7 @@ import com.njumarket.njumarket.service.ContactService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -29,7 +30,7 @@ public class ContactController {
     })
     @PostMapping("/send")
     public Result sendMessage(@CurrentUser User user,
-                             @RequestBody SendMessageRequest request) {
+                             @Valid @RequestBody SendMessageRequest request) {
         return contactService.sendMessage(user.getUserId(), request);
     }
     
