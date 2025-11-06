@@ -8,18 +8,18 @@ import com.njumarket.njumarket.service.ContactService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "用户联系", description = "买家与卖家之间的消息联系功能")
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api/contact")
 public class ContactController {
     
-    @Autowired
-    private ContactService contactService;
+    private final ContactService contactService;
     
     @Operation(summary = "发送消息", description = "向对方发送消息")
     @ApiResponses({
