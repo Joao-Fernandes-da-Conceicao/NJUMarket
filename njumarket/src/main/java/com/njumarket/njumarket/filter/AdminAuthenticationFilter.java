@@ -41,18 +41,22 @@ public class AdminAuthenticationFilter extends OncePerRequestFilter {
                                    @NonNull HttpServletResponse response, 
                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
         
-        // 只处理管理员相关路径
+        // 性能优化：只处理管理员相关路径（/api/admin/**）
+        // 注意：SecurityConfig中已配置这些路径需要认证，这里的检查是为了性能优化（提前跳过不需要处理的路径）
         String requestURI = request.getRequestURI();
         if (!requestURI.startsWith("/api/admin/")) {
             filterChain.doFilter(request, response);
             return;
         }
         
-        // 排除登录接口
+        // 排除登录接口（管理员只有一个公开接口：登录，该接口在SecurityConfig中配置为permitAll，不需要JWT验证）
+        // 注意：登录接口虽然不需要JWT Token，但需要用户名密码验证（这是Service层的业务逻辑验证）
         if (requestURI.equals("/api/admin/login")) {
             filterChain.doFilter(request, response);
             return;
         }
+        
+        // 其他所有管理员接口都需要JWT认证（除了登录之外，管理员没有无需权限的操作）
         
         // 1. 从请求头获取Token（与原有AdminInterceptor逻辑一致）
         String token = getTokenFromRequest(request);

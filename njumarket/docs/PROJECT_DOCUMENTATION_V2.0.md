@@ -29,6 +29,8 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 - ✅ **分布式系统**：分布式事务、分布式锁、分布式ID
 - ✅ **消息队列**：RabbitMQ/RocketMQ实现异步处理
 - ✅ **搜索引擎**：Elasticsearch实现商品和消息搜索
+- ✅ **MyBatis复杂查询**：学习MyBatis处理复杂查询场景
+- ✅ **缓存机制**：多级缓存、缓存一致性、缓存预热
 
 ---
 
@@ -44,6 +46,8 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 - **消息队列**：学习消息队列的使用场景
 - **搜索引擎**：学习Elasticsearch全文搜索
 - **分布式系统**：学习分布式事务、分布式锁
+- **MyBatis**：学习MyBatis处理复杂查询场景
+- **缓存系统**：学习多级缓存、缓存一致性策略
 
 ### 3. 系统能力提升
 - **可扩展性**：服务独立部署和扩展
@@ -82,7 +86,8 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 **技术栈**：
 - Spring Boot
 - Spring Cloud
-- JPA + MySQL
+- JPA + MySQL（基础CRUD）
+- MyBatis（复杂查询）
 - Redis（Token存储）
 
 ---
@@ -106,9 +111,10 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 **技术栈**：
 - Spring Boot
 - Spring Cloud
-- JPA + MySQL
+- JPA + MySQL（基础CRUD）
+- MyBatis（复杂查询、统计报表）
 - Elasticsearch（商品搜索）
-- Redis（商品缓存）
+- Redis（商品缓存、多级缓存）
 
 ---
 
@@ -130,8 +136,9 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 **技术栈**：
 - Spring Boot
 - Spring Cloud
-- JPA + MySQL
-- Redis（分布式锁、库存缓存）
+- JPA + MySQL（基础CRUD）
+- MyBatis（复杂查询、统计报表）
+- Redis（分布式锁、库存缓存、多级缓存）
 - RabbitMQ（订单异步处理）
 
 ---
@@ -440,6 +447,463 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 
 ---
 
+## MyBatis 复杂查询实践
+
+### 1. 技术选型
+
+#### 1.1 为什么引入MyBatis
+**JPA的局限性**：
+- 复杂SQL查询难以表达（多表关联、子查询、动态SQL）
+- 性能优化困难（无法精确控制SQL）
+- 统计报表查询复杂（聚合函数、分组、排序）
+
+**MyBatis的优势**：
+- 灵活的动态SQL（if、choose、foreach等）
+- 精确控制SQL语句
+- 支持复杂查询和统计报表
+- 性能优化更容易
+
+**混合使用策略**：
+- **JPA**：用于基础CRUD操作（简单、快速）
+- **MyBatis**：用于复杂查询和统计报表（灵活、可控）
+
+---
+
+### 2. 应用场景
+
+#### 2.1 复杂查询场景
+
+**商品服务**：
+- 多条件动态查询（分类、价格区间、状态、可见性等）
+- 商品统计报表（按分类统计、按时间统计）
+- 商品排行榜（销量、点击量、评分）
+
+**订单服务**：
+- 订单统计报表（按状态统计、按时间统计、按用户统计）
+- 订单趋势分析（日/周/月订单量）
+- 订单金额统计（总收入、平均订单金额）
+
+**用户服务**：
+- 用户统计报表（注册用户数、活跃用户数）
+- 用户行为分析（购买频率、消费金额）
+- 用户排行榜（信用分、评分、交易量）
+
+**消息服务**：
+- 消息统计（未读数统计、消息发送量）
+- 对话活跃度分析（按时间统计对话数）
+
+#### 2.2 实现示例
+
+**商品多条件动态查询**：
+```xml
+<!-- CommodityMapper.xml -->
+<select id="findCommoditiesByConditions" resultType="CommodityDTO">
+    SELECT c.*, u.nickname as sellerNickname, u.avatar as sellerAvatar
+    FROM commodities c
+    LEFT JOIN user_profiles u ON c.seller_id = u.user_id
+    <where>
+        <if test="category != null and category != ''">
+            AND c.category = #{category}
+        </if>
+        <if test="minPrice != null">
+            AND c.price >= #{minPrice}
+        </if>
+        <if test="maxPrice != null">
+            AND c.price <= #{maxPrice}
+        </if>
+        <if test="status != null and status != ''">
+            AND c.commodity_status = #{status}
+        </if>
+        <if test="sellerVisibility != null">
+            AND c.seller_visibility = #{sellerVisibility}
+        </if>
+        <if test="buyerVisibility != null">
+            AND c.buyer_visibility = #{buyerVisibility}
+        </if>
+    </where>
+    ORDER BY c.publish_time DESC
+    LIMIT #{offset}, #{size}
+</select>
+```
+
+**订单统计报表**：
+```xml
+<!-- OrderMapper.xml -->
+<select id="getOrderStatistics" resultType="OrderStatisticsDTO">
+    SELECT 
+        DATE(create_time) as date,
+        COUNT(*) as totalOrders,
+        SUM(total_amount) as totalAmount,
+        AVG(total_amount) as avgAmount,
+        COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paidOrders,
+        COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completedOrders
+    FROM orders
+    WHERE create_time >= #{startDate} AND create_time <= #{endDate}
+    GROUP BY DATE(create_time)
+    ORDER BY date DESC
+</select>
+```
+
+---
+
+### 3. MyBatis配置
+
+#### 3.1 依赖配置
+```xml
+<!-- pom.xml -->
+<dependency>
+    <groupId>org.mybatis.spring.boot</groupId>
+    <artifactId>mybatis-spring-boot-starter</artifactId>
+    <version>3.0.3</version>
+</dependency>
+```
+
+#### 3.2 配置项
+```yaml
+# application.yml
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.njumarket.njumarket.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+```
+
+#### 3.3 Mapper接口
+```java
+@Mapper
+public interface CommodityMapper {
+    List<CommodityDTO> findCommoditiesByConditions(CommodityQueryDTO query);
+    CommodityStatisticsDTO getCommodityStatistics(StatisticsQueryDTO query);
+}
+```
+
+---
+
+### 4. 学习重点
+
+#### 4.1 动态SQL
+- **if标签**：条件判断
+- **choose/when/otherwise**：多条件选择
+- **foreach标签**：循环处理
+- **where标签**：自动处理WHERE子句
+- **set标签**：自动处理SET子句
+
+#### 4.2 结果映射
+- **resultMap**：复杂对象映射
+- **association**：一对一关联
+- **collection**：一对多关联
+- **discriminator**：鉴别器映射
+
+#### 4.3 性能优化
+- **批量操作**：批量插入、批量更新
+- **分页查询**：PageHelper插件
+- **缓存机制**：一级缓存、二级缓存
+
+---
+
+## 缓存机制实现
+
+### 1. 多级缓存架构
+
+#### 1.1 缓存层次设计
+
+**三级缓存架构**：
+```
+L1: 本地缓存（Caffeine） → L2: Redis分布式缓存 → L3: 数据库
+```
+
+**缓存策略**：
+- **热点数据**：L1 + L2（本地缓存 + Redis）
+- **普通数据**：L2（Redis）
+- **冷数据**：L3（数据库）
+
+#### 1.2 缓存选型
+
+**本地缓存（L1）**：
+- **Caffeine**：高性能本地缓存
+- **优点**：速度快、内存占用小
+- **缺点**：无法跨服务共享
+- **适用场景**：热点数据、配置信息
+
+**分布式缓存（L2）**：
+- **Redis**：分布式缓存
+- **优点**：跨服务共享、支持复杂数据结构
+- **缺点**：网络延迟
+- **适用场景**：用户信息、商品信息、订单信息
+
+---
+
+### 2. 缓存实现方案
+
+#### 2.1 Spring Cache + Caffeine + Redis
+
+**配置示例**：
+```java
+@Configuration
+@EnableCaching
+public class CacheConfig {
+    
+    // L1: 本地缓存（Caffeine）
+    @Bean
+    public CacheManager localCacheManager() {
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
+        cacheManager.setCaffeine(Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .recordStats());
+        return cacheManager;
+    }
+    
+    // L2: 分布式缓存（Redis）
+    @Bean
+    public CacheManager redisCacheManager(RedisConnectionFactory factory) {
+        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+            .entryTtl(Duration.ofMinutes(30))
+            .serializeKeysWith(RedisSerializationContext.SerializationPair
+                .fromSerializer(new StringRedisSerializer()))
+            .serializeValuesWith(RedisSerializationContext.SerializationPair
+                .fromSerializer(new GenericJackson2JsonRedisSerializer()));
+        
+        return RedisCacheManager.builder(factory)
+            .cacheDefaults(config)
+            .build();
+    }
+}
+```
+
+**使用示例**：
+```java
+@Service
+public class CommodityService {
+    
+    // L1缓存：热点商品（本地缓存）
+    @Cacheable(value = "commodity:hot", cacheManager = "localCacheManager")
+    public CommodityDTO getHotCommodity(String commodityId) {
+        return getCommodityFromRedis(commodityId);
+    }
+    
+    // L2缓存：普通商品（Redis）
+    @Cacheable(value = "commodity", cacheManager = "redisCacheManager")
+    public CommodityDTO getCommodity(String commodityId) {
+        return commodityRepository.findById(commodityId)
+            .map(this::convertToDTO)
+            .orElse(null);
+    }
+}
+```
+
+---
+
+### 3. 缓存一致性策略
+
+#### 3.1 Cache Aside模式
+
+**读流程**：
+1. 先查缓存，命中则返回
+2. 缓存未命中，查数据库
+3. 将结果写入缓存
+
+**写流程**：
+1. 更新数据库
+2. 删除缓存（不更新缓存，让下次查询自动缓存）
+
+**优点**：
+- 实现简单
+- 缓存和数据库解耦
+
+**缺点**：
+- 可能出现缓存不一致（极小概率）
+
+#### 3.2 Read/Write Through模式
+
+**读流程**：
+1. 先查缓存，命中则返回
+2. 缓存未命中，查数据库并写入缓存
+
+**写流程**：
+1. 更新缓存
+2. 更新数据库
+
+**优点**：
+- 缓存一致性更好
+
+**缺点**：
+- 实现复杂
+- 写操作需要同时更新缓存和数据库
+
+#### 3.3 Write Behind模式
+
+**写流程**：
+1. 更新缓存
+2. 异步更新数据库
+
+**优点**：
+- 写性能好
+
+**缺点**：
+- 数据可能丢失
+- 实现复杂
+
+**推荐**：使用Cache Aside模式（简单、可靠）
+
+---
+
+### 4. 缓存预热
+
+#### 4.1 预热策略
+
+**应用启动时预热**：
+- 加载热点商品到本地缓存
+- 加载热门用户信息到Redis
+- 加载配置信息到本地缓存
+
+**定时预热**：
+- 每小时刷新热门商品缓存
+- 每天刷新统计数据缓存
+
+**实现示例**：
+```java
+@Component
+public class CacheWarmUp {
+    
+    @PostConstruct
+    public void warmUpCache() {
+        // 预热热点商品
+        List<String> hotCommodityIds = getHotCommodityIds();
+        hotCommodityIds.forEach(id -> {
+            commodityService.getHotCommodity(id);
+        });
+        
+        // 预热用户信息
+        List<String> activeUserIds = getActiveUserIds();
+        activeUserIds.forEach(id -> {
+            userService.getUserProfile(id);
+        });
+    }
+}
+```
+
+---
+
+### 5. 缓存穿透、击穿、雪崩
+
+#### 5.1 缓存穿透
+
+**问题**：查询不存在的数据，每次都查数据库
+
+**解决方案**：
+- **布隆过滤器**：快速判断数据是否存在
+- **空值缓存**：将空结果也缓存，设置较短TTL
+
+**实现示例**：
+```java
+@Cacheable(value = "commodity", unless = "#result == null")
+public CommodityDTO getCommodity(String commodityId) {
+    CommodityDTO dto = commodityRepository.findById(commodityId)
+        .map(this::convertToDTO)
+        .orElse(null);
+    
+    // 空值也缓存，防止穿透
+    if (dto == null) {
+        // 缓存空值，TTL较短（5分钟）
+        cacheManager.getCache("commodity").put(commodityId, new EmptyCommodityDTO());
+    }
+    
+    return dto;
+}
+```
+
+#### 5.2 缓存击穿
+
+**问题**：热点数据过期，大量请求同时查数据库
+
+**解决方案**：
+- **分布式锁**：只允许一个线程查数据库
+- **热点数据永不过期**：后台异步更新
+
+**实现示例**：
+```java
+public CommodityDTO getCommodity(String commodityId) {
+    CommodityDTO cached = cacheManager.getCache("commodity").get(commodityId, CommodityDTO.class);
+    if (cached != null) {
+        return cached;
+    }
+    
+    // 使用分布式锁，防止击穿
+    RLock lock = redisson.getLock("commodity:lock:" + commodityId);
+    try {
+        lock.lock(10, TimeUnit.SECONDS);
+        // 双重检查
+        cached = cacheManager.getCache("commodity").get(commodityId, CommodityDTO.class);
+        if (cached != null) {
+            return cached;
+        }
+        
+        // 查数据库
+        CommodityDTO dto = commodityRepository.findById(commodityId)
+            .map(this::convertToDTO)
+            .orElse(null);
+        
+        // 写入缓存
+        cacheManager.getCache("commodity").put(commodityId, dto);
+        return dto;
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+#### 5.3 缓存雪崩
+
+**问题**：大量缓存同时过期，大量请求查数据库
+
+**解决方案**：
+- **随机TTL**：避免同时过期
+- **多级缓存**：本地缓存 + Redis
+- **熔断降级**：数据库压力大时降级
+
+**实现示例**：
+```java
+@Cacheable(value = "commodity", cacheManager = "redisCacheManager")
+public CommodityDTO getCommodity(String commodityId) {
+    // TTL随机化，避免雪崩
+    RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+        .entryTtl(Duration.ofMinutes(30 + new Random().nextInt(10))); // 30-40分钟随机
+    
+    // ...
+}
+```
+
+---
+
+### 6. 缓存监控
+
+#### 6.1 缓存命中率监控
+
+**指标**：
+- 缓存命中率
+- 缓存QPS
+- 缓存大小
+- 缓存过期时间
+
+**实现**：
+- Caffeine提供统计功能
+- Redis提供INFO命令查看统计
+
+#### 6.2 缓存性能监控
+
+**指标**：
+- 缓存响应时间
+- 缓存错误率
+- 缓存内存使用率
+
+**工具**：
+- Spring Boot Actuator
+- Prometheus + Grafana
+
+---
+
 ## 搜索引擎集成
 
 ### 1. Elasticsearch
@@ -523,6 +987,17 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 - **全文搜索**：IK分词器、搜索高亮
 - **搜索优化**：搜索建议、搜索历史
 
+### 6. MyBatis
+- **动态SQL**：if、choose、foreach等标签
+- **结果映射**：resultMap、association、collection
+- **性能优化**：批量操作、分页查询、缓存机制
+
+### 7. 缓存系统
+- **多级缓存**：本地缓存（Caffeine）+ 分布式缓存（Redis）
+- **缓存一致性**：Cache Aside、Read/Write Through模式
+- **缓存问题**：穿透、击穿、雪崩的解决方案
+- **缓存预热**：应用启动预热、定时预热
+
 ---
 
 ## 实施计划
@@ -585,10 +1060,19 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 - [ ] 消息搜索服务实现
 - [ ] IK分词器配置
 
-#### Week 9: 系统集成和测试
+#### Week 9: MyBatis和缓存机制
+- [ ] MyBatis集成和配置
+- [ ] 复杂查询Mapper实现
+- [ ] 统计报表查询实现
+- [ ] 多级缓存架构设计
+- [ ] 缓存一致性策略实现
+- [ ] 缓存预热和监控
+
+#### Week 10: 系统集成和测试
 - [ ] 各服务集成测试
 - [ ] 性能测试
 - [ ] 压力测试
+- [ ] 缓存性能测试
 - [ ] 文档完善
 
 ---
@@ -606,6 +1090,8 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 - ✅ 分布式事务保证数据一致性
 - ✅ 消息队列实现异步处理
 - ✅ Elasticsearch实现全文搜索
+- ✅ MyBatis实现复杂查询和统计报表
+- ✅ 多级缓存提升系统性能
 - ✅ 服务熔断降级保证系统稳定性
 
 ### 3. 技术成果
@@ -614,6 +1100,8 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 - ✅ 理解分布式系统原理
 - ✅ 掌握消息队列使用
 - ✅ 掌握搜索引擎集成
+- ✅ 掌握MyBatis复杂查询
+- ✅ 掌握多级缓存架构设计
 
 ### 4. 文档成果
 - ✅ 微服务架构设计文档
@@ -622,6 +1110,8 @@ v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆�
 - ✅ 分布式系统实践文档
 - ✅ 消息队列应用文档
 - ✅ 搜索引擎集成文档
+- ✅ MyBatis复杂查询实践文档
+- ✅ 缓存机制实现文档
 
 ---
 

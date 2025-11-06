@@ -235,6 +235,7 @@ const handleGlobalMouseMove = (event) => {
 }
 
 // ✅ v1.3.x: 全局鼠标抬起（桌面端）
+// eslint-disable-next-line no-unused-vars
 const handleGlobalMouseUp = (event) => {
   if (!currentDraggingConversation.value) {
     return

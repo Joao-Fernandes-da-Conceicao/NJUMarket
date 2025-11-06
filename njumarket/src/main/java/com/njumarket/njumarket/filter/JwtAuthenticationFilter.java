@@ -38,14 +38,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                    @NonNull HttpServletResponse response, 
                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
         
-        // 只处理用户相关路径（/api/user/** 和 /api/contact/**）
+        // 性能优化：只处理用户相关路径（/api/user/** 和 /api/contact/**）
+        // 注意：SecurityConfig中已配置这些路径需要认证，这里的检查是为了性能优化（提前跳过不需要处理的路径）
         String requestURI = request.getRequestURI();
         if (!requestURI.startsWith("/api/user/") && !requestURI.startsWith("/api/contact/")) {
             filterChain.doFilter(request, response);
             return;
         }
         
-        // 排除认证相关接口
+        // 排除认证相关接口（这些接口在SecurityConfig中配置为permitAll，不需要JWT验证）
         if (isAuthEndpoint(requestURI)) {
             filterChain.doFilter(request, response);
             return;

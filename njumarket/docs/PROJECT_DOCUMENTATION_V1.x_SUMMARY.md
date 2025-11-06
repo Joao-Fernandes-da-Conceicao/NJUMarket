@@ -104,6 +104,17 @@
 - ✅ 订单提醒持久化：订单提醒状态存储到数据库，跨会话保持
 - ✅ 应用启动扫描：启动时自动从profile加载订单提醒状态
 
+### v1.3.1 - Spring Security规范化迁移（2025-01-XX）
+
+**主要成就**：
+- ✅ Spring Security JWT Filter：用户认证从拦截器迁移到Spring Security Filter
+- ✅ Spring Security Admin Filter：管理员认证从拦截器迁移到Spring Security Filter
+- ✅ @CurrentUser注解：简化Controller参数注入，符合Spring生态标准
+- ✅ @CurrentAdmin注解：简化管理员Controller参数注入
+- ✅ 方法级权限控制：使用@PreAuthorize实现细粒度权限控制
+- ✅ 代码清理：删除冗余的拦截器和ThreadLocal代码
+- ✅ LazyInitializationException修复：修复User和Admin实体的toString方法
+
 ---
 
 ## 核心功能总结
@@ -158,7 +169,7 @@
 - **数据库**：MySQL 8.0
 - **缓存**：Redis（分布式锁、增量轮询）
 - **实时通信**：WebSocket（消息推送、订单通知）
-- **认证**：JWT Token + Redis存储
+- **认证**：Spring Security JWT Filter + JWT Token + Redis存储
 
 ### 前端架构
 - **框架**：Vue 3 (Composition API)
@@ -286,26 +297,30 @@ v2.0 版本将专注于**微服务架构改造**，将单体应用拆分为多�
 3. **实时通信**：WebSocket实现消息和订单的实时推送
 4. **用户体验**：无限滚动、软删除、智能角标等用户体验优化
 5. **代码质量**：清晰的分层架构、统一的代码规范、完善的文档体系
+6. **技术栈规范化**：Spring Security标准实现，符合Spring生态最佳实践
 
 ### v1.x 阶段技术积累
 1. **Spring Boot**：深入理解Spring Boot生态
-2. **JPA/Hibernate**：ORM框架使用和优化
-3. **Redis**：分布式锁、缓存、增量轮询
-4. **WebSocket**：实时通信实现
-5. **Vue 3**：Composition API、Pinia状态管理
-6. **数据库优化**：索引优化、查询优化、并发控制
+2. **Spring Security**：JWT Filter、方法级权限控制、参数解析器
+3. **JPA/Hibernate**：ORM框架使用和优化
+4. **Redis**：分布式锁、缓存、增量轮询
+5. **WebSocket**：实时通信实现
+6. **Vue 3**：Composition API、Pinia状态管理
+7. **数据库优化**：索引优化、查询优化、并发控制
 
 ### 进入v2.0的准备
 - ✅ 核心业务功能稳定
 - ✅ 性能优化完成
 - ✅ 代码质量良好
+- ✅ 技术栈规范化（Spring Security标准实现）
 - ✅ 文档体系完善
 - ✅ 测试验证通过
 
-**项目状态**：✅ **v1.x 阶段已完成，可以进入 v2.0 微服务架构改造阶段**
+**项目状态**：✅ **v1.x 阶段已完成，基本功能彻底完成，可以进入 v2.0 微服务架构改造阶段**
 
 ---
 
 **文档版本**：v1.x 总结  
-**最后更新**：2025-01-XX
+**最后更新**：2025-01-XX  
+**包含版本**：v1.0 → v1.1.0 → v1.1.1 → v1.1.2 → v1.1.3 → v1.1.4 → v1.1.5 → v1.2.0 → v1.2.1 → v1.2.2 → v1.3.0 → v1.3.1
 
