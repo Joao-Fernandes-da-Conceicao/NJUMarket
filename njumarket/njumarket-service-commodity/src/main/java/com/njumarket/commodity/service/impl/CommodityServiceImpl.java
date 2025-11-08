@@ -534,7 +534,7 @@ public class CommodityServiceImpl implements CommodityService {
     public Result getCommodityForUpdate(String commodityId) {
         Optional<Commodity> commodityOpt = commodityRepository.findByIdForUpdate(commodityId);
         if (commodityOpt.isEmpty()) {
-            return Result.fail("商品不存在");
+            throw new BusinessException("商品不存在");
         }
         return Result.ok(commodityOpt.get());
     }
@@ -544,7 +544,7 @@ public class CommodityServiceImpl implements CommodityService {
     public Result updateCommodityStock(String commodityId, Integer quantity) {
         int updateResult = commodityRepository.updateStockWithCondition(commodityId, quantity);
         if (updateResult == 0) {
-            return Result.fail("商品库存不足，请刷新后重试");
+            throw new BusinessException("商品库存不足，请刷新后重试");
         }
         return Result.ok("库存更新成功");
     }

@@ -7,6 +7,7 @@ import com.njumarket.njumarket.dto.CommodityDTO;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
 import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.commodity.repository.CommodityRepository;
 import com.njumarket.commodity.service.CommodityQueryService;
 import com.njumarket.commodity.client.AuthClient;
@@ -90,7 +91,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("搜索商品失败: {}", e.getMessage(), e);
-            return Result.fail("搜索失败，请稍后重试");
+            throw new BusinessException("搜索失败，请稍后重试");
         }
     }
     
@@ -116,7 +117,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("根据分类查询商品失败: {}", e.getMessage(), e);
-            return Result.fail("查询失败，请稍后重试");
+            throw new BusinessException("查询失败，请稍后重试");
         }
     }
     
@@ -127,13 +128,13 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
             Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
             if (commodity == null) {
-                return Result.fail("商品不存在");
+                throw new BusinessException("商品不存在");
             }
             
             // 检查可见性权限（公开接口，允许未登录用户访问）
             User currentUser = SecurityUtils.getCurrentUser(); // 使用 getCurrentUser 而不是 requireCurrentUser
             if (!canUserViewCommodity(commodity, currentUser)) {
-                return Result.fail("无权限查看此商品");
+                throw new BusinessException("无权限查看此商品");
             }
             
             // 增加点击量
@@ -148,7 +149,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("获取商品详情失败: {}", e.getMessage(), e);
-            return Result.fail("获取商品详情失败");
+            throw new BusinessException("获取商品详情失败");
         }
     }
     
@@ -167,7 +168,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("获取热门商品失败: {}", e.getMessage(), e);
-            return Result.fail("获取热门商品失败");
+            throw new BusinessException("获取热门商品失败");
         }
     }
     
@@ -186,7 +187,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("获取最新商品失败: {}", e.getMessage(), e);
-            return Result.fail("获取最新商品失败");
+            throw new BusinessException("获取最新商品失败");
         }
     }
     
@@ -205,7 +206,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("获取商品分类失败: {}", e.getMessage(), e);
-            return Result.fail("获取分类失败");
+            throw new BusinessException("获取分类失败");
         }
     }
     
@@ -219,7 +220,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("获取推荐商品失败: {}", e.getMessage(), e);
-            return Result.fail("获取推荐商品失败");
+            throw new BusinessException("获取推荐商品失败");
         }
     }
     
@@ -230,7 +231,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
             Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
             if (commodity == null) {
-                return Result.fail("商品不存在");
+                throw new BusinessException("商品不存在");
             }
             
             // 增加点击量
@@ -241,7 +242,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("记录商品浏览失败: {}", e.getMessage(), e);
-            return Result.fail("记录浏览失败");
+            throw new BusinessException("记录浏览失败");
         }
     }
     
@@ -255,7 +256,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("AI语义搜索失败: {}", e.getMessage(), e);
-            return Result.fail("AI搜索失败");
+            throw new BusinessException("AI搜索失败");
         }
     }
     
@@ -271,7 +272,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             }
             
             if (targetSellerId == null) {
-                return Result.fail("卖家ID不能为空");
+                throw new BusinessException("卖家ID不能为空");
             }
             
             boolean isOwnCommodities = user != null && user.getUserId().equals(targetSellerId);
@@ -287,7 +288,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
             // 如果是查看其他用户的商品，不能查看草稿状态
             if (!isOwnCommodities && "DRAFT".equals(normalizedStatus)) {
-                return Result.fail("无法查看其他用户的草稿商品");
+                throw new BusinessException("无法查看其他用户的草稿商品");
             }
             
             // 如果是自己的商品，直接查询并返回
@@ -345,7 +346,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             } else {
                 // 按状态查询（只支持 ON_SHELF 和 OFF_SHELF）
                 if (!"ON_SHELF".equals(normalizedStatus) && !"OFF_SHELF".equals(normalizedStatus) && !"PUBLISHED".equals(normalizedStatus)) {
-                    return Result.fail("不支持的状态筛选，只支持 ON_SHELF、OFF_SHELF 和 PUBLISHED");
+                    throw new BusinessException("不支持的状态筛选，只支持 ON_SHELF、OFF_SHELF 和 PUBLISHED");
                 }
                 
                 commodityPage = commodityRepository.findBySellerIdAndCommodityStatus(targetSellerId, normalizedStatus, pageable);
@@ -370,7 +371,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("获取用户商品失败: {}", e.getMessage(), e);
-            return Result.fail("获取用户商品失败");
+            throw new BusinessException("获取用户商品失败");
         }
     }
     
@@ -463,12 +464,12 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
             Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
             if (commodity == null) {
-                return Result.fail("商品不存在");
+                throw new BusinessException("商品不存在");
             }
             
             // 检查权限：使用新的查询权限检查
             if (!canCommodityBeQueried(commodity, currentUser)) {
-                return Result.fail("无权限查看此商品");
+                throw new BusinessException("无权限查看此商品");
             }
             
             // ✅ 优化：批量查询卖家 Profile（虽然只有一条，但保持一致性）
@@ -487,7 +488,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("根据ID获取商品详情失败: {}", e.getMessage(), e);
-            return Result.fail("获取商品详情失败");
+            throw new BusinessException("获取商品详情失败");
         }
     }
     
@@ -546,7 +547,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("获取商品统计信息失败: {}", e.getMessage(), e);
-            return Result.fail("获取统计信息失败");
+            throw new BusinessException("获取统计信息失败");
         }
     }
     
@@ -752,7 +753,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             
         } catch (Exception e) {
             log.error("Failed to batch query commodity status: {}", e.getMessage(), e);
-            return Result.fail("Batch query failed");
+            throw new BusinessException("Batch query failed");
         }
     }
 }

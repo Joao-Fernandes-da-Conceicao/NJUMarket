@@ -4,6 +4,7 @@ import com.njumarket.njumarket.annotation.CurrentUser;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
 import com.njumarket.njumarket.entity.User;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserProfileService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -129,12 +130,8 @@ public class UserProfileController {
     })
     @GetMapping("/order-reminder/status")
     public Result getOrderReminderStatus(@CurrentUser User user) {
-        try {
-            java.util.Map<String, Boolean> status = userProfileService.getOrderReminderStatus(user.getUserId());
-            return Result.ok(status);
-        } catch (Exception e) {
-            return Result.fail("获取订单提醒状态失败: " + e.getMessage());
-        }
+        java.util.Map<String, Boolean> status = userProfileService.getOrderReminderStatus(user.getUserId());
+        return Result.ok(status);
     }
     
     @Operation(summary = "清除订单提醒状态", description = "清除指定角色的订单提醒状态（进入订单页面时调用）")
@@ -148,12 +145,8 @@ public class UserProfileController {
         @CurrentUser User user,
         @Parameter(description = "角色", required = true, example = "SELLER")
         @RequestParam String role) {
-        try {
-            userProfileService.clearOrderReminderStatus(user.getUserId(), role);
-            return Result.ok("订单提醒状态已清除");
-        } catch (Exception e) {
-            return Result.fail("清除订单提醒状态失败: " + e.getMessage());
-        }
+        userProfileService.clearOrderReminderStatus(user.getUserId(), role);
+        return Result.ok("订单提醒状态已清除");
     }
 }
 

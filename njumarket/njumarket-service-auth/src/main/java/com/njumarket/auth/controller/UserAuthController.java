@@ -5,6 +5,7 @@ import com.njumarket.njumarket.dto.UserDTO;
 import com.njumarket.njumarket.dto.LoginFormDTO;
 import com.njumarket.njumarket.dto.PasswordDTO;
 import com.njumarket.njumarket.dto.RegisterDTO;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -114,7 +115,7 @@ public class UserAuthController {
     public Result refreshToken(@RequestBody Map<String, String> request) {
         String refreshToken = request.get("refreshToken");
         if (refreshToken == null || refreshToken.trim().isEmpty()) {
-            return Result.fail("RefreshToken不能为空");
+            throw new BusinessException("RefreshToken不能为空");
         }
         return userService.refreshToken(refreshToken.trim());
     }
@@ -129,7 +130,7 @@ public class UserAuthController {
         // 验证密码确认
         if (passwordDTO.getConfirmPassword() != null && 
             !passwordDTO.getNewPassword().equals(passwordDTO.getConfirmPassword())) {
-            return Result.fail("两次输入的密码不一致");
+            throw new BusinessException("两次输入的密码不一致");
         }
         
         return userService.resetPassword(passwordDTO.getPhone(), passwordDTO.getCode(), passwordDTO.getNewPassword());

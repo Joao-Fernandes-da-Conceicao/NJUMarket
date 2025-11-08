@@ -3,6 +3,7 @@ package com.njumarket.message.controller;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.entity.Conversation;
 import com.njumarket.njumarket.entity.Message;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.message.repository.ConversationRepository;
 import com.njumarket.message.repository.MessageRepository;
 import com.njumarket.message.service.WebSocketRetryService;
@@ -34,14 +35,8 @@ public class InternalController {
     public Result pushMessage(@RequestParam String receiverId,
                              @RequestParam String messageType,
                              @RequestBody Map<String, Object> messageData) {
-        try {
-            webSocketRetryService.pushWithRetry(receiverId, messageData, messageType);
-            return Result.ok("推送成功");
-        } catch (Exception e) {
-            log.error("WebSocket推送失败: receiverId={}, messageType={}, error={}", 
-                receiverId, messageType, e.getMessage(), e);
-            return Result.fail("推送失败");
-        }
+        webSocketRetryService.pushWithRetry(receiverId, messageData, messageType);
+        return Result.ok("推送成功");
     }
 
     /**
@@ -49,16 +44,9 @@ public class InternalController {
      */
     @GetMapping("/conversation/{conversationId}")
     public Result getConversationById(@PathVariable String conversationId) {
-        try {
-            Optional<Conversation> opt = conversationRepository.findById(conversationId);
-            if (opt.isEmpty()) {
-                return Result.fail("会话不存在");
-            }
-            return Result.ok("查询成功", opt.get());
-        } catch (Exception e) {
-            log.error("查询会话失败: conversationId={}, error={}", conversationId, e.getMessage(), e);
-            return Result.fail("查询失败");
-        }
+        Conversation conversation = conversationRepository.findById(conversationId)
+            .orElseThrow(() -> new BusinessException("会话不存在"));
+        return Result.ok("查询成功", conversation);
     }
 
     /**
@@ -67,44 +55,36 @@ public class InternalController {
     @PutMapping("/conversation/{conversationId}/full")
     public Result updateConversationFull(@PathVariable String conversationId,
                                          @RequestBody Map<String, Object> payload) {
-        try {
-            Optional<Conversation> opt = conversationRepository.findById(conversationId);
-            if (opt.isEmpty()) {
-                return Result.fail("会话不存在");
+        Conversation c = conversationRepository.findById(conversationId)
+            .orElseThrow(() -> new BusinessException("会话不存在"));
+        
+        // 更新字段
+        Object userId1 = payload.get("userId1");
+        if (userId1 instanceof String) c.setUserId1(((String) userId1).trim());
+        
+        Object userId2 = payload.get("userId2");
+        if (userId2 instanceof String) c.setUserId2(((String) userId2).trim());
+        
+        Object lastMessageContent = payload.get("lastMessageContent");
+        if (lastMessageContent instanceof String) c.setLastMessageContent(((String) lastMessageContent).trim());
+        
+        Object status = payload.get("status");
+        if (status instanceof String) {
+            String st = ((String) status).trim();
+            java.util.Set<String> allowedStatus = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE", "ARCHIVED", "DELETED"));
+            if (allowedStatus.contains(st)) {
+                c.setStatus(st);
             }
-            Conversation c = opt.get();
-            
-            // 更新字段
-            Object userId1 = payload.get("userId1");
-            if (userId1 instanceof String) c.setUserId1(((String) userId1).trim());
-            
-            Object userId2 = payload.get("userId2");
-            if (userId2 instanceof String) c.setUserId2(((String) userId2).trim());
-            
-            Object lastMessageContent = payload.get("lastMessageContent");
-            if (lastMessageContent instanceof String) c.setLastMessageContent(((String) lastMessageContent).trim());
-            
-            Object status = payload.get("status");
-            if (status instanceof String) {
-                String st = ((String) status).trim();
-                java.util.Set<String> allowedStatus = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE", "ARCHIVED", "DELETED"));
-                if (allowedStatus.contains(st)) {
-                    c.setStatus(st);
-                }
-            }
-            
-            Object user1Visibility = payload.get("user1Visibility");
-            if (user1Visibility instanceof Boolean) c.setUser1Visibility((Boolean) user1Visibility);
-            
-            Object user2Visibility = payload.get("user2Visibility");
-            if (user2Visibility instanceof Boolean) c.setUser2Visibility((Boolean) user2Visibility);
-            
-            conversationRepository.save(c);
-            return Result.ok("更新成功", c);
-        } catch (Exception e) {
-            log.error("完整更新会话异常: conversationId={}, error={}", conversationId, e.getMessage(), e);
-            return Result.fail("更新失败");
         }
+        
+        Object user1Visibility = payload.get("user1Visibility");
+        if (user1Visibility instanceof Boolean) c.setUser1Visibility((Boolean) user1Visibility);
+        
+        Object user2Visibility = payload.get("user2Visibility");
+        if (user2Visibility instanceof Boolean) c.setUser2Visibility((Boolean) user2Visibility);
+        
+        conversationRepository.save(c);
+        return Result.ok("更新成功", c);
     }
 
     /**
@@ -112,16 +92,11 @@ public class InternalController {
      */
     @DeleteMapping("/conversation/{conversationId}")
     public Result deleteConversation(@PathVariable String conversationId) {
-        try {
-            if (!conversationRepository.existsById(conversationId)) {
-                return Result.fail("会话不存在");
-            }
-            conversationRepository.deleteById(conversationId);
-            return Result.ok("删除成功");
-        } catch (Exception e) {
-            log.error("删除会话异常: conversationId={}, error={}", conversationId, e.getMessage(), e);
-            return Result.fail("删除失败");
+        if (!conversationRepository.existsById(conversationId)) {
+            throw new BusinessException("会话不存在");
         }
+        conversationRepository.deleteById(conversationId);
+        return Result.ok("删除成功");
     }
 
     /**
@@ -129,16 +104,9 @@ public class InternalController {
      */
     @GetMapping("/message/{messageId}")
     public Result getMessageById(@PathVariable String messageId) {
-        try {
-            Optional<Message> opt = messageRepository.findById(messageId);
-            if (opt.isEmpty()) {
-                return Result.fail("消息不存在");
-            }
-            return Result.ok("查询成功", opt.get());
-        } catch (Exception e) {
-            log.error("查询消息失败: messageId={}, error={}", messageId, e.getMessage(), e);
-            return Result.fail("查询失败");
-        }
+        Message message = messageRepository.findById(messageId)
+            .orElseThrow(() -> new BusinessException("消息不存在"));
+        return Result.ok("查询成功", message);
     }
 
     /**
@@ -147,32 +115,24 @@ public class InternalController {
     @PutMapping("/message/{messageId}/full")
     public Result updateMessageFull(@PathVariable String messageId,
                                     @RequestBody Map<String, Object> payload) {
-        try {
-            Optional<Message> opt = messageRepository.findById(messageId);
-            if (opt.isEmpty()) {
-                return Result.fail("消息不存在");
-            }
-            Message m = opt.get();
-            
-            // 更新字段
-            Object content = payload.get("content");
-            if (content instanceof String) m.setContent(((String) content).trim());
-            
-            Object deletedBySender = payload.get("deletedBySender");
-            if (deletedBySender instanceof Boolean) m.setDeletedBySender((Boolean) deletedBySender);
-            
-            Object deletedByReceiver = payload.get("deletedByReceiver");
-            if (deletedByReceiver instanceof Boolean) m.setDeletedByReceiver((Boolean) deletedByReceiver);
-            
-            Object isRead = payload.get("isRead");
-            if (isRead instanceof Boolean) m.setIsRead((Boolean) isRead);
-            
-            messageRepository.save(m);
-            return Result.ok("更新成功", m);
-        } catch (Exception e) {
-            log.error("完整更新消息异常: messageId={}, error={}", messageId, e.getMessage(), e);
-            return Result.fail("更新失败");
-        }
+        Message m = messageRepository.findById(messageId)
+            .orElseThrow(() -> new BusinessException("消息不存在"));
+        
+        // 更新字段
+        Object content = payload.get("content");
+        if (content instanceof String) m.setContent(((String) content).trim());
+        
+        Object deletedBySender = payload.get("deletedBySender");
+        if (deletedBySender instanceof Boolean) m.setDeletedBySender((Boolean) deletedBySender);
+        
+        Object deletedByReceiver = payload.get("deletedByReceiver");
+        if (deletedByReceiver instanceof Boolean) m.setDeletedByReceiver((Boolean) deletedByReceiver);
+        
+        Object isRead = payload.get("isRead");
+        if (isRead instanceof Boolean) m.setIsRead((Boolean) isRead);
+        
+        messageRepository.save(m);
+        return Result.ok("更新成功", m);
     }
 
     /**
@@ -180,16 +140,11 @@ public class InternalController {
      */
     @DeleteMapping("/message/{messageId}")
     public Result deleteMessage(@PathVariable String messageId) {
-        try {
-            if (!messageRepository.existsById(messageId)) {
-                return Result.fail("消息不存在");
-            }
-            messageRepository.deleteById(messageId);
-            return Result.ok("删除成功");
-        } catch (Exception e) {
-            log.error("删除消息异常: messageId={}, error={}", messageId, e.getMessage(), e);
-            return Result.fail("删除失败");
+        if (!messageRepository.existsById(messageId)) {
+            throw new BusinessException("消息不存在");
         }
+        messageRepository.deleteById(messageId);
+        return Result.ok("删除成功");
     }
     
     /**
@@ -218,11 +173,7 @@ public class InternalController {
                 org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "lastMessageTime"));
             org.springframework.data.domain.Page<Conversation> p = conversationRepository.findAll(spec, pageable);
             
-            return Result.ok("查询成功", p);
-        } catch (Exception e) {
-            log.error("获取会话列表失败: error={}", e.getMessage(), e);
-            return Result.fail("查询失败");
-        }
+        return Result.ok("查询成功", p);
     }
     
     /**
@@ -242,11 +193,7 @@ public class InternalController {
                 org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
             org.springframework.data.domain.Page<Message> p = messageRepository.findAll(spec, pageable);
             
-            return Result.ok("查询成功", p);
-        } catch (Exception e) {
-            log.error("获取消息列表失败: conversationId={}, error={}", conversationId, e.getMessage(), e);
-            return Result.fail("查询失败");
-        }
+        return Result.ok("查询成功", p);
     }
 }
 

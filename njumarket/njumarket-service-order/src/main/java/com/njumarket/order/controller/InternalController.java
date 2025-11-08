@@ -4,6 +4,7 @@ import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.internal.InternalDTOConverter;
 import com.njumarket.njumarket.dto.internal.OrderInternalDTO;
 import com.njumarket.njumarket.entity.Order;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,17 +33,10 @@ public class InternalController {
      */
     @GetMapping("/order/{orderId}")
     public Result getOrderById(@PathVariable String orderId) {
-        try {
-            Optional<Order> opt = orderRepository.findById(orderId);
-            if (opt.isEmpty()) {
-                return Result.fail("订单不存在");
-            }
-            OrderInternalDTO dto = internalDTOConverter.toInternalDTO(opt.get());
-            return Result.ok("查询成功", dto);
-        } catch (Exception e) {
-            log.error("查询订单失败: orderId={}, error={}", orderId, e.getMessage(), e);
-            return Result.fail("查询失败");
-        }
+        Order order = orderRepository.findById(orderId)
+            .orElseThrow(() -> new BusinessException("订单不存在"));
+        OrderInternalDTO dto = internalDTOConverter.toInternalDTO(order);
+        return Result.ok("查询成功", dto);
     }
     
     /**
@@ -51,12 +45,8 @@ public class InternalController {
     @PutMapping("/order/{orderId}/full")
     public Result updateOrderFull(@PathVariable String orderId,
                                   @RequestBody Map<String, Object> payload) {
-        try {
-            Optional<Order> opt = orderRepository.findById(orderId);
-            if (opt.isEmpty()) {
-                return Result.fail("订单不存在");
-            }
-            Order o = opt.get();
+        Order o = orderRepository.findById(orderId)
+            .orElseThrow(() -> new BusinessException("订单不存在"));
             
             // 更新字段
             Object orderStatus = payload.get("orderStatus");
@@ -94,12 +84,8 @@ public class InternalController {
                 }
             }
             
-            orderRepository.save(o);
-            return Result.ok("更新成功", o);
-        } catch (Exception e) {
-            log.error("完整更新订单异常: orderId={}, error={}", orderId, e.getMessage(), e);
-            return Result.fail("更新失败");
-        }
+        orderRepository.save(o);
+        return Result.ok("更新成功", o);
     }
     
     /**
@@ -107,16 +93,11 @@ public class InternalController {
      */
     @DeleteMapping("/order/{orderId}")
     public Result deleteOrder(@PathVariable String orderId) {
-        try {
-            if (!orderRepository.existsById(orderId)) {
-                return Result.fail("订单不存在");
-            }
-            orderRepository.deleteById(orderId);
-            return Result.ok("删除成功");
-        } catch (Exception e) {
-            log.error("删除订单异常: orderId={}, error={}", orderId, e.getMessage(), e);
-            return Result.fail("删除失败");
+        if (!orderRepository.existsById(orderId)) {
+            throw new BusinessException("订单不存在");
         }
+        orderRepository.deleteById(orderId);
+        return Result.ok("删除成功");
     }
     
     /**
@@ -124,16 +105,91 @@ public class InternalController {
      */
     @GetMapping("/order/check-commodity/{commodityId}")
     public Result checkCommodityHasOrders(@PathVariable String commodityId) {
-        try {
-            List<Order> orders = orderRepository.findByCommodityId(commodityId);
-            if (orders != null && !orders.isEmpty()) {
-                return Result.fail("该商品已有订单，无法删除");
-            }
-            return Result.ok("该商品没有订单");
-        } catch (Exception e) {
-            log.error("检查商品订单失败: commodityId={}, error={}", commodityId, e.getMessage(), e);
-            return Result.fail("检查失败");
+        List<Order> orders = orderRepository.findByCommodityId(commodityId);
+        if (orders != null && !orders.isEmpty()) {
+            throw new BusinessException("该商品已有订单，无法删除");
         }
+        return Result.ok("该商品没有订单");
+    }
+    
+    /**
+     * 查询订单列表（管理端内部接口）
+     */
+    @GetMapping("/orders")
+    public Result listOrders(@RequestParam(defaultValue = "1") Integer page,
+                            @RequestParam(defaultValue = "10") Integer size,
+                            @RequestParam(required = false) String keyword,
+                            @RequestParam(required = false) String status,
+                            @RequestParam(required = false) String sellerVisibility,
+                            @RequestParam(required = false) String buyerVisibility,
+                            @RequestParam(required = false) String sortProp,
+                            @RequestParam(required = false) String sortOrder) {
+        try {
+            // 构建分页参数
+            org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Direction.DESC, "createTime"
+            );
+            if (org.springframework.util.StringUtils.hasText(sortProp)) {
+                org.springframework.data.domain.Sort.Direction direction = 
+                    "desc".equalsIgnoreCase(sortOrder) ? 
+                    org.springframework.data.domain.Sort.Direction.DESC : 
+                    org.springframework.data.domain.Sort.Direction.ASC;
+                sort = org.springframework.data.domain.Sort.by(direction, sortProp);
+            }
+            org.springframework.data.domain.Pageable pageable = 
+                org.springframework.data.domain.PageRequest.of(Math.max(0, page - 1), size, sort);
+            
+            // 构建查询条件
+            org.springframework.data.jpa.domain.Specification<Order> spec = (root, query, cb) -> {
+                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+                
+                // 关键词搜索：订单ID、商品标题、买家ID、卖家ID（处理空字符串）
+                if (keyword != null && !keyword.trim().isEmpty()) {
+                    String kw = keyword.trim().toLowerCase();
+                    predicates.add(cb.or(
+                        cb.like(cb.lower(root.get("orderId")), "%" + kw + "%"),
+                        cb.like(cb.lower(root.get("commodityTitle")), "%" + kw + "%"),
+                        cb.like(cb.lower(root.get("buyerId")), "%" + kw + "%"),
+                        cb.like(cb.lower(root.get("sellerId")), "%" + kw + "%")
+                    ));
+                }
+                
+                // 状态筛选（处理空字符串）
+                if (status != null && !status.trim().isEmpty()) {
+                    predicates.add(cb.equal(root.get("orderStatus"), status.trim()));
+                }
+                
+                // 卖家可见性筛选（处理空字符串）
+                if (sellerVisibility != null && !sellerVisibility.trim().isEmpty()) {
+                    predicates.add(cb.equal(root.get("sellerVisibility"), sellerVisibility.trim()));
+                }
+                
+                // 买家可见性筛选（处理空字符串）
+                if (buyerVisibility != null && !buyerVisibility.trim().isEmpty()) {
+                    predicates.add(cb.equal(root.get("buyerVisibility"), buyerVisibility.trim()));
+                }
+                
+                return predicates.isEmpty() ? cb.conjunction() : 
+                    cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+            };
+            
+            org.springframework.data.domain.Page<Order> orderPage = 
+                orderRepository.findAll(spec, pageable);
+            
+            // 转换为内部 DTO 列表
+            List<OrderInternalDTO> orderDTOs = orderPage.getContent().stream()
+                .map(internalDTOConverter::toInternalDTO)
+                .collect(java.util.stream.Collectors.toList());
+            
+            // 构建分页结果
+            Map<String, Object> result = new java.util.HashMap<>();
+            result.put("content", orderDTOs);
+            result.put("totalElements", orderPage.getTotalElements());
+            result.put("totalPages", orderPage.getTotalPages());
+            result.put("number", orderPage.getNumber());
+            result.put("size", orderPage.getSize());
+            
+        return Result.ok("查询成功", result);
     }
 }
 

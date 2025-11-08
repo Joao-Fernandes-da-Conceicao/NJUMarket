@@ -1,6 +1,7 @@
 package com.njumarket.order.controller;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.order.service.OrderService;
 import com.njumarket.order.client.ChangeRecordClient;
 import com.njumarket.order.client.CommodityQueryClient;
@@ -79,7 +80,7 @@ public class ChatDataController {
                 }
             } catch (Exception e) {
                 log.error("Timestamp format error: {}, error message: {}", lastPollTimestamp, e.getMessage());
-                return Result.fail("Timestamp format error, please use ISO format (e.g., 2025-01-20T10:30:00 or 2025-01-20T10:30:00.000Z)");
+                throw new BusinessException("Timestamp format error, please use ISO format (e.g., 2025-01-20T10:30:00 or 2025-01-20T10:30:00.000Z)");
             }
             
             // Note: timestamp已转换为系统时区，但epoch秒数计算使用UTC（与Redis ZSet score计算方式一致）
@@ -168,11 +169,6 @@ public class ChatDataController {
             log.info("Incremental query completed - commodities: {}, orders: {}, total changes: {}", 
                 commodityIds.size(), orderIds.size(), totalChanges);
             
-            return Result.ok("Incremental query successful", result);
-            
-        } catch (Exception e) {
-            log.error("Incremental query failed: {}", e.getMessage(), e);
-            return Result.fail("Incremental query failed: " + e.getMessage());
-        }
+        return Result.ok("Incremental query successful", result);
     }
 }

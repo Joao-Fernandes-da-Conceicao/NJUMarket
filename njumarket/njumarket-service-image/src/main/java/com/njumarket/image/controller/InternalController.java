@@ -2,6 +2,7 @@ package com.njumarket.image.controller;
 
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.ImageUploadDTO;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.image.service.ImageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,11 +32,13 @@ public class InternalController {
             if (result.isSuccess()) {
                 return Result.ok("头像上传成功", result);
             } else {
-                return Result.fail(result.getMessage());
+                throw new BusinessException(result.getMessage());
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("上传头像失败: userId={}, error={}", userId, e.getMessage(), e);
-            return Result.fail("上传头像失败: " + e.getMessage());
+            throw new BusinessException("上传头像失败: " + e.getMessage());
         }
     }
     
@@ -49,11 +52,13 @@ public class InternalController {
             if (deleted) {
                 return Result.ok("头像删除成功");
             } else {
-                return Result.fail("头像删除失败");
+                throw new BusinessException("头像删除失败");
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("删除头像失败: avatarUrl={}, error={}", avatarUrl, e.getMessage(), e);
-            return Result.fail("删除头像失败: " + e.getMessage());
+            throw new BusinessException("删除头像失败: " + e.getMessage());
         }
     }
     
@@ -68,11 +73,13 @@ public class InternalController {
             if (result.isSuccess()) {
                 return Result.ok("商品图片上传成功", result);
             } else {
-                return Result.fail(result.getMessage());
+                throw new BusinessException(result.getMessage());
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("上传商品图片失败: userId={}, error={}", userId, e.getMessage(), e);
-            return Result.fail("上传商品图片失败: " + e.getMessage());
+            throw new BusinessException("上传商品图片失败: " + e.getMessage());
         }
     }
     
@@ -87,11 +94,13 @@ public class InternalController {
             if (result.isSuccess()) {
                 return Result.ok("商品图片上传成功", result);
             } else {
-                return Result.fail(result.getMessage());
+                throw new BusinessException(result.getMessage());
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("上传商品图片失败: commodityId={}, error={}", commodityId, e.getMessage(), e);
-            return Result.fail("上传商品图片失败: " + e.getMessage());
+            throw new BusinessException("上传商品图片失败: " + e.getMessage());
         }
     }
     
@@ -105,11 +114,13 @@ public class InternalController {
             if (deleted) {
                 return Result.ok("商品图片删除成功");
             } else {
-                return Result.fail("商品图片删除失败");
+                throw new BusinessException("商品图片删除失败");
             }
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("删除商品图片失败: imageUrl={}, error={}", imageUrl, e.getMessage(), e);
-            return Result.fail("删除商品图片失败: " + e.getMessage());
+            throw new BusinessException("删除商品图片失败: " + e.getMessage());
         }
     }
 }

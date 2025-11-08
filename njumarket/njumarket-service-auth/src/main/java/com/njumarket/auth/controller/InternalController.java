@@ -6,6 +6,7 @@ import com.njumarket.njumarket.dto.internal.UserInternalDTO;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
 import com.njumarket.njumarket.entity.User;
 import com.njumarket.njumarket.entity.UserProfile;
+import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.repository.UserProfileRepository;
 import com.njumarket.auth.service.UserProfileService;
@@ -42,28 +43,20 @@ public class InternalController {
      */
     @GetMapping("/user/{userId}")
     public Result getUserById(@PathVariable String userId) {
-        try {
-            User user = userRepository.findById(userId)
-                .orElse(null);
-            if (user == null) {
-                return Result.fail("用户不存在");
-            }
-            
-            // 调试：打印用户状态信息
-            log.info("auth-service查询用户: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
-                user.getUserId(), user.getAccountStatus(), user.getAccountStatus() == null);
-            
-            UserInternalDTO dto = internalDTOConverter.toInternalDTO(user);
-            
-            // 调试：打印DTO状态信息
-            log.info("auth-service返回UserInternalDTO: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
-                dto.getUserId(), dto.getAccountStatus(), dto.getAccountStatus() == null);
-            
-            return Result.ok("查询成功", dto);
-        } catch (Exception e) {
-            log.error("查询用户失败: {}", e.getMessage(), e);
-            return Result.fail("查询用户失败");
-        }
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        
+        // 调试：打印用户状态信息
+        log.info("auth-service查询用户: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
+            user.getUserId(), user.getAccountStatus(), user.getAccountStatus() == null);
+        
+        UserInternalDTO dto = internalDTOConverter.toInternalDTO(user);
+        
+        // 调试：打印DTO状态信息
+        log.info("auth-service返回UserInternalDTO: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
+            dto.getUserId(), dto.getAccountStatus(), dto.getAccountStatus() == null);
+        
+        return Result.ok("查询成功", dto);
     }
     
     /**
@@ -72,14 +65,9 @@ public class InternalController {
      */
     @GetMapping("/user/batch")
     public Result getUsersByIds(@RequestParam List<String> userIds) {
-        try {
-            List<User> users = userRepository.findAllById(userIds);
-            List<UserInternalDTO> dtos = internalDTOConverter.toUserInternalDTOList(users);
-            return Result.ok("批量查询成功", dtos);
-        } catch (Exception e) {
-            log.error("批量查询用户失败: {}", e.getMessage(), e);
-            return Result.fail("批量查询用户失败");
-        }
+        List<User> users = userRepository.findAllById(userIds);
+        List<UserInternalDTO> dtos = internalDTOConverter.toUserInternalDTOList(users);
+        return Result.ok("批量查询成功", dtos);
     }
     
     /**
@@ -88,14 +76,9 @@ public class InternalController {
      */
     @GetMapping("/user/profile/batch")
     public Result getUserProfilesByIds(@RequestParam List<String> userIds) {
-        try {
-            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
-            List<UserProfileInternalDTO> dtos = internalDTOConverter.toUserProfileInternalDTOList(profiles);
-            return Result.ok("批量查询成功", dtos);
-        } catch (Exception e) {
-            log.error("批量查询用户档案失败: {}", e.getMessage(), e);
-            return Result.fail("批量查询用户档案失败");
-        }
+        List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
+        List<UserProfileInternalDTO> dtos = internalDTOConverter.toUserProfileInternalDTOList(profiles);
+        return Result.ok("批量查询成功", dtos);
     }
     
     /**
@@ -103,51 +86,43 @@ public class InternalController {
      */
     @PutMapping("/user/{userId}/full")
     public Result updateUserFull(@PathVariable String userId, @RequestBody Map<String, Object> payload) {
-        try {
-            Optional<User> userOpt = userRepository.findById(userId);
-            if (userOpt.isEmpty()) {
-                return Result.fail("用户不存在");
-            }
-            User user = userOpt.get();
-            
-            // 更新基本字段
-            Object username = payload.get("username");
-            if (username instanceof String && StringUtils.hasText((String) username)) {
-                user.setUsername(((String) username).trim());
-            }
-            Object primaryPhone = payload.get("primaryPhone");
-            if (primaryPhone instanceof String && StringUtils.hasText((String) primaryPhone)) {
-                user.setPrimaryPhone(((String) primaryPhone).trim());
-            }
-            Object accountStatus = payload.get("accountStatus");
-            if (accountStatus instanceof String && StringUtils.hasText((String) accountStatus)) {
-                String newStatus = ((String) accountStatus).trim();
-                java.util.Set<String> allowed = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE","SUSPENDED","BANNED"));
-                if (allowed.contains(newStatus)) {
-                    user.setAccountStatus(newStatus);
-                }
-            }
-            
-            // 更新档案字段
-            UserProfile profile = user.getUserProfile();
-            if (profile == null) {
-                profile = new UserProfile();
-                profile.setProfileId("PROFILE_" + System.currentTimeMillis());
-                profile.setUserId(user.getUserId());
-            }
-            Object nickname = payload.get("nickname");
-            if (nickname instanceof String) profile.setNickname(((String) nickname).trim());
-            Object avatar = payload.get("avatar");
-            if (avatar instanceof String) profile.setAvatar(((String) avatar).trim());
-            
-            userRepository.save(user);
-            userProfileRepository.save(profile);
-            
-            return Result.ok("更新成功");
-        } catch (Exception e) {
-            log.error("更新用户完整信息失败: userId={}, error={}", userId, e.getMessage(), e);
-            return Result.fail("更新失败");
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        
+        // 更新基本字段
+        Object username = payload.get("username");
+        if (username instanceof String && StringUtils.hasText((String) username)) {
+            user.setUsername(((String) username).trim());
         }
+        Object primaryPhone = payload.get("primaryPhone");
+        if (primaryPhone instanceof String && StringUtils.hasText((String) primaryPhone)) {
+            user.setPrimaryPhone(((String) primaryPhone).trim());
+        }
+        Object accountStatus = payload.get("accountStatus");
+        if (accountStatus instanceof String && StringUtils.hasText((String) accountStatus)) {
+            String newStatus = ((String) accountStatus).trim();
+            java.util.Set<String> allowed = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE","SUSPENDED","BANNED"));
+            if (allowed.contains(newStatus)) {
+                user.setAccountStatus(newStatus);
+            }
+        }
+        
+        // 更新档案字段
+        UserProfile profile = user.getUserProfile();
+        if (profile == null) {
+            profile = new UserProfile();
+            profile.setProfileId("PROFILE_" + System.currentTimeMillis());
+            profile.setUserId(user.getUserId());
+        }
+        Object nickname = payload.get("nickname");
+        if (nickname instanceof String) profile.setNickname(((String) nickname).trim());
+        Object avatar = payload.get("avatar");
+        if (avatar instanceof String) profile.setAvatar(((String) avatar).trim());
+        
+        userRepository.save(user);
+        userProfileRepository.save(profile);
+        
+        return Result.ok("更新成功");
     }
     
     /**
@@ -155,19 +130,11 @@ public class InternalController {
      */
     @DeleteMapping("/user/{userId}")
     public Result deleteUser(@PathVariable String userId) {
-        try {
-            Optional<User> userOpt = userRepository.findById(userId);
-            if (userOpt.isEmpty()) {
-                return Result.fail("用户不存在");
-            }
-            User user = userOpt.get();
-            user.setAccountStatus("DELETED");
-            userRepository.save(user);
-            return Result.ok("删除成功");
-        } catch (Exception e) {
-            log.error("删除用户失败: userId={}, error={}", userId, e.getMessage(), e);
-            return Result.fail("删除失败");
-        }
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        user.setAccountStatus("DELETED");
+        userRepository.save(user);
+        return Result.ok("删除成功");
     }
     
     /**
@@ -223,11 +190,7 @@ public class InternalController {
             result.put("number", userPage.getNumber());
             result.put("size", userPage.getSize());
             
-            return Result.ok("查询成功", result);
-        } catch (Exception e) {
-            log.error("查询用户列表失败: error={}", e.getMessage(), e);
-            return Result.fail("查询失败");
-        }
+        return Result.ok("查询成功", result);
     }
     
     /**
@@ -237,13 +200,7 @@ public class InternalController {
     public Result setOrderReminderStatus(@PathVariable String userId,
                                         @RequestParam String role,
                                         @RequestParam Boolean hasNew) {
-        try {
-            userProfileService.setOrderReminderStatus(userId, role, hasNew);
-            return Result.ok("设置成功");
-        } catch (Exception e) {
-            log.error("设置订单提醒状态失败: userId={}, role={}, hasNew={}, error={}", 
-                userId, role, hasNew, e.getMessage(), e);
-            return Result.fail("设置失败");
-        }
+        userProfileService.setOrderReminderStatus(userId, role, hasNew);
+        return Result.ok("设置成功");
     }
 }

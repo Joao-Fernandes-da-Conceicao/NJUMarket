@@ -1023,6 +1023,10 @@ public class ContactServiceImpl implements ContactService {
             // ✅ 保存消息的更改
             messageRepository.save(message);
             
+            // ✅ 重新从数据库加载conversation，确保获取最新的最后消息字段
+            conversation = conversationRepository.findById(message.getConversationId())
+                    .orElseThrow(() -> new BusinessException("对话不存在"));
+            
             // ✅ 如果可见性发生变化，需要更新相关用户的最后消息字段
             // 参考 AdminService.updateMessageFull 的逻辑
             if (newDeletedBySender != null && !newDeletedBySender.equals(oldDeletedBySender)) {
@@ -1036,20 +1040,22 @@ public class ContactServiceImpl implements ContactService {
                     String senderId = message.getSenderId();
                     String senderLastContent = conversation.getLastMessageContentForUser(senderId);
                     LocalDateTime senderLastTime = conversation.getLastMessageTimeForUser(senderId);
+                    // ✅ 使用更宽松的比较：内容相同，时间相差不超过1秒（处理精度问题）
                     boolean isSenderLastMessage = senderLastContent != null && senderLastTime != null &&
                         message.getContent().equals(senderLastContent) && 
-                        message.getCreatedAt().equals(senderLastTime);
+                        (message.getCreatedAt().equals(senderLastTime) || 
+                         Math.abs(java.time.Duration.between(message.getCreatedAt(), senderLastTime).getSeconds()) <= 1);
                     
                     if (isSenderLastMessage) {
-                        // 查询发送方可见的倒数第二条消息（查询2条，取第二条）
+                        // 查询发送方可见的最后一条消息（因为当前消息已被标记删除，查询时会自动过滤）
                         try {
-                            Pageable pageable = PageRequest.of(0, 2);
+                            Pageable pageable = PageRequest.of(0, 1);
                             List<Message> lastMessages = messageRepository.findLastMessageForUser(
                                     message.getConversationId(), senderId, pageable);
                             
-                            if (lastMessages.size() > 1) {
-                                // 有第二条消息，使用第二条作为新的最后消息
-                                Message newLastMessage = lastMessages.get(1);
+                            if (!lastMessages.isEmpty()) {
+                                // 有可见消息，使用作为新的最后消息
+                                Message newLastMessage = lastMessages.get(0);
                                 conversation.setLastMessageForUser(senderId, 
                                         newLastMessage.getContent(), 
                                         newLastMessage.getCreatedAt());
@@ -1076,20 +1082,22 @@ public class ContactServiceImpl implements ContactService {
                     String receiverId = message.getReceiverId();
                     String receiverLastContent = conversation.getLastMessageContentForUser(receiverId);
                     LocalDateTime receiverLastTime = conversation.getLastMessageTimeForUser(receiverId);
+                    // ✅ 使用更宽松的比较：内容相同，时间相差不超过1秒（处理精度问题）
                     boolean isReceiverLastMessage = receiverLastContent != null && receiverLastTime != null &&
                         message.getContent().equals(receiverLastContent) && 
-                        message.getCreatedAt().equals(receiverLastTime);
+                        (message.getCreatedAt().equals(receiverLastTime) || 
+                         Math.abs(java.time.Duration.between(message.getCreatedAt(), receiverLastTime).getSeconds()) <= 1);
                     
                     if (isReceiverLastMessage) {
-                        // 查询接收方可见的倒数第二条消息（查询2条，取第二条）
+                        // 查询接收方可见的最后一条消息（因为当前消息已被标记删除，查询时会自动过滤）
                         try {
-                            Pageable pageable = PageRequest.of(0, 2);
+                            Pageable pageable = PageRequest.of(0, 1);
                             List<Message> lastMessages = messageRepository.findLastMessageForUser(
                                     message.getConversationId(), receiverId, pageable);
                             
-                            if (lastMessages.size() > 1) {
-                                // 有第二条消息，使用第二条作为新的最后消息
-                                Message newLastMessage = lastMessages.get(1);
+                            if (!lastMessages.isEmpty()) {
+                                // 有可见消息，使用作为新的最后消息
+                                Message newLastMessage = lastMessages.get(0);
                                 conversation.setLastMessageForUser(receiverId, 
                                         newLastMessage.getContent(), 
                                         newLastMessage.getCreatedAt());

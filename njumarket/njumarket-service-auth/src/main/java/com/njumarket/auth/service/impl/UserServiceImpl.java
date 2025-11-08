@@ -435,40 +435,40 @@ public class UserServiceImpl implements UserService {
     public Result resetPassword(String phone, String code, String newPassword) {
         // 1. 校验手机号格式
         if (RegexUtils.isPhoneInvalid(phone)) {
-            return Result.fail("手机号格式错误");
+            throw new BusinessException("手机号格式错误");
         }
         
         // 2. 校验验证码
         if (code == null || code.trim().isEmpty()) {
-            return Result.fail("验证码不能为空");
+            throw new BusinessException("验证码不能为空");
         }
         
         // 3. 从Redis中获取验证码
         String codeKey = RedisConstants.LOGIN_CODE_KEY + phone;
         String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
         if (cachedCode == null) {
-            return Result.fail("验证码已过期，请重新获取");
+            throw new BusinessException("验证码已过期，请重新获取");
         }
         
         // 4. 验证验证码
         if (!cachedCode.equals(code.trim())) {
-            return Result.fail("验证码错误");
+            throw new BusinessException("验证码错误");
         }
         
         // 5. 校验新密码
         if (newPassword == null || newPassword.trim().length() < 6) {
-            return Result.fail("密码长度不能少于6位");
+            throw new BusinessException("密码长度不能少于6位");
         }
         
         // 6. 查找用户
         User user = userRepository.findByPrimaryPhone(phone).orElse(null);
         if (user == null) {
-            return Result.fail("该手机号未注册");
+            throw new BusinessException("该手机号未注册");
         }
         
         // 7. 检查账户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
-            return Result.fail("账户已被禁用，无法重置密码");
+            throw new BusinessException("账户已被禁用，无法重置密码");
         }
         
         // 8. 加密并设置新密码
@@ -486,20 +486,15 @@ public class UserServiceImpl implements UserService {
     // ========== 用户档案相关 ==========
     @Override
     public Result getCurrentUser() {
-        try {
-            // 获取当前用户信息（使用 SecurityUtils）
-            User currentUser = SecurityUtils.getCurrentUser();
-            if (currentUser == null) {
-                return Result.fail("用户未登录");
-            }
-            
-            // 转换为UserDTO（包含profile信息）
-            UserDTO userDTO = convertToUserDTO(currentUser);
-            return Result.ok(userDTO);
-        } catch (Exception e) {
-            log.error("获取当前用户信息失败: {}", e.getMessage(), e);
-            return Result.fail("获取用户信息失败");
+        // 获取当前用户信息（使用 SecurityUtils）
+        User currentUser = SecurityUtils.getCurrentUser();
+        if (currentUser == null) {
+            throw new BusinessException("用户未登录");
         }
+        
+        // 转换为UserDTO（包含profile信息）
+        UserDTO userDTO = convertToUserDTO(currentUser);
+        return Result.ok(userDTO);
     }
 
     @Override
@@ -636,12 +631,12 @@ public class UserServiceImpl implements UserService {
      */
     public Result setPassword(String userId, String newPassword) {
         if (newPassword == null || newPassword.trim().length() < 6) {
-            return Result.fail("密码长度不能少于6位");
+            throw new BusinessException("密码长度不能少于6位");
         }
         
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
-            return Result.fail("用户不存在");
+            throw new BusinessException("用户不存在");
         }
         
         // 加密密码
@@ -658,28 +653,28 @@ public class UserServiceImpl implements UserService {
      */
     public Result changePassword(String userId, String oldPassword, String newPassword) {
         if (oldPassword == null || oldPassword.trim().isEmpty()) {
-            return Result.fail("原密码不能为空");
+            throw new BusinessException("原密码不能为空");
         }
         if (newPassword == null || newPassword.trim().length() < 6) {
-            return Result.fail("新密码长度不能少于6位");
+            throw new BusinessException("新密码长度不能少于6位");
         }
         
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
-            return Result.fail("用户不存在");
+            throw new BusinessException("用户不存在");
         }
         
         // 验证原密码
         if (user.getPassword() == null) {
-            return Result.fail("该账户未设置密码");
+            throw new BusinessException("该账户未设置密码");
         }
         if (!passwordService.matches(oldPassword, user.getPassword())) {
-            return Result.fail("原密码错误");
+            throw new BusinessException("原密码错误");
         }
         
         // 检查新密码是否与原密码相同
         if (passwordService.matches(newPassword, user.getPassword())) {
-            return Result.fail("新密码不能与原密码相同");
+            throw new BusinessException("新密码不能与原密码相同");
         }
         
         // 更新密码
@@ -696,12 +691,12 @@ public class UserServiceImpl implements UserService {
      */
     public Result resetPassword(String userId, String newPassword) {
         if (newPassword == null || newPassword.trim().length() < 6) {
-            return Result.fail("密码长度不能少于6位");
+            throw new BusinessException("密码长度不能少于6位");
         }
         
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
-            return Result.fail("用户不存在");
+            throw new BusinessException("用户不存在");
         }
         
         // 加密密码
