@@ -1,1185 +1,1221 @@
-# 南大集市 NJUMarket v2.0 阶段规划
+# 南大集市 NJUMarket v2.0 项目文档
 
 ## 📋 目录
 - [版本概述](#版本概述)
-- [核心目标](#核心目标)
-- [微服务拆分方案](#微服务拆分方案)
-- [Spring Cloud 生态集成](#spring-cloud-生态集成)
-- [分布式系统实践](#分布式系统实践)
-- [技术学习重点](#技术学习重点)
-- [实施计划](#实施计划)
-- [预期成果](#预期成果)
+- [从单体到微服务：不仅仅是代码迁移](#从单体到微服务不仅仅是代码迁移)
+- [微服务架构设计](#微服务架构设计)
+- [核心连接规范与实现](#核心连接规范与实现)
+- [常见问题与解决方案](#常见问题与解决方案)
+- [微服务实践教学指南](#微服务实践教学指南)
+- [技术栈与配置](#技术栈与配置)
+- [2.x版本规划](#2x版本规划)
 
 ---
 
 ## 版本概述
 
+**NJUMarket v2.0** 是项目的重大架构升级版本，从单体应用架构升级为微服务架构。
+
 ### 版本信息
-- **版本**: v2.0
-- **计划开始时间**: 2025-01-XX
-- **基于版本**: v1.3.0
-- **状态**: 规划中
+- **版本**: v2.0.0
+- **发布日期**: 2024年
+- **架构**: 微服务架构
+- **状态**: ✅ 架构迁移完成，核心功能已实现并测试通过
 
-### 版本定位
-v2.0 版本将专注于**微服务架构改造**，将现有的单体应用拆分为多个微服务，学习Spring Cloud生态，实现服务注册与发现、配置中心、API网关、熔断降级等功能。通过微服务架构改造，提升系统的可扩展性、可维护性和高可用性。
+### 主要成就
 
-### 主要目标
-- ✅ **微服务拆分**：将单体应用拆分为5个核心微服务
-- ✅ **Spring Cloud集成**：服务注册、配置中心、API网关
-- ✅ **分布式系统**：分布式事务、分布式锁、分布式ID
-- ✅ **消息队列**：RabbitMQ/RocketMQ实现异步处理
-- ✅ **搜索引擎**：Elasticsearch实现商品和消息搜索
-- ✅ **MyBatis复杂查询**：学习MyBatis处理复杂查询场景
-- ✅ **缓存机制**：多级缓存、缓存一致性、缓存预热
+#### 架构升级
+- ✅ 从单体应用拆分为6个微服务
+- ✅ 实现服务注册与发现（Eureka）
+- ✅ 实现API网关（Spring Cloud Gateway）
+- ✅ 实现服务间通信（Feign Client）
+- ✅ 实现统一认证与授权机制
+- ✅ 实现分布式锁（Redis）
+- ✅ 实现WebSocket实时推送
 
----
-
-## 核心目标
-
-### 1. 架构升级
-- **从单体到微服务**：学习微服务架构设计原则
-- **服务拆分策略**：按业务领域拆分服务
-- **服务治理**：服务注册、发现、配置、监控
-
-### 2. 技术栈扩展
-- **Spring Cloud**：学习Spring Cloud生态
-- **消息队列**：学习消息队列的使用场景
-- **搜索引擎**：学习Elasticsearch全文搜索
-- **分布式系统**：学习分布式事务、分布式锁
-- **MyBatis**：学习MyBatis处理复杂查询场景
-- **缓存系统**：学习多级缓存、缓存一致性策略
-
-### 3. 系统能力提升
-- **可扩展性**：服务独立部署和扩展
-- **可维护性**：服务职责清晰，代码组织更好
-- **高可用性**：服务熔断、降级、限流
+#### 代码组织
+- ✅ 公共代码模块化（njumarket-common）
+- ✅ 实体类、DTO、工具类统一管理
+- ✅ 服务间使用内部DTO通信
+- ✅ 统一异常处理机制
 
 ---
 
-## 微服务拆分方案
+## 从单体到微服务：不仅仅是代码迁移
 
-### 1. 服务拆分原则
+### 为什么需要微服务？
 
-**拆分依据**：
-- **业务领域**：按业务功能划分服务边界
-- **数据独立性**：服务拥有独立的数据存储
-- **服务粒度**：服务不宜过大也不宜过小
-- **通信成本**：考虑服务间通信成本
+单体应用在业务规模较小时具有开发简单、部署方便的优势。但随着业务增长，单体应用会面临以下问题：
 
-### 2. 核心微服务设计
+1. **技术栈耦合**：所有模块必须使用相同的技术栈
+2. **扩展困难**：只能整体扩展，无法针对特定模块优化
+3. **维护成本高**：代码库庞大，修改影响范围广
+4. **团队协作困难**：多人同时修改容易产生冲突
 
-#### 2.1 用户服务（User Service）
-**职责**：
-- 用户认证（登录、注册、Token管理）
-- 用户资料管理（昵称、头像、信用分、评分）
-- VIP等级管理
-- 用户排行榜
+微服务架构通过将应用拆分为多个独立服务，解决了这些问题，但同时也引入了新的挑战。
 
-**数据存储**：
-- `users` 表
-- `user_profiles` 表
+### 微服务架构的核心挑战
 
-**API接口**：
-- `/api/user/auth/*` - 认证相关
-- `/api/user/profile/*` - 用户资料相关
-
-**技术栈**：
-- Spring Boot
-- Spring Cloud
-- JPA + MySQL（基础CRUD）
-- MyBatis（复杂查询）
-- Redis（Token存储）
+从单体到微服务，**不仅仅是代码的物理迁移**，更重要的是建立一套**完整的连接规范**，确保服务之间能够正确、高效、安全地协作。
 
 ---
 
-#### 2.2 商品服务（Commodity Service）
-**职责**：
-- 商品发布、编辑、上下架
-- 商品浏览、搜索、筛选
-- 商品详情查询
-- 商品可见性控制
-- 商品快照管理
+## 微服务架构设计
 
-**数据存储**：
-- `commodities` 表
-- `commodity_images` 表
-- `commodity_snapshots` 表（订单中使用）
+### 架构图
 
-**API接口**：
-- `/api/user/commodity/*` - 商品管理相关
-
-**技术栈**：
-- Spring Boot
-- Spring Cloud
-- JPA + MySQL（基础CRUD）
-- MyBatis（复杂查询、统计报表）
-- Elasticsearch（商品搜索）
-- Redis（商品缓存、多级缓存）
-
----
-
-#### 2.3 订单服务（Order Service）
-**职责**：
-- 订单创建、支付、发货、收货
-- 订单取消、退款、退货流程
-- 订单状态管理
-- 订单可见性控制
-- 订单统计
-
-**数据存储**：
-- `orders` 表
-- `order_snapshots` 表
-
-**API接口**：
-- `/api/user/order/*` - 订单管理相关
-
-**技术栈**：
-- Spring Boot
-- Spring Cloud
-- JPA + MySQL（基础CRUD）
-- MyBatis（复杂查询、统计报表）
-- Redis（分布式锁、库存缓存、多级缓存）
-- RabbitMQ（订单异步处理）
-
----
-
-#### 2.4 消息服务（Message Service）
-**职责**：
-- 会话管理（对话创建、查询、删除）
-- 消息发送、接收、历史加载
-- 消息软删除
-- 未读数管理
-- WebSocket实时通信
-
-**数据存储**：
-- `conversations` 表
-- `messages` 表
-
-**API接口**：
-- `/api/user/contact/*` - 消息相关
-
-**技术栈**：
-- Spring Boot
-- Spring Cloud
-- JPA + MySQL
-- WebSocket（实时通信）
-- Redis（未读数缓存）
-
----
-
-#### 2.5 通知服务（Notification Service）
-**职责**：
-- 订单变化通知（WebSocket推送）
-- 消息通知（WebSocket推送）
-- 系统通知
-- 通知历史记录
-
-**数据存储**：
-- `notifications` 表（可选）
-
-**API接口**：
-- `/api/user/notification/*` - 通知相关
-
-**技术栈**：
-- Spring Boot
-- Spring Cloud
-- WebSocket（实时推送）
-- RabbitMQ（通知队列）
-- Redis（通知缓存）
-
----
-
-### 3. 服务间通信
-
-#### 3.1 同步通信
-**技术选型**：OpenFeign
-- **用户服务调用**：商品服务查询卖家信息、订单服务查询用户信息
-- **商品服务调用**：订单服务查询商品信息
-- **订单服务调用**：商品服务扣减库存、用户服务查询用户信息
-
-#### 3.2 异步通信
-**技术选型**：RabbitMQ / RocketMQ
-- **订单创建事件**：订单服务 → 商品服务（扣减库存）
-- **订单支付事件**：订单服务 → 通知服务（推送通知）
-- **订单完成事件**：订单服务 → 用户服务（更新信用分）
-
----
-
-## Spring Cloud 生态集成
-
-### 1. 服务注册与发现
-
-#### 1.1 技术选型
-**选项1：Eureka**
-- 优点：Spring Cloud原生支持，简单易用
-- 缺点：Netflix已停止维护
-
-**选项2：Nacos**
-- 优点：功能强大，支持配置中心，阿里开源
-- 缺点：学习成本稍高
-
-**推荐**：Nacos（功能更全面，支持配置中心）
-
-#### 1.2 实现内容
-- 服务注册：各微服务启动时注册到注册中心
-- 服务发现：服务间通过服务名调用，无需硬编码IP
-- 健康检查：注册中心监控服务健康状态
-- 负载均衡：Ribbon / LoadBalancer实现负载均衡
-
----
-
-### 2. 配置中心
-
-#### 2.1 技术选型
-**选项1：Spring Cloud Config**
-- 优点：Spring Cloud原生支持
-- 缺点：需要Git仓库，配置更新需要重启
-
-**选项2：Nacos Config**
-- 优点：支持动态配置，无需重启
-- 缺点：需要引入Nacos依赖
-
-**推荐**：Nacos Config（支持动态配置）
-
-#### 2.2 实现内容
-- 集中配置管理：所有服务的配置统一管理
-- 动态配置更新：配置变更无需重启服务
-- 配置版本管理：支持配置版本回滚
-- 环境隔离：开发、测试、生产环境配置隔离
-
----
-
-### 3. API网关
-
-#### 3.1 技术选型
-**Spring Cloud Gateway**
-- 优点：Spring Cloud原生支持，性能好
-- 功能：路由、过滤、限流、熔断
-
-#### 3.2 实现内容
-- **路由转发**：统一入口，路由到各个微服务
-- **请求过滤**：认证、鉴权、日志记录
-- **限流控制**：API限流，防止服务过载
-- **熔断降级**：服务异常时降级处理
-
-**路由规则示例**：
 ```
-/api/user/** → 用户服务
-/api/commodity/** → 商品服务
-/api/order/** → 订单服务
-/api/contact/** → 消息服务
-/api/notification/** → 通知服务
+┌─────────────────────────────────────────────────────────────┐
+│                   前端应用 (Vue 3)                           │
+│             用户端 + 管理端                                  │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ HTTP/WebSocket
+┌──────────────────────▼──────────────────────────────────────┐
+│              API Gateway (8080)                            │
+│         Spring Cloud Gateway                               │
+│  - 路由转发                                                │
+│  - 负载均衡                                                │
+│  - JWT统一鉴权                                             │
+│  - X-User-Id传递                                           │
+└──────┬───────────┬───────────┬───────────┬─────────────────┘
+       │           │           │           │
+       │           │           │           │
+┌──────▼───┐ ┌─────▼────┐ ┌───▼────┐ ┌───▼──────┐
+│ Discovery │ │  Auth    │ │Commodity│ │  Order  │
+│  (8761)   │ │ (8091)   │ │ (8092)  │ │ (8093)  │
+│  Eureka   │ │  认证    │ │  商品   │ │  订单   │
+└───────────┘ └──────────┘ └─────────┘ └─────────┘
+                              │           │
+                              │           │
+                         ┌────▼───────────▼────┐
+                         │    Message (8094)    │
+                         │      消息服务        │
+                         └─────────────────────┘
 ```
 
----
+### 服务划分
 
-### 4. 服务调用
-
-#### 4.1 OpenFeign
-**功能**：
-- 声明式HTTP客户端
-- 负载均衡
-- 服务降级
-
-**使用场景**：
-- 订单服务调用商品服务查询商品信息
-- 订单服务调用用户服务查询用户信息
-- 消息服务调用用户服务查询用户资料
-
-#### 4.2 负载均衡
-**技术选型**：Spring Cloud LoadBalancer
-- 替换Ribbon（已停止维护）
-- 支持多种负载均衡策略（轮询、随机、权重）
+| 服务 | 端口 | 职责 | 状态 |
+|------|------|------|------|
+| njumarket-discovery | 8761 | 服务注册与发现（Eureka Server） | ✅ 完成 |
+| njumarket-gateway | 8080 | API网关、统一鉴权 | ✅ 完成 |
+| njumarket-service-auth | 8091 | 用户认证、用户管理、管理员管理 | ✅ 完成 |
+| njumarket-service-commodity | 8092 | 商品管理、商品查询、图片管理 | ✅ 完成 |
+| njumarket-service-order | 8093 | 订单管理、订单查询、投诉处理 | ✅ 完成 |
+| njumarket-service-message | 8094 | 消息发送、会话管理、WebSocket推送 | ✅ 完成 |
+| njumarket-common | - | 公共代码模块（Entity、DTO、工具类） | ✅ 完成 |
 
 ---
 
-### 5. 熔断降级
+## 核心连接规范与实现
 
-#### 5.1 技术选型
-**选项1：Hystrix**
-- 优点：Netflix开源，功能完善
-- 缺点：已停止维护
+### 1. 服务注册与发现规范
 
-**选项2：Sentinel**
-- 优点：阿里开源，功能强大，支持限流、熔断、降级
-- 缺点：学习成本稍高
+#### 为什么需要服务发现？
 
-**推荐**：Sentinel（功能更全面，持续维护）
+在单体应用中，服务调用是直接的（通过方法调用）。在微服务中，服务是独立的进程，需要通过网络通信。服务发现机制让服务能够动态地找到其他服务的位置。
 
-#### 5.2 实现内容
-- **熔断机制**：服务异常率超过阈值时熔断
-- **降级策略**：服务不可用时返回默认值或缓存数据
-- **限流控制**：QPS限流，防止服务过载
-- **实时监控**：Sentinel Dashboard监控服务状态
+#### 实现方式
 
----
+**使用 Eureka 作为服务注册中心**：
 
-## 分布式系统实践
-
-### 1. 分布式事务
-
-#### 1.1 技术选型
-**Seata**
-- AT模式：自动事务，无需手动编写补偿逻辑
-- TCC模式：Try-Confirm-Cancel，需要手动实现
-- SAGA模式：长事务，适合复杂业务流程
-
-**学习重点**：
-- AT模式：简单易用，适合大多数场景
-- TCC模式：理解Try-Confirm-Cancel三个阶段
-- 分布式事务的CAP理论
-
-#### 1.2 应用场景
-- **订单创建**：订单服务 + 商品服务（扣减库存）
-- **订单支付**：订单服务 + 用户服务（更新信用分）
-- **订单退款**：订单服务 + 商品服务（恢复库存）+ 用户服务（更新信用分）
-
----
-
-### 2. 分布式锁
-
-#### 2.1 技术选型
-**Redis分布式锁**（已实现，需优化）
-- 使用Redisson实现
-- 支持可重入锁、读写锁
-- 支持锁续期
-
-**优化方向**：
-- 使用Redisson替代手动实现
-- 支持锁超时自动释放
-- 支持锁续期机制
-
-#### 2.2 应用场景
-- **库存扣减**：防止并发超卖
-- **订单创建**：防止重复创建订单
-- **消息发送**：防止重复发送消息
-
----
-
-### 3. 分布式ID
-
-#### 3.1 技术选型
-**选项1：Snowflake算法**
-- 优点：性能好，趋势递增
-- 缺点：依赖机器时钟
-
-**选项2：UUID**
-- 优点：简单，无需中心化服务
-- 缺点：无序，不适合作为主键
-
-**选项3：数据库自增ID + 号段模式**
-- 优点：性能好，趋势递增
-- 缺点：需要数据库支持
-
-**推荐**：Snowflake算法（性能好，趋势递增）
-
-#### 3.2 实现内容
-- **ID生成器**：统一ID生成服务
-- **ID格式**：时间戳 + 机器ID + 序列号
-- **ID分配**：各服务独立ID段，避免冲突
-
----
-
-## 消息队列应用
-
-### 1. 技术选型
-
-#### 1.1 RabbitMQ
-**优点**：
-- 功能完善，支持多种消息模型
-- 管理界面友好
-- 社区活跃
-
-**适用场景**：
-- 订单异步处理
-- 消息异步推送
-- 系统通知
-
-#### 1.2 RocketMQ
-**优点**：
-- 性能好，支持高并发
-- 支持顺序消息
-- 阿里开源，国内使用广泛
-
-**适用场景**：
-- 高并发场景
-- 顺序消息场景
-
-**推荐**：RabbitMQ（功能完善，学习成本低）
-
----
-
-### 2. 消息模型
-
-#### 2.1 点对点模型（Queue）
-**应用场景**：
-- 订单异步处理
-- 消息异步推送
-
-**实现**：
-- 生产者发送消息到队列
-- 消费者从队列消费消息
-- 消息只能被一个消费者消费
-
-#### 2.2 发布订阅模型（Topic/Exchange）
-**应用场景**：
-- 订单状态变更通知
-- 系统广播通知
-
-**实现**：
-- 生产者发送消息到Exchange
-- Exchange路由消息到多个Queue
-- 多个消费者可以消费同一消息
-
----
-
-### 3. 消息可靠性
-
-#### 3.1 消息确认机制
-- **生产者确认**：消息发送成功确认
-- **消费者确认**：消息消费成功确认
-- **消息重试**：消费失败时重试
-
-#### 3.2 消息持久化
-- **队列持久化**：队列重启后消息不丢失
-- **消息持久化**：消息持久化到磁盘
-- **Exchange持久化**：Exchange重启后不丢失
-
----
-
-## MyBatis 复杂查询实践
-
-### 1. 技术选型
-
-#### 1.1 为什么引入MyBatis
-**JPA的局限性**：
-- 复杂SQL查询难以表达（多表关联、子查询、动态SQL）
-- 性能优化困难（无法精确控制SQL）
-- 统计报表查询复杂（聚合函数、分组、排序）
-
-**MyBatis的优势**：
-- 灵活的动态SQL（if、choose、foreach等）
-- 精确控制SQL语句
-- 支持复杂查询和统计报表
-- 性能优化更容易
-
-**混合使用策略**：
-- **JPA**：用于基础CRUD操作（简单、快速）
-- **MyBatis**：用于复杂查询和统计报表（灵活、可控）
-
----
-
-### 2. 应用场景
-
-#### 2.1 复杂查询场景
-
-**商品服务**：
-- 多条件动态查询（分类、价格区间、状态、可见性等）
-- 商品统计报表（按分类统计、按时间统计）
-- 商品排行榜（销量、点击量、评分）
-
-**订单服务**：
-- 订单统计报表（按状态统计、按时间统计、按用户统计）
-- 订单趋势分析（日/周/月订单量）
-- 订单金额统计（总收入、平均订单金额）
-
-**用户服务**：
-- 用户统计报表（注册用户数、活跃用户数）
-- 用户行为分析（购买频率、消费金额）
-- 用户排行榜（信用分、评分、交易量）
-
-**消息服务**：
-- 消息统计（未读数统计、消息发送量）
-- 对话活跃度分析（按时间统计对话数）
-
-#### 2.2 实现示例
-
-**商品多条件动态查询**：
-```xml
-<!-- CommodityMapper.xml -->
-<select id="findCommoditiesByConditions" resultType="CommodityDTO">
-    SELECT c.*, u.nickname as sellerNickname, u.avatar as sellerAvatar
-    FROM commodities c
-    LEFT JOIN user_profiles u ON c.seller_id = u.user_id
-    <where>
-        <if test="category != null and category != ''">
-            AND c.category = #{category}
-        </if>
-        <if test="minPrice != null">
-            AND c.price >= #{minPrice}
-        </if>
-        <if test="maxPrice != null">
-            AND c.price <= #{maxPrice}
-        </if>
-        <if test="status != null and status != ''">
-            AND c.commodity_status = #{status}
-        </if>
-        <if test="sellerVisibility != null">
-            AND c.seller_visibility = #{sellerVisibility}
-        </if>
-        <if test="buyerVisibility != null">
-            AND c.buyer_visibility = #{buyerVisibility}
-        </if>
-    </where>
-    ORDER BY c.publish_time DESC
-    LIMIT #{offset}, #{size}
-</select>
-```
-
-**订单统计报表**：
-```xml
-<!-- OrderMapper.xml -->
-<select id="getOrderStatistics" resultType="OrderStatisticsDTO">
-    SELECT 
-        DATE(create_time) as date,
-        COUNT(*) as totalOrders,
-        SUM(total_amount) as totalAmount,
-        AVG(total_amount) as avgAmount,
-        COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paidOrders,
-        COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completedOrders
-    FROM orders
-    WHERE create_time >= #{startDate} AND create_time <= #{endDate}
-    GROUP BY DATE(create_time)
-    ORDER BY date DESC
-</select>
-```
-
----
-
-### 3. MyBatis配置
-
-#### 3.1 依赖配置
-```xml
-<!-- pom.xml -->
-<dependency>
-    <groupId>org.mybatis.spring.boot</groupId>
-    <artifactId>mybatis-spring-boot-starter</artifactId>
-    <version>3.0.3</version>
-</dependency>
-```
-
-#### 3.2 配置项
 ```yaml
-# application.yml
-mybatis:
-  mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.njumarket.njumarket.entity
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+# 各服务的 application.yml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
 ```
 
-#### 3.3 Mapper接口
+**关键配置**：
+- `register-with-eureka: true`：服务启动时自动注册到Eureka
+- `fetch-registry: true`：从Eureka获取其他服务的位置
+- `prefer-ip-address: true`：使用IP地址而非主机名（避免DNS问题）
+
+#### 常见问题
+
+**问题1**：服务启动后无法注册到Eureka
+- **原因**：Eureka Server未启动，或网络连接问题
+- **解决**：确保Eureka Server先启动，检查端口8761是否被占用
+
+**问题2**：服务注册后立即下线
+- **原因**：健康检查失败，或心跳超时
+- **解决**：检查服务的健康检查端点，调整心跳间隔
+
+---
+
+### 2. API网关规范
+
+#### 为什么需要API网关？
+
+API网关是微服务架构的**统一入口**，负责：
+1. **路由转发**：将请求路由到正确的服务
+2. **统一鉴权**：在网关层验证JWT Token，避免每个服务重复实现
+3. **负载均衡**：在多个服务实例间分配请求
+4. **跨域处理**：统一处理CORS
+5. **请求头传递**：将用户信息传递给后端服务
+
+#### 实现方式
+
+**Gateway路由配置**：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        # 用户相关接口
+        - id: auth-service-user
+          uri: lb://njumarket-service-auth
+          predicates:
+            - Path=/api/user/**
+          filters:
+            - StripPrefix=1
+        
+        # 订单相关接口
+        - id: order-service
+          uri: lb://njumarket-service-order
+          predicates:
+            - Path=/api/user/order/**
+          filters:
+            - StripPrefix=1
+```
+
+**关键点**：
+- `lb://`：使用负载均衡（LoadBalancer）
+- `StripPrefix=1`：去掉路径前缀（如 `/api/user/order` → `/order`）
+- **路由顺序很重要**：更具体的路径应该放在前面
+
+#### JWT验证与用户信息传递
+
+**Gateway JWT验证流程**：
+
 ```java
-@Mapper
-public interface CommodityMapper {
-    List<CommodityDTO> findCommoditiesByConditions(CommodityQueryDTO query);
-    CommodityStatisticsDTO getCommodityStatistics(StatisticsQueryDTO query);
+// JwtAuthenticationFilter.java
+public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+    // 1. 提取JWT Token
+    String token = extractToken(request);
+    
+    // 2. 验证Token（格式、过期、Redis验证）
+    String userId = validateToken(token);
+    
+    // 3. 设置X-User-Id请求头，传递给后端服务
+    ServerHttpRequest modifiedRequest = request.mutate()
+        .header("X-User-Id", userId)
+        .build();
+    
+    return chain.filter(exchange.mutate().request(modifiedRequest).build());
 }
 ```
 
----
+**关键点**：
+- Gateway只验证Token，不查询用户详细信息（避免性能问题）
+- 通过`X-User-Id`请求头传递用户ID
+- 后端服务根据`X-User-Id`查询完整用户信息
 
-### 4. 学习重点
+#### 常见问题
 
-#### 4.1 动态SQL
-- **if标签**：条件判断
-- **choose/when/otherwise**：多条件选择
-- **foreach标签**：循环处理
-- **where标签**：自动处理WHERE子句
-- **set标签**：自动处理SET子句
+**问题1**：路由404错误
+- **原因**：路由配置错误，或服务未注册到Eureka
+- **解决**：检查路由配置，确认服务已注册
 
-#### 4.2 结果映射
-- **resultMap**：复杂对象映射
-- **association**：一对一关联
-- **collection**：一对多关联
-- **discriminator**：鉴别器映射
-
-#### 4.3 性能优化
-- **批量操作**：批量插入、批量更新
-- **分页查询**：PageHelper插件
-- **缓存机制**：一级缓存、二级缓存
+**问题2**：跨域问题
+- **原因**：Gateway未配置CORS
+- **解决**：在Gateway配置CORS过滤器
 
 ---
 
-## 缓存机制实现
+### 3. 服务间通信规范
 
-### 1. 多级缓存架构
+#### 为什么需要服务间通信？
 
-#### 1.1 缓存层次设计
+在微服务架构中，业务功能被拆分到不同服务，但业务逻辑往往需要跨服务协作。例如：
+- 创建订单需要查询商品信息（order-service → commodity-service）
+- 创建订单需要查询卖家信息（order-service → auth-service）
+- 发送消息需要查询用户信息（message-service → auth-service）
 
-**三级缓存架构**：
+#### 实现方式：Feign Client
+
+**Feign Client声明式调用**：
+
+```java
+@FeignClient(name = "njumarket-service-auth", path = "/api/internal")
+public interface AuthClient {
+    @GetMapping("/user/{userId}")
+    Result getUserById(@PathVariable String userId);
+    
+    @PostMapping("/users/batch")
+    Result getUsersByIds(@RequestBody List<String> userIds);
+}
 ```
-L1: 本地缓存（Caffeine） → L2: Redis分布式缓存 → L3: 数据库
+
+**关键点**：
+- `@FeignClient`：声明这是一个Feign Client
+- `name`：服务名称（必须与Eureka注册名称一致）
+- `path`：API路径前缀
+- 方法签名与Controller方法一致
+
+#### 类型转换问题与解决方案
+
+**问题**：Feign Client返回的`Result.getData()`是`LinkedHashMap`，不能直接转换为Entity
+
+**原因**：JSON反序列化时，Feign不知道目标类型，只能反序列化为`Map`
+
+**解决方案**：使用`ObjectMapper`显式转换
+
+```java
+// ❌ 错误方式
+User user = (User) result.getData();  // ClassCastException!
+
+// ✅ 正确方式
+UserInternalDTO userDTO = objectMapper.convertValue(
+    result.getData(),
+    new TypeReference<UserInternalDTO>() {}
+);
+User user = convertUserDTOToEntity(userDTO);
 ```
 
-**缓存策略**：
-- **热点数据**：L1 + L2（本地缓存 + Redis）
-- **普通数据**：L2（Redis）
-- **冷数据**：L3（数据库）
+**为什么使用内部DTO？**
+- 避免服务间直接传递Entity（违反微服务原则）
+- 只传递必要字段，减少网络传输
+- 版本兼容性更好（Entity变化不影响DTO）
 
-#### 1.2 缓存选型
+#### 内部DTO设计规范
 
-**本地缓存（L1）**：
-- **Caffeine**：高性能本地缓存
-- **优点**：速度快、内存占用小
-- **缺点**：无法跨服务共享
-- **适用场景**：热点数据、配置信息
+**CommodityInternalDTO示例**：
 
-**分布式缓存（L2）**：
-- **Redis**：分布式缓存
-- **优点**：跨服务共享、支持复杂数据结构
-- **缺点**：网络延迟
-- **适用场景**：用户信息、商品信息、订单信息
+```java
+@Data
+public class CommodityInternalDTO implements Serializable {
+    private String commodityId;
+    private String sellerId;
+    private String title;
+    private String description;
+    private BigDecimal price;
+    private Integer stock;
+    private String images;  // ✅ 必须包含所有必要字段
+    // ... 其他字段
+}
+```
+
+**关键点**：
+- 实现`Serializable`接口（支持序列化）
+- 只包含必要字段（不包含关联对象）
+- 字段类型使用基本类型或`BigDecimal`（避免精度问题）
+
+#### 常见问题
+
+**问题1**：`ClassCastException: LinkedHashMap cannot be cast to User`
+- **原因**：直接强制类型转换
+- **解决**：使用`ObjectMapper.convertValue`转换
+
+**问题2**：`No servers available for service: njumarket-service-auth`
+- **原因**：服务未注册到Eureka，或服务名称不匹配
+- **解决**：检查Eureka注册中心，确认服务名称一致
+
+**问题3**：Feign调用超时
+- **原因**：默认超时时间过短
+- **解决**：配置Feign超时时间
+
+```yaml
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+```
 
 ---
 
-### 2. 缓存实现方案
+### 4. 统一认证与授权规范
 
-#### 2.1 Spring Cache + Caffeine + Redis
+#### 为什么需要统一认证？
 
-**配置示例**：
+在单体应用中，认证逻辑集中在一个地方。在微服务中，如果每个服务都实现认证，会导致：
+1. **代码重复**：每个服务都要实现JWT验证
+2. **性能问题**：每个服务都要查询用户信息
+3. **维护困难**：认证逻辑修改需要更新所有服务
+
+#### 实现方式：Gateway统一鉴权 + 后端服务用户上下文
+
+**认证流程**：
+
+```
+1. 用户登录 → auth-service
+   ↓
+2. auth-service生成JWT Token，存储到Redis
+   ↓
+3. 客户端携带Token访问API
+   ↓
+4. Gateway验证Token（格式、过期、Redis验证）
+   ↓
+5. Gateway提取userId，设置X-User-Id请求头
+   ↓
+6. 后端服务UserContextFilter从X-User-Id获取用户信息
+   ↓
+7. 后端服务设置SecurityContext和UserHolder
+   ↓
+8. Controller使用@CurrentUser获取用户
+```
+
+#### Gateway层实现
+
+**JwtAuthenticationFilter**：
+
+```java
+// 1. 验证Token格式和过期时间
+String userId = jwtUtils.getUserIdFromToken(token);
+
+// 2. 验证Token是否在Redis中（防止被撤销）
+String cachedToken = redisTemplate.opsForValue().get("login:token:" + userId);
+if (!token.equals(cachedToken)) {
+    return unauthorizedResponse("Token已被撤销或用户已登出");
+}
+
+// 3. 设置X-User-Id请求头
+ServerHttpRequest modifiedRequest = request.mutate()
+    .header("X-User-Id", userId)
+    .build();
+```
+
+#### 后端服务层实现
+
+**UserContextFilter**：
+
+```java
+// 1. 从X-User-Id获取用户ID
+String userId = request.getHeader("X-User-Id");
+
+// 2. 通过Feign Client获取用户信息
+Result userResult = authClient.getUserById(userId);
+UserInternalDTO userDTO = objectMapper.convertValue(
+    userResult.getData(),
+    new TypeReference<UserInternalDTO>() {}
+);
+
+// 3. 检查账户状态
+if (!"ACTIVE".equals(userDTO.getAccountStatus())) {
+    return 403 Forbidden;
+}
+
+// 4. 设置SecurityContext和UserHolder
+UsernamePasswordAuthenticationToken authentication = 
+    new UsernamePasswordAuthenticationToken(user, null, null);
+SecurityContextHolder.getContext().setAuthentication(authentication);
+UserHolder.setUser(user);
+```
+
+#### 常见问题
+
+**问题1**：用户登录后访问订单，显示"账号被禁用"
+- **原因**：后端服务未检查账户状态
+- **解决**：在`UserContextFilter`中添加账户状态检查
+
+**问题2**：`@CurrentUser`注解无法获取用户
+- **原因**：`CurrentUserArgumentResolver`未注册
+- **解决**：创建`WebMvcConfig`，注册`CurrentUserArgumentResolver`
+
 ```java
 @Configuration
-@EnableCaching
-public class CacheConfig {
+@RequiredArgsConstructor
+public class WebMvcConfig implements WebMvcConfigurer {
+    private final CurrentUserArgumentResolver currentUserArgumentResolver;
     
-    // L1: 本地缓存（Caffeine）
-    @Bean
-    public CacheManager localCacheManager() {
-        CaffeineCacheManager cacheManager = new CaffeineCacheManager();
-        cacheManager.setCaffeine(Caffeine.newBuilder()
-            .maximumSize(1000)
-            .expireAfterWrite(5, TimeUnit.MINUTES)
-            .recordStats());
-        return cacheManager;
-    }
-    
-    // L2: 分布式缓存（Redis）
-    @Bean
-    public CacheManager redisCacheManager(RedisConnectionFactory factory) {
-        RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-            .entryTtl(Duration.ofMinutes(30))
-            .serializeKeysWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new StringRedisSerializer()))
-            .serializeValuesWith(RedisSerializationContext.SerializationPair
-                .fromSerializer(new GenericJackson2JsonRedisSerializer()));
-        
-        return RedisCacheManager.builder(factory)
-            .cacheDefaults(config)
-            .build();
+    @Override
+    public void addArgumentResolvers(List<HandlerMethodArgumentResolver> resolvers) {
+        resolvers.add(currentUserArgumentResolver);
     }
 }
 ```
 
-**使用示例**：
+**问题3**：WebSocket连接后无法推送消息
+- **原因**：WebSocket握手时未传递`X-User-Id`，无法识别用户
+- **解决**：在Gateway的`JwtAuthenticationFilter`中处理WebSocket路径，在`WebSocketConfig`中设置Principal
+
+---
+
+### 5. 数据一致性规范
+
+#### 为什么需要数据一致性？
+
+在微服务架构中，一个业务操作可能涉及多个服务的数据修改。例如：
+- 创建订单：需要扣减商品库存（commodity-service）和创建订单（order-service）
+- 如果只扣减库存，订单创建失败，会导致数据不一致
+
+#### 实现方式：分布式锁 + 数据库事务
+
+**三重保护机制**（防止超卖）：
+
 ```java
-@Service
-public class CommodityService {
-    
-    // L1缓存：热点商品（本地缓存）
-    @Cacheable(value = "commodity:hot", cacheManager = "localCacheManager")
-    public CommodityDTO getHotCommodity(String commodityId) {
-        return getCommodityFromRedis(commodityId);
-    }
-    
-    // L2缓存：普通商品（Redis）
-    @Cacheable(value = "commodity", cacheManager = "redisCacheManager")
-    public CommodityDTO getCommodity(String commodityId) {
-        return commodityRepository.findById(commodityId)
-            .map(this::convertToDTO)
-            .orElse(null);
-    }
+// 1. Redis分布式锁（跨服务器保护）
+String lockKey = "lock:commodity:" + commodityId;
+String lockValue = RedisLockUtil.generateLockValue();
+boolean lockAcquired = redisLockUtil.tryLock(lockKey, lockValue, 10, 1, 100);
+
+// 2. 数据库悲观锁（SELECT ... FOR UPDATE）
+Optional<Commodity> commodity = commodityRepository.findByIdForUpdate(commodityId);
+
+// 3. 条件更新（UPDATE ... WHERE stock >= quantity）
+int updateResult = commodityRepository.updateStockWithCondition(commodityId, quantity);
+if (updateResult == 0) {
+    throw new BusinessException("库存不足");
+}
+```
+
+**关键点**：
+- **分布式锁**：防止多台服务器同时处理同一商品的订单
+- **悲观锁**：在事务中锁定商品记录
+- **条件更新**：原子性更新，确保库存不会为负
+
+#### 事务管理
+
+**单服务事务**：
+
+```java
+@Transactional
+public Result createOrder(OrderDTO orderDTO) {
+    // 事务内的操作
+}
+```
+
+**跨服务事务**：
+- 当前实现：使用**最终一致性**（补偿机制）
+- 未来优化：使用分布式事务框架（如Seata）
+
+#### 常见问题
+
+**问题1**：`Cannot execute statement in a READ ONLY transaction`
+- **原因**：`SELECT ... FOR UPDATE`需要写事务，但使用了`@Transactional(readOnly = true)`
+- **解决**：移除`readOnly = true`，使用`@Transactional`
+
+**问题2**：订单创建时商品不存在
+- **原因**：`getCommodityForUpdate`方法缺少`@Transactional`注解
+- **解决**：添加`@Transactional`注解
+
+---
+
+### 6. 配置规范化
+
+#### 为什么需要配置规范？
+
+在微服务架构中，每个服务都有独立的配置文件。如果配置不规范，会导致：
+1. **配置不一致**：不同服务使用不同的配置格式
+2. **配置缺失**：某些服务缺少必要的配置
+3. **配置错误**：配置值错误导致服务无法启动
+
+#### 配置规范清单
+
+**每个服务必须包含的配置**：
+
+1. **服务基本信息**
+```yaml
+server:
+  port: 8091
+spring:
+  application:
+    name: njumarket-service-auth
+```
+
+2. **数据库配置**
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/nju_market
+    username: root
+    password: ${DB_PASSWORD:password}
+```
+
+3. **Redis配置**（如果使用）
+```yaml
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${AUTH_REDIS_DATABASE:2}  # 每个服务使用不同的database
+```
+
+4. **Eureka配置**
+```yaml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+```
+
+5. **Feign Client配置**（如果调用其他服务）
+```yaml
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+```
+
+6. **日志配置**
+```yaml
+logging:
+  level:
+    com.njumarket.auth.service: INFO
+    com.njumarket.auth.controller: INFO
+    com.njumarket.auth.filter: INFO
+    com.njumarket.njumarket.resolver: INFO
+```
+
+#### Redis数据库分配
+
+| 服务 | Redis Database | 用途 |
+|------|----------------|------|
+| gateway | 2 | Token验证 |
+| auth-service | 2 | Token存储 |
+| commodity-service | 2 | 缓存 |
+| message-service | 3 | 消息缓存 |
+| order-service | 4 | 分布式锁 |
+
+**为什么使用不同的database？**
+- 避免Key冲突
+- 便于管理和监控
+- 可以独立设置过期策略
+
+---
+
+## 常见问题与解决方案
+
+### 问题1：用户登录后访问订单，显示"账号被禁用"，前端强制登出
+
+#### 问题分析
+
+**现象**：
+- 用户登录成功
+- 访问订单列表时返回403 Forbidden
+- 前端检测到403，强制登出用户
+
+**根本原因**：
+1. Gateway验证JWT Token通过，设置`X-User-Id`请求头
+2. 后端服务的`UserContextFilter`从`X-User-Id`获取用户信息
+3. **但是**：`UserContextFilter`未检查账户状态
+4. 即使账户状态是`ACTIVE`，如果未检查，可能导致其他问题
+
+**解决方案**：
+在`UserContextFilter`中添加账户状态检查：
+
+```java
+UserInternalDTO userDTO = convertUserDTOToEntity(authClient.getUserById(userId));
+if (!"ACTIVE".equals(userDTO.getAccountStatus())) {
+    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+    response.getWriter().write("账号已被禁用");
+    return;
 }
 ```
 
 ---
 
-### 3. 缓存一致性策略
+### 问题2：订单创建时商品不存在
 
-#### 3.1 Cache Aside模式
+#### 问题分析
 
-**读流程**：
-1. 先查缓存，命中则返回
-2. 缓存未命中，查数据库
-3. 将结果写入缓存
+**现象**：
+- 商品确实存在
+- 但创建订单时返回"商品不存在"
 
-**写流程**：
-1. 更新数据库
-2. 删除缓存（不更新缓存，让下次查询自动缓存）
-
-**优点**：
-- 实现简单
-- 缓存和数据库解耦
-
-**缺点**：
-- 可能出现缓存不一致（极小概率）
-
-#### 3.2 Read/Write Through模式
-
-**读流程**：
-1. 先查缓存，命中则返回
-2. 缓存未命中，查数据库并写入缓存
-
-**写流程**：
-1. 更新缓存
-2. 更新数据库
-
-**优点**：
-- 缓存一致性更好
-
-**缺点**：
-- 实现复杂
-- 写操作需要同时更新缓存和数据库
-
-#### 3.3 Write Behind模式
-
-**写流程**：
-1. 更新缓存
-2. 异步更新数据库
-
-**优点**：
-- 写性能好
-
-**缺点**：
-- 数据可能丢失
-- 实现复杂
-
-**推荐**：使用Cache Aside模式（简单、可靠）
-
----
-
-### 4. 缓存预热
-
-#### 4.1 预热策略
-
-**应用启动时预热**：
-- 加载热点商品到本地缓存
-- 加载热门用户信息到Redis
-- 加载配置信息到本地缓存
-
-**定时预热**：
-- 每小时刷新热门商品缓存
-- 每天刷新统计数据缓存
-
-**实现示例**：
-```java
-@Component
-public class CacheWarmUp {
-    
-    @PostConstruct
-    public void warmUpCache() {
-        // 预热热点商品
-        List<String> hotCommodityIds = getHotCommodityIds();
-        hotCommodityIds.forEach(id -> {
-            commodityService.getHotCommodity(id);
-        });
-        
-        // 预热用户信息
-        List<String> activeUserIds = getActiveUserIds();
-        activeUserIds.forEach(id -> {
-            userService.getUserProfile(id);
-        });
-    }
-}
-```
-
----
-
-### 5. 缓存穿透、击穿、雪崩
-
-#### 5.1 缓存穿透
-
-**问题**：查询不存在的数据，每次都查数据库
+**根本原因**：
+1. `order-service`调用`commodity-service`的`/api/internal/commodity/{commodityId}/for-update`
+2. `InternalController.getCommodityForUpdate`方法使用`findByIdForUpdate`（悲观锁）
+3. **但是**：方法缺少`@Transactional`注解，无法执行`SELECT ... FOR UPDATE`
 
 **解决方案**：
-- **布隆过滤器**：快速判断数据是否存在
-- **空值缓存**：将空结果也缓存，设置较短TTL
+添加`@Transactional`注解（不能是`readOnly = true`）：
 
-**实现示例**：
 ```java
-@Cacheable(value = "commodity", unless = "#result == null")
-public CommodityDTO getCommodity(String commodityId) {
-    CommodityDTO dto = commodityRepository.findById(commodityId)
-        .map(this::convertToDTO)
-        .orElse(null);
-    
-    // 空值也缓存，防止穿透
-    if (dto == null) {
-        // 缓存空值，TTL较短（5分钟）
-        cacheManager.getCache("commodity").put(commodityId, new EmptyCommodityDTO());
-    }
-    
-    return dto;
-}
-```
-
-#### 5.2 缓存击穿
-
-**问题**：热点数据过期，大量请求同时查数据库
-
-**解决方案**：
-- **分布式锁**：只允许一个线程查数据库
-- **热点数据永不过期**：后台异步更新
-
-**实现示例**：
-```java
-public CommodityDTO getCommodity(String commodityId) {
-    CommodityDTO cached = cacheManager.getCache("commodity").get(commodityId, CommodityDTO.class);
-    if (cached != null) {
-        return cached;
-    }
-    
-    // 使用分布式锁，防止击穿
-    RLock lock = redisson.getLock("commodity:lock:" + commodityId);
-    try {
-        lock.lock(10, TimeUnit.SECONDS);
-        // 双重检查
-        cached = cacheManager.getCache("commodity").get(commodityId, CommodityDTO.class);
-        if (cached != null) {
-            return cached;
-        }
-        
-        // 查数据库
-        CommodityDTO dto = commodityRepository.findById(commodityId)
-            .map(this::convertToDTO)
-            .orElse(null);
-        
-        // 写入缓存
-        cacheManager.getCache("commodity").put(commodityId, dto);
-        return dto;
-    } finally {
-        lock.unlock();
-    }
-}
-```
-
-#### 5.3 缓存雪崩
-
-**问题**：大量缓存同时过期，大量请求查数据库
-
-**解决方案**：
-- **随机TTL**：避免同时过期
-- **多级缓存**：本地缓存 + Redis
-- **熔断降级**：数据库压力大时降级
-
-**实现示例**：
-```java
-@Cacheable(value = "commodity", cacheManager = "redisCacheManager")
-public CommodityDTO getCommodity(String commodityId) {
-    // TTL随机化，避免雪崩
-    RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-        .entryTtl(Duration.ofMinutes(30 + new Random().nextInt(10))); // 30-40分钟随机
-    
+@GetMapping("/commodity/{commodityId}/for-update")
+@Transactional  // ✅ 必须是写事务
+public Result getCommodityForUpdate(@PathVariable String commodityId) {
+    Optional<Commodity> commodityOpt = commodityRepository.findByIdForUpdate(commodityId);
     // ...
 }
 ```
 
 ---
 
-### 6. 缓存监控
+### 问题3：下单时图片URL未正确写入订单快照
 
-#### 6.1 缓存命中率监控
+#### 问题分析
 
-**指标**：
-- 缓存命中率
-- 缓存QPS
-- 缓存大小
-- 缓存过期时间
+**现象**：
+- 订单创建成功
+- 但订单快照中的图片URL为空
 
-**实现**：
-- Caffeine提供统计功能
-- Redis提供INFO命令查看统计
+**根本原因**：
+1. `CommodityInternalDTO`缺少`images`字段
+2. `InternalDTOConverter.toInternalDTO(Commodity)`未转换`images`字段
+3. `OrderServiceImpl.convertCommodityDTOToEntity`未设置`images`字段
+4. `order.createCommoditySnapshot`调用`getFirstImage(commodity.getImages())`时，`images`为`null`
 
-#### 6.2 缓存性能监控
-
-**指标**：
-- 缓存响应时间
-- 缓存错误率
-- 缓存内存使用率
-
-**工具**：
-- Spring Boot Actuator
-- Prometheus + Grafana
-
----
-
-## 搜索引擎集成
-
-### 1. Elasticsearch
-
-#### 1.1 技术选型
-**Elasticsearch 8.x**
-- 全文搜索引擎
-- 支持分布式搜索
-- 支持实时搜索
-
-#### 1.2 应用场景
-- **商品搜索**：商品标题、描述全文搜索
-- **消息搜索**：消息内容全文搜索
-- **用户搜索**：用户昵称搜索
-
-#### 1.3 实现内容
-- **索引设计**：商品索引、消息索引
-- **分词器**：IK分词器（中文分词）
-- **搜索高亮**：搜索结果高亮显示
-- **搜索建议**：搜索自动补全
-- **搜索历史**：用户搜索历史记录
-
----
-
-### 2. 搜索服务设计
-
-#### 2.1 商品搜索服务
-**功能**：
-- 商品索引创建和更新
-- 商品全文搜索
-- 商品搜索建议
-- 商品搜索历史
-
-**技术栈**：
-- Spring Boot
-- Elasticsearch Client
-- IK分词器
-
-#### 2.2 消息搜索服务
-**功能**：
-- 消息索引创建和更新
-- 消息全文搜索
-- 消息搜索高亮
-
-**技术栈**：
-- Spring Boot
-- Elasticsearch Client
-- IK分词器
-
----
-
-## 技术学习重点
-
-### 1. 微服务架构
-- **服务拆分原则**：如何合理拆分服务
-- **服务治理**：服务注册、发现、配置、监控
-- **服务通信**：同步通信、异步通信
-- **服务监控**：服务健康检查、性能监控
-
-### 2. Spring Cloud
-- **服务注册与发现**：Eureka / Nacos
-- **配置中心**：Spring Cloud Config / Nacos Config
-- **API网关**：Spring Cloud Gateway
-- **服务调用**：OpenFeign
-- **熔断降级**：Hystrix / Sentinel
-
-### 3. 分布式系统
-- **分布式事务**：Seata（AT、TCC、SAGA模式）
-- **分布式锁**：Redis分布式锁优化
-- **分布式ID**：Snowflake算法
-- **CAP理论**：一致性、可用性、分区容错性
-
-### 4. 消息队列
-- **消息模型**：点对点、发布订阅
-- **消息可靠性**：消息确认、消息重试、消息持久化
-- **消息顺序**：顺序消息实现
-- **消息幂等性**：防止重复消费
-
-### 5. 搜索引擎
-- **Elasticsearch**：索引设计、查询DSL
-- **全文搜索**：IK分词器、搜索高亮
-- **搜索优化**：搜索建议、搜索历史
-
-### 6. MyBatis
-- **动态SQL**：if、choose、foreach等标签
-- **结果映射**：resultMap、association、collection
-- **性能优化**：批量操作、分页查询、缓存机制
-
-### 7. 缓存系统
-- **多级缓存**：本地缓存（Caffeine）+ 分布式缓存（Redis）
-- **缓存一致性**：Cache Aside、Read/Write Through模式
-- **缓存问题**：穿透、击穿、雪崩的解决方案
-- **缓存预热**：应用启动预热、定时预热
-
----
-
-## 实施计划
-
-### Phase 1: 微服务拆分（2-3周）
-
-#### Week 1: 服务拆分准备
-- [ ] 设计微服务拆分方案
-- [ ] 搭建Spring Cloud基础环境（Nacos、Gateway）
-- [ ] 创建各微服务项目骨架
-- [ ] 配置服务注册与发现
-
-#### Week 2: 核心服务拆分
-- [ ] 拆分用户服务（User Service）
-- [ ] 拆分商品服务（Commodity Service）
-- [ ] 拆分订单服务（Order Service）
-- [ ] 服务间通信测试（OpenFeign）
-
-#### Week 3: 消息和通知服务拆分
-- [ ] 拆分消息服务（Message Service）
-- [ ] 拆分通知服务（Notification Service）
-- [ ] 服务间通信完善
-- [ ] 集成测试
-
----
-
-### Phase 2: Spring Cloud生态集成（2-3周）
-
-#### Week 4: 配置中心和API网关
-- [ ] Nacos Config配置中心集成
-- [ ] Spring Cloud Gateway API网关配置
-- [ ] 路由规则配置
-- [ ] 请求过滤和限流
-
-#### Week 5: 服务调用和熔断
-- [ ] OpenFeign服务调用配置
-- [ ] Sentinel熔断降级集成
-- [ ] 负载均衡配置
-- [ ] 服务监控配置
-
-#### Week 6: 分布式系统实践
-- [ ] Seata分布式事务集成
-- [ ] 分布式锁优化（Redisson）
-- [ ] 分布式ID生成器实现
-- [ ] 分布式系统测试
-
----
-
-### Phase 3: 消息队列和搜索引擎（2-3周）
-
-#### Week 7: 消息队列集成
-- [ ] RabbitMQ安装和配置
-- [ ] 订单异步处理实现
-- [ ] 消息可靠性保证
-- [ ] 消息队列监控
-
-#### Week 8: Elasticsearch集成
-- [ ] Elasticsearch安装和配置
-- [ ] 商品搜索服务实现
-- [ ] 消息搜索服务实现
-- [ ] IK分词器配置
-
-#### Week 9: MyBatis和缓存机制
-- [ ] MyBatis集成和配置
-- [ ] 复杂查询Mapper实现
-- [ ] 统计报表查询实现
-- [ ] 多级缓存架构设计
-- [ ] 缓存一致性策略实现
-- [ ] 缓存预热和监控
-
-#### Week 10: 系统集成和测试
-- [ ] 各服务集成测试
-- [ ] 性能测试
-- [ ] 压力测试
-- [ ] 缓存性能测试
-- [ ] 文档完善
-
----
-
-## 预期成果
-
-### 1. 架构成果
-- ✅ 5个核心微服务独立部署和运行
-- ✅ Spring Cloud生态完整集成
-- ✅ API网关统一入口
-- ✅ 服务注册与发现正常工作
-- ✅ 配置中心动态配置生效
-
-### 2. 功能成果
-- ✅ 分布式事务保证数据一致性
-- ✅ 消息队列实现异步处理
-- ✅ Elasticsearch实现全文搜索
-- ✅ MyBatis实现复杂查询和统计报表
-- ✅ 多级缓存提升系统性能
-- ✅ 服务熔断降级保证系统稳定性
-
-### 3. 技术成果
-- ✅ 深入理解微服务架构
-- ✅ 掌握Spring Cloud生态
-- ✅ 理解分布式系统原理
-- ✅ 掌握消息队列使用
-- ✅ 掌握搜索引擎集成
-- ✅ 掌握MyBatis复杂查询
-- ✅ 掌握多级缓存架构设计
-
-### 4. 文档成果
-- ✅ 微服务架构设计文档
-- ✅ 服务拆分方案文档
-- ✅ Spring Cloud集成文档
-- ✅ 分布式系统实践文档
-- ✅ 消息队列应用文档
-- ✅ 搜索引擎集成文档
-- ✅ MyBatis复杂查询实践文档
-- ✅ 缓存机制实现文档
-
----
-
-## 技术难点与解决方案
-
-### 1. 服务拆分难点
-**难点**：如何合理拆分服务，避免过度拆分或拆分不足
 **解决方案**：
-- 按业务领域拆分，保持服务职责单一
-- 考虑数据独立性，避免跨服务事务
-- 考虑服务间通信成本，避免频繁调用
-
-### 2. 分布式事务难点
-**难点**：跨服务事务如何保证一致性
-**解决方案**：
-- 使用Seata AT模式，自动事务管理
-- 对于复杂场景，使用TCC模式
-- 对于长事务，使用SAGA模式
-
-### 3. 服务间通信难点
-**难点**：服务间通信的可靠性和性能
-**解决方案**：
-- 同步通信使用OpenFeign，支持重试和降级
-- 异步通信使用消息队列，保证可靠性
-- 使用缓存减少服务间调用
-
-### 4. 数据一致性难点
-**难点**：分布式环境下数据一致性保证
-**解决方案**：
-- 使用分布式事务（Seata）
-- 使用最终一致性（消息队列）
-- 使用分布式锁（Redis）
+1. 在`CommodityInternalDTO`中添加`images`字段
+2. 在`InternalDTOConverter`中转换`images`字段
+3. 在`OrderServiceImpl.convertCommodityDTOToEntity`中设置`images`字段
 
 ---
 
-## 风险评估与应对
+### 问题4：WebSocket连接成功，但推送失败
 
-### 1. 技术风险
-**风险**：Spring Cloud学习曲线陡峭
-**应对**：
-- 分阶段实施，先实现基础功能
-- 参考官方文档和最佳实践
-- 遇到问题及时查阅资料
+#### 问题分析
 
-### 2. 性能风险
-**风险**：微服务拆分后性能可能下降
-**应对**：
-- 服务间通信使用缓存减少调用
-- 异步处理减少同步调用
-- 合理使用消息队列
+**现象**：
+- WebSocket连接成功
+- 但无法向用户推送消息
 
-### 3. 复杂度风险
-**风险**：微服务架构复杂度增加
-**应对**：
-- 完善的文档和注释
-- 清晰的代码组织
-- 统一的开发规范
+**根本原因**：
+1. Gateway的`JwtAuthenticationFilter`未处理WebSocket路径（`/api/ws/**`）
+2. WebSocket握手时未传递`X-User-Id`请求头
+3. `WebSocketConfig`中未设置`Principal`，`SimpUserRegistry`无法识别用户
+
+**解决方案**：
+1. 在Gateway的`JwtAuthenticationFilter`中添加WebSocket路径处理
+2. 在`WebSocketConfig`中添加`WebSocketHandshakeInterceptor`提取`X-User-Id`
+3. 在`WebSocketConfig`中添加`WebSocketChannelInterceptor`设置`Principal`
+
+---
+
+### 问题5：对话获取成功，但消息获取失败
+
+#### 问题分析
+
+**现象**：
+- `getConversations`返回对话列表
+- 但`getConversationDetail`返回空消息列表
+
+**根本原因**：
+1. Feign Client返回的`Result.getData()`是`LinkedHashMap`
+2. 直接强制类型转换导致`ClassCastException`
+3. 异常被捕获，返回空列表
+
+**解决方案**：
+使用`ObjectMapper.convertValue`转换类型：
+
+```java
+UserInternalDTO userDTO = objectMapper.convertValue(
+    userResult.getData(),
+    new TypeReference<UserInternalDTO>() {}
+);
+```
+
+---
+
+## 微服务实践教学指南
+
+### 从单体到微服务：必须实现的规范
+
+#### 1. 服务拆分规范
+
+**原则**：
+- **按业务领域拆分**：每个服务负责一个业务领域
+- **高内聚、低耦合**：服务内部紧密相关，服务间松散耦合
+- **独立部署**：每个服务可以独立部署和扩展
+
+**本项目拆分**：
+- `auth-service`：用户认证、用户管理
+- `commodity-service`：商品管理
+- `order-service`：订单管理
+- `message-service`：消息通信
+
+#### 2. 服务发现规范
+
+**必须实现**：
+- 服务注册：服务启动时自动注册到注册中心
+- 服务发现：通过服务名称查找服务实例
+- 健康检查：定期检查服务健康状态
+
+**技术选型**：
+- Eureka（本项目使用）
+- Consul
+- Nacos
+
+#### 3. API网关规范
+
+**必须实现**：
+- 统一入口：所有外部请求都通过网关
+- 路由转发：根据路径转发到对应服务
+- 统一鉴权：在网关层验证JWT Token
+- 请求头传递：将用户信息传递给后端服务
+
+**技术选型**：
+- Spring Cloud Gateway（本项目使用）
+- Zuul
+- Kong
+
+#### 4. 服务间通信规范
+
+**必须实现**：
+- 使用声明式HTTP客户端（Feign Client）
+- 使用内部DTO传输数据（不直接传输Entity）
+- 处理类型转换问题（`LinkedHashMap` → DTO）
+- 配置超时时间
+
+**技术选型**：
+- Feign Client（本项目使用）
+- RestTemplate
+- WebClient
+
+#### 5. 统一认证规范
+
+**必须实现**：
+- Gateway统一验证JWT Token
+- 后端服务从请求头获取用户信息
+- 设置Spring Security SecurityContext
+- 检查账户状态
+
+**技术选型**：
+- JWT Token（本项目使用）
+- OAuth2
+- Session共享
+
+#### 6. 数据一致性规范
+
+**必须实现**：
+- 分布式锁（跨服务器保护）
+- 数据库悲观锁（事务内保护）
+- 条件更新（原子性操作）
+- 补偿机制（最终一致性）
+
+**技术选型**：
+- Redis分布式锁（本项目使用）
+- 数据库事务
+- 分布式事务框架（Seata）
+
+#### 7. 配置规范
+
+**必须实现**：
+- 统一配置格式
+- 环境变量支持
+- 配置验证
+- 配置文档
+
+**技术选型**：
+- Spring Boot配置（本项目使用）
+- Spring Cloud Config
+- Nacos配置中心
+
+---
+
+### 如何配置连接
+
+#### 1. 服务注册与发现配置
+
+**Eureka Server配置**：
+
+```yaml
+# njumarket-discovery/application.yml
+server:
+  port: 8761
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+```
+
+**Eureka Client配置**（各服务）：
+
+```yaml
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+```
+
+#### 2. API网关配置
+
+**Gateway路由配置**：
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service-user
+          uri: lb://njumarket-service-auth
+          predicates:
+            - Path=/api/user/**
+          filters:
+            - StripPrefix=1
+```
+
+**关键点**：
+- `lb://`：使用负载均衡
+- `StripPrefix=1`：去掉路径前缀
+- 路由顺序：更具体的路径放在前面
+
+#### 3. Feign Client配置
+
+**Feign Client接口**：
+
+```java
+@FeignClient(name = "njumarket-service-auth", path = "/api/internal")
+public interface AuthClient {
+    @GetMapping("/user/{userId}")
+    Result getUserById(@PathVariable String userId);
+}
+```
+
+**Feign Client配置**：
+
+```yaml
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+```
+
+#### 4. Redis配置
+
+**各服务Redis配置**：
+
+```yaml
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${AUTH_REDIS_DATABASE:2}
+```
+
+---
+
+### 如何沟通服务
+
+#### 1. 同步通信：Feign Client
+
+**使用场景**：
+- 需要立即获取结果
+- 操作是幂等的
+- 数据量小
+
+**示例**：
+```java
+@Autowired
+private AuthClient authClient;
+
+public User getUser(String userId) {
+    Result result = authClient.getUserById(userId);
+    UserInternalDTO dto = objectMapper.convertValue(
+        result.getData(),
+        new TypeReference<UserInternalDTO>() {}
+    );
+    return convertUserDTOToEntity(dto);
+}
+```
+
+#### 2. 异步通信：消息队列（未来实现）
+
+**使用场景**：
+- 不需要立即获取结果
+- 操作可以异步处理
+- 需要解耦服务
+
+**技术选型**：
+- RabbitMQ
+- Kafka
+- RocketMQ
+
+#### 3. 实时通信：WebSocket
+
+**使用场景**：
+- 实时推送消息
+- 在线状态管理
+
+**实现方式**：
+- 前端通过SockJS连接WebSocket
+- 后端通过STOMP协议推送消息
+
+---
+
+### 要避免的问题
+
+#### 1. 服务间直接调用Repository
+
+**错误示例**：
+```java
+// ❌ 错误：order-service直接注入commodity-service的Repository
+@Autowired
+private CommodityRepository commodityRepository;
+```
+
+**正确方式**：
+```java
+// ✅ 正确：通过Feign Client调用
+@Autowired
+private CommodityClient commodityClient;
+```
+
+**原因**：
+- 违反微服务原则（服务间应该通过API通信）
+- 导致服务间紧耦合
+- 无法独立部署和扩展
+
+#### 2. 服务间直接传输Entity
+
+**错误示例**：
+```java
+// ❌ 错误：直接传输Entity
+Result<Commodity> getCommodity(String commodityId);
+```
+
+**正确方式**：
+```java
+// ✅ 正确：使用内部DTO
+Result<CommodityInternalDTO> getCommodity(String commodityId);
+```
+
+**原因**：
+- Entity包含关联对象，序列化问题
+- Entity变化会影响所有服务
+- 违反微服务数据隔离原则
+
+#### 3. 忽略类型转换问题
+
+**错误示例**：
+```java
+// ❌ 错误：直接强制类型转换
+User user = (User) result.getData();  // ClassCastException!
+```
+
+**正确方式**：
+```java
+// ✅ 正确：使用ObjectMapper转换
+UserInternalDTO dto = objectMapper.convertValue(
+    result.getData(),
+    new TypeReference<UserInternalDTO>() {}
+);
+```
+
+#### 4. 配置不一致
+
+**错误示例**：
+- 不同服务使用不同的Redis database
+- 不同服务使用不同的超时时间
+- 不同服务使用不同的日志格式
+
+**正确方式**：
+- 统一配置格式
+- 使用环境变量
+- 维护配置文档
+
+#### 5. 忽略账户状态检查
+
+**错误示例**：
+```java
+// ❌ 错误：未检查账户状态
+User user = getUser(userId);
+// 直接使用user
+```
+
+**正确方式**：
+```java
+// ✅ 正确：检查账户状态
+User user = getUser(userId);
+if (!"ACTIVE".equals(user.getAccountStatus())) {
+    throw new BusinessException("账号已被禁用");
+}
+```
+
+---
+
+## 技术栈与配置
+
+### 后端技术栈
+
+- **框架**: Spring Boot 3.2.0
+- **服务治理**: Spring Cloud 2023.0.3
+- **服务注册**: Eureka Server
+- **API网关**: Spring Cloud Gateway
+- **服务间通信**: OpenFeign
+- **数据持久化**: Spring Data JPA + MySQL
+- **缓存**: Redis
+- **安全**: Spring Security + JWT
+- **实时通信**: WebSocket (STOMP over SockJS)
+
+### 前端技术栈
+
+- **框架**: Vue 3
+- **状态管理**: Pinia
+- **UI组件**: Element Plus
+- **HTTP客户端**: Axios
+- **WebSocket客户端**: SockJS + STOMP.js
+
+### 部署要求
+
+- **Java**: JDK 17+
+- **Maven**: 3.6+
+- **MySQL**: 8.0+
+- **Redis**: 6.0+
+
+---
+
+## 2.x版本规划
+
+### 2.1.x版本（近期，高优先级）
+
+#### 主线：微服务完善
+
+1. **服务间认证机制**
+   - 实现服务间Token（Service-to-Service Token）
+   - Gateway生成服务间调用Token
+   - 各服务验证Token的有效性
+   - **目标**：防止未授权服务调用
+
+2. **服务降级和熔断**
+   - 使用Resilience4j或Sentinel实现熔断
+   - 为Feign Client添加Fallback类
+   - 实现优雅降级策略
+   - **目标**：提高系统可用性
+
+3. **实体类与DTO分离优化**
+   - 完善内部DTO设计
+   - 优化类型转换逻辑
+   - 统一DTO转换工具
+   - **目标**：减少服务间耦合
+
+#### 支线：组件增强
+
+4. **分布式锁优化**
+   - 实现锁续期机制
+   - 优化锁超时时间
+   - 添加锁监控
+   - **目标**：提高分布式锁可靠性
+
+5. **WebSocket优化**
+   - 实现消息持久化
+   - 优化推送性能
+   - 添加连接监控
+   - **目标**：提高实时通信可靠性
+
+---
+
+### 2.2.x版本（中期，中优先级）
+
+#### 主线：微服务治理
+
+1. **API版本控制**
+   - 在路径中添加版本号：`/api/v1/user/**`、`/api/v2/user/**`
+   - Gateway路由时保留版本号
+   - 支持多版本共存
+   - **目标**：支持API平滑升级
+
+2. **分布式链路追踪**
+   - 使用Sleuth + Zipkin
+   - 或使用SkyWalking
+   - 集成到Gateway和各服务中
+   - **目标**：提高问题排查效率
+
+3. **配置中心**
+   - 使用Spring Cloud Config Server
+   - 统一管理配置
+   - 支持动态刷新（可选）
+   - **目标**：简化配置管理
+
+#### 支线：监控与运维
+
+4. **服务监控**
+   - 集成Prometheus + Grafana
+   - 监控服务健康、性能指标、错误率
+   - 配置告警规则
+   - **目标**：提高系统可观测性
+
+5. **日志聚合**
+   - 使用ELK Stack (Elasticsearch + Logstash + Kibana)
+   - 统一日志格式
+   - 实现日志检索和分析
+   - **目标**：提高问题排查效率
+
+---
+
+### 2.3.x版本（长期，低优先级）
+
+#### 主线：架构优化
+
+1. **数据库拆分**（可选）
+   - 拆分数据库：
+     - `nju_market_auth` - 认证服务数据库
+     - `nju_market_commodity` - 商品服务数据库
+     - `nju_market_order` - 订单服务数据库
+     - `nju_market_message` - 消息服务数据库
+   - 使用消息队列或事件总线实现数据同步（如需要）
+   - **注意**：本项目旨在学习微服务，允许数据库共用，此任务优先级最低
+
+2. **消息队列集成**
+   - 使用RabbitMQ或Kafka
+   - 实现异步消息处理
+   - 实现事件驱动架构
+   - **目标**：提高系统解耦和性能
+
+3. **分布式事务**
+   - 使用Seata实现分布式事务
+   - 支持TCC模式
+   - 支持Saga模式
+   - **目标**：保证跨服务数据一致性
+
+#### 支线：部署与运维
+
+4. **容器化部署**
+   - 使用Docker容器化各服务
+   - 使用Docker Compose或Kubernetes编排
+   - 实现自动化部署
+   - **目标**：简化部署流程
+
+5. **服务网格**（可选）
+   - 使用Istio或Linkerd实现服务网格
+   - 将服务间通信逻辑下沉到基础设施层
+   - **目标**：简化服务间通信管理
+
+---
+
+### 版本规划总结
+
+| 版本 | 主线 | 支线 | 优先级 |
+|------|------|------|--------|
+| 2.1.x | 服务间认证、熔断、DTO优化 | 分布式锁优化、WebSocket优化 | 高 |
+| 2.2.x | API版本控制、链路追踪、配置中心 | 服务监控、日志聚合 | 中 |
+| 2.3.x | 数据库拆分、消息队列、分布式事务 | 容器化部署、服务网格 | 低 |
 
 ---
 
 ## 总结
 
-v2.0 阶段将通过微服务架构改造，将系统从单体应用升级为微服务架构，学习Spring Cloud生态，实现分布式系统实践。这将是一个重要的技术提升阶段，为后续的系统扩展和优化打下坚实基础。
+NJUMarket v2.0 完成了从单体架构到微服务架构的重大升级，**不仅仅是代码的物理迁移**，更重要的是建立了一套**完整的连接规范**：
 
-**项目状态**：📋 **v2.0 阶段规划完成，准备开始实施**
+1. **服务注册与发现**：使用Eureka实现服务动态发现
+2. **API网关**：使用Spring Cloud Gateway实现统一入口和鉴权
+3. **服务间通信**：使用Feign Client实现声明式HTTP调用
+4. **统一认证**：Gateway统一验证JWT，后端服务设置用户上下文
+5. **数据一致性**：使用分布式锁、悲观锁、条件更新三重保护
+6. **配置规范**：统一配置格式，使用环境变量，维护配置文档
+
+在迁移过程中，我们遇到了许多问题（用户登出、订单失效、图片URL丢失等），这些问题都源于**微服务连接规范的不完善**。通过逐步完善这些规范，我们最终实现了一个稳定、可靠的微服务系统。
+
+**2.x版本的规划**以**微服务完善**为主线，以**组件增强**为支线，逐步提升系统的可用性、可维护性和可扩展性。
 
 ---
 
-**文档版本**：v2.0 规划  
-**最后更新**：2025-01-XX
+## 相关文档
 
+- [微服务配置规范化](./MICROSERVICE_CONFIGURATION_STANDARDIZATION.md)
+- [安全机制重构总结](./SECURITY_REFACTORING_SUMMARY.md)
+- [Feign Client迁移指南](./FEIGN_CLIENT_MIGRATION_GUIDE.md)
+- [2.1.x版本TODO](./TODO_V2.1.x.md)

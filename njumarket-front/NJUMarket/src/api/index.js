@@ -410,13 +410,13 @@ export const profileAPI = {
 // 图片相关API
 export const imageAPI = {
   // 获取头像图片
-  getAvatar: (fileName) => `${api.defaults.baseURL}/images/avatars/${fileName}`,
+  getAvatar: (fileName) => `http://localhost:8080/api/images/avatars/${fileName}`,
   
   // 获取商品图片
-  getCommodityImage: (fileName) => `${api.defaults.baseURL}/images/commodities/${fileName}`,
+  getCommodityImage: (fileName) => `http://localhost:8080/api/images/commodities/${fileName}`,
   
   // 获取默认头像
-  getDefaultAvatar: () => `${api.defaults.baseURL}/images/avatars/default`,
+  getDefaultAvatar: () => `http://localhost:8080/api/images/avatars/default`,
   
   // 获取默认商品图片
   getDefaultCommodityImage: () => '/default-commodity.jpg',

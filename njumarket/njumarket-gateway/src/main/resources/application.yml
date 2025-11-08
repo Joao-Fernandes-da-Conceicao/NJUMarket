@@ -1,0 +1,107 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: njumarket-gateway
+  main:
+    web-application-type: reactive  # 强制使用响应式模式，避免与Spring MVC冲突
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${GATEWAY_REDIS_DATABASE:2}  # 使用与auth-service相同的Redis database，以便读取Token
+      timeout: 3000ms  # 连接超时时间
+      lettuce:
+        pool:
+          max-active: 8   # 最大连接数
+          max-idle: 8     # 最大空闲连接数
+          min-idle: 0     # 最小空闲连接数
+          max-wait: -1ms  # 最大等待时间（-1表示无限等待）
+        shutdown-timeout: 100ms  # 关闭超时时间
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # ⚠️ 重要：更具体的路由必须放在更通用的路由之前，否则会被通用路由先匹配
+        # 商品服务路由（公开API）
+        - id: commodity-service-public
+          uri: lb://njumarket-service-commodity
+          predicates:
+            - Path=/api/public/commodity/**
+          # 不StripPrefix，直接转发
+        # 商品服务路由（用户API）- 必须在 /api/user/** 之前
+        - id: commodity-service-user
+          uri: lb://njumarket-service-commodity
+          predicates:
+            - Path=/api/user/commodity/**
+          # 不StripPrefix，直接转发
+        # 订单服务路由 - 必须在 /api/user/** 之前
+        - id: order-service
+          uri: lb://njumarket-service-order
+          predicates:
+            - Path=/api/user/order/**,/api/user/chat/**,/api/user/complaint/**
+          # 不StripPrefix，直接转发
+        # 消息服务路由（用户消息API）- 必须在 /api/user/** 之前
+        - id: message-service-user
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/user/message/**
+          # 不StripPrefix，直接转发
+        # 消息服务路由（联系相关API）- 必须在 /api/contact/** 之前
+        - id: message-service-contact
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/contact/**
+          # 不StripPrefix，直接转发
+        # 认证服务路由（用户相关API）- 放在最后，作为通用路由
+        # 注意：/api/user/commodity/**、/api/user/order/**、/api/user/message/** 等已被上面的路由处理
+        - id: auth-service-user
+          uri: lb://njumarket-service-auth
+          predicates:
+            - Path=/api/user/**
+          # 不StripPrefix，直接转发到服务（服务内部路径就是/api/user/**）
+        # WebSocket路由（消息服务）
+        - id: websocket-service
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/ws/**
+          filters:
+            - StripPrefix=1  # 将/api/ws转换为/ws，因为message-service的WebSocket端点是/ws
+        # 图片服务路由
+        - id: image-service
+          uri: lb://njumarket-service-image
+          predicates:
+            - Path=/api/images/**
+          # 不StripPrefix，直接转发（服务内部路径就是/api/images/**）
+        # 管理服务路由
+        - id: admin-service
+          uri: lb://njumarket-service-admin
+          predicates:
+            - Path=/api/admin/**
+          # 不StripPrefix，直接转发
+      # 全局CORS配置
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"  # 使用allowedOriginPatterns替代allowedOrigins，支持allowCredentials
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+

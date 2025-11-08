@@ -225,7 +225,7 @@ const getStatusText = (status) => {
 const getAvatarUrl = (avatar) => {
   if (!avatar) return ''
   if (avatar.startsWith('http')) return avatar
-  return `http://localhost:8080/uploads/avatars/${avatar}`
+  return `http://localhost:8080/api/images/avatars/${avatar}`
 }
 </script>
 

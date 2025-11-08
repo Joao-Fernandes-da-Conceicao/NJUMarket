@@ -1,0 +1,59 @@
+server:
+  port: 8093
+
+spring:
+  application:
+    name: njumarket-service-order
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${ORDER_DATASOURCE_URL:jdbc:mysql://localhost:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
+    username: ${ORDER_DATASOURCE_USERNAME:root}
+    password: ${ORDER_DATASOURCE_PASSWORD:Hqz20050316}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${ORDER_REDIS_DATABASE:4}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+# Feign Client 配置
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000  # 连接超时（毫秒）
+        readTimeout: 10000    # 读取超时（毫秒）
+      njumarket-service-commodity:
+        connectTimeout: 3000
+        readTimeout: 8000
+      njumarket-service-auth:
+        connectTimeout: 3000
+        readTimeout: 5000
+      njumarket-service-message:
+        connectTimeout: 3000
+        readTimeout: 5000
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true
+  logging:
+    level:
+      com.njumarket.order.client: DEBUG
+      com.njumarket.order.filter: INFO
+      com.njumarket.order.service: INFO
+      com.njumarket.order.controller: INFO
+      com.njumarket.njumarket.resolver: INFO
+
