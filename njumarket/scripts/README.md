@@ -1,241 +1,232 @@
-# 🧪 测试脚本和文档总览
+# NJUMarket 测试脚本使用指南
 
-## 📁 本文件夹包含什么？
+## 📋 目录说明
 
-这个文件夹包含所有**测试相关的脚本和文档**，用于：
-- ✅ 批量创建测试用户
-- ✅ JMeter压力测试
-- ✅ 验证库存超卖防护
+本目录包含用于测试和演示的脚本文件，适用于**微服务架构版本**。
 
----
+## 📁 文件清单
 
-## 📚 文档导航
+### 核心脚本
 
-### ⚡ 快速开始（5分钟）
-
-**[QUICK_START.md](./QUICK_START.md)** 🚀 **最快上手**
-- 3步完成测试
-- 适合快速验证
-
-### 💻 Windows用户必读
-
-**[WINDOWS_COMMANDS.md](./WINDOWS_COMMANDS.md)** 📖 **Windows命令参考**
-- Windows常用命令
-- 命令对比说明
-- 使用技巧
-
-**[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** 🔧 **故障排查指南**
-- 常见错误及解决方案
-- pip/python命令不可用
-- 连接错误、验证码失败等
-
-### 🎯 新手必读（按顺序阅读）
-
-1. **[README_TESTING.md](./README_TESTING.md)** ⭐ **完整指南**
-   - 从创建用户到运行测试的完整流程
-   - 详细步骤说明
-   - 适合初学者
-
-2. **[README_BATCH_USERS.md](./README_BATCH_USERS.md)**
-   - 如何批量创建测试用户
-   - 脚本使用方法
-
-3. **[JMETER_GUIDE.md](./JMETER_GUIDE.md)**
-   - JMeter快速入门
-   - 如何创建测试计划
-   - 如何查看测试结果
-
-4. **[STOCK_OVERSALE_SOLUTION.md](./STOCK_OVERSALE_SOLUTION.md)**
-   - 库存超卖问题的解决方案
-   - 为什么需要三层保护机制
-
-### 📖 进阶文档
-
-- **[JMETER_STOCK_OVERSALE_TEST.md](./JMETER_STOCK_OVERSALE_TEST.md)** - JMeter详细技术文档
-
----
-
-## 🛠️ 脚本文件
-
-### 用户创建脚本
-
-- **`batch_create_users_simple.py`** ⭐ **推荐使用**
+- **`batch_create_users_simple.py`** - 批量创建测试用户脚本
   - 自动创建100个测试用户
-  - 自动获取token
-  - 最简单易用
+  - 自动获取Token并保存为CSV和JSON格式
+  - 适用于JMeter压力测试
 
-- **`batch_create_users.py`**
-  - 完整版脚本
-  - 支持多种模式
-  - 需要手动输入验证码
+- **`线程组.jmx`** - JMeter测试计划文件
+  - 包含压力测试配置
+  - 需要配合 `user_tokens.csv` 使用
 
 ### 配置文件
 
-- **`requirements.txt`**
-  - Python依赖包列表
-  - 运行 `pip install -r requirements.txt` 安装
+- **`requirements.txt`** - Python依赖包列表
+  - 仅需 `requests` 库
 
-- **`user_tokens_template.csv`**
-  - CSV文件模板
-  - 参考格式
+### 生成文件（运行脚本后自动生成）
 
----
+运行 `batch_create_users_simple.py` 后会自动生成：
+- **`user_tokens.csv`** - 用户Token列表（CSV格式，用于JMeter）
+- **`user_tokens.json`** - 用户Token列表（JSON格式，用于调试）
 
-## 🚀 快速开始（3步）
+**注意**：这些文件会在运行脚本时自动生成，无需手动创建。
 
-### 第1步：创建测试用户
+## 🚀 快速开始
 
-**Windows命令提示符（CMD）**：
+### 前置条件
+
+1. **启动所有微服务**
+   ```bash
+   # Windows
+   start-all-services.bat
+   
+   # Linux/Mac
+   ./start-all-services.sh
+   ```
+
+2. **等待服务启动完成**
+   - 访问 http://localhost:8761 查看 Eureka 控制台
+   - 确保所有服务都已注册成功
+   - 访问 http://localhost:8080 确认 Gateway 正常运行
+
+3. **安装Python依赖**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### 步骤1：创建测试用户
+
+**Windows:**
 ```cmd
-cd njumarket\scripts
-py -m pip install -r requirements.txt
-py batch_create_users_simple.py
+cd scripts
+python batch_create_users_simple.py
 ```
 
-**或者使用PowerShell**：
-```powershell
-cd njumarket\scripts
-py -m pip install -r requirements.txt
-py batch_create_users_simple.py
+**Linux/Mac:**
+```bash
+cd scripts
+python3 batch_create_users_simple.py
 ```
 
-**注意**：
-- 如果 `pip` 命令不可用，使用 `py -m pip` 代替 `pip`
-- 如果 `python` 命令不可用，使用 `py` 代替 `python`
+**输出：**
+- 自动生成 `user_tokens.csv`（用于JMeter）
+- 自动生成 `user_tokens.json`（用于调试）
 
-**输出**：`user_tokens.csv` 文件（包含100个用户的token）
-
-### 第2步：准备测试商品
-
-在数据库中执行：
-```sql
--- 创建测试商品（库存=10）
-INSERT INTO commodities (
-    commodity_id, seller_id, title, price, stock, commodity_status
-) VALUES (
-    'test-commodity-001',
-    'USER_xxx',  -- 替换为实际的seller_id
-    '测试商品',
-    100.00,
-    10,
-    'ON_SHELF'
-);
-```
-
-### 第3步：运行JMeter测试
+### 步骤2：运行JMeter测试
 
 1. 打开JMeter
-2. 创建测试计划（参考 [JMETER_GUIDE.md](./JMETER_GUIDE.md)）
-3. 使用 `user_tokens.csv` 作为CSV数据源
-4. 运行测试
+2. 打开 `线程组.jmx` 文件
+3. 配置CSV数据源：
+   - 使用 `user_tokens.csv` 作为数据源
+   - 配置变量名：`username`, `phone`, `token`, `userId`
+4. 运行测试计划
 
-**详细步骤**：查看 [README_TESTING.md](./README_TESTING.md) 或 [QUICK_START.md](./QUICK_START.md)
+## 📝 脚本配置说明
 
----
+### batch_create_users_simple.py
 
-## 📊 测试流程概览
-
-```
-┌─────────────────┐
-│ 1. 创建测试用户 │  ← 使用 batch_create_users_simple.py
-└────────┬────────┘
-         │
-         ↓
-┌─────────────────┐
-│ 2. 准备测试商品 │  ← 在数据库中创建
-└────────┬────────┘
-         │
-         ↓
-┌─────────────────┐
-│ 3. 配置JMeter   │  ← 参考 JMETER_GUIDE.md
-└────────┬────────┘
-         │
-         ↓
-┌─────────────────┐
-│ 4. 运行测试     │  ← 100个并发用户
-└────────┬────────┘
-         │
-         ↓
-┌─────────────────┐
-│ 5. 验证结果     │  ← 检查库存和订单数
-└─────────────────┘
+**配置项：**
+```python
+BASE_URL = "http://localhost:8080"      # API Gateway 地址
+API_PREFIX = "/api/user/auth"           # 认证服务路径
+USER_COUNT = 100                        # 创建用户数量
+PASSWORD = "123456"                     # 默认密码
+USERNAME_PREFIX = "username_test"       # 用户名前缀
 ```
 
----
+**生成规则：**
+- 手机号：`13800000001` 到 `13800000100`
+- 用户名：`username_test_1` 到 `username_test_100`
+- 密码：统一为 `123456`
 
-## 🎓 学习路径
+**输出格式：**
 
-### 学习路径推荐
+**CSV格式（user_tokens.csv）：**
+```csv
+username,phone,token,userId
+username_test_1,13800000001,eyJhbGciOi...,user_001
+username_test_2,13800000002,eyJhbGciOi...,user_002
+...
+```
 
-#### 路径1：快速验证（5分钟）
-1. 阅读 [QUICK_START.md](./QUICK_START.md)
-2. 跟着步骤操作
-3. 验证结果
+**JSON格式（user_tokens.json）：**
+```json
+[
+  {
+    "username": "username_test_1",
+    "phone": "13800000001",
+    "token": "eyJhbGciOi...",
+    "refreshToken": "eyJhbGciOi...",
+    "userId": "user_001"
+  },
+  ...
+]
+```
 
-#### 路径2：完整学习（30分钟）
-1. **第一步**：阅读 [README_TESTING.md](./README_TESTING.md)
-   - 了解完整的测试流程
-   - 跟着步骤操作
+## 🔧 故障排查
 
-2. **第二步**：运行脚本创建用户
-   - 参考 [README_BATCH_USERS.md](./README_BATCH_USERS.md)
+### 问题1：连接失败
 
-3. **第三步**：学习JMeter
-   - 参考 [JMETER_GUIDE.md](./JMETER_GUIDE.md)
+**错误信息：** `Connection refused` 或 `无法连接到服务器`
 
-4. **第四步**：理解解决方案
-   - 参考 [STOCK_OVERSALE_SOLUTION.md](./STOCK_OVERSALE_SOLUTION.md)
+**解决方案：**
+1. 确认所有微服务已启动
+2. 检查 Gateway 是否运行在 `http://localhost:8080`
+3. 检查防火墙设置
 
----
+### 问题2：用户已存在
 
-## ❓ 常见问题
+**错误信息：** `该手机号已注册` 或 `用户已存在`
 
-### Q: 我应该从哪里开始？
+**解决方案：**
+- 脚本会自动尝试登录已存在的用户
+- 如果登录失败，需要手动清理数据库或使用不同的手机号范围
 
-**A**: 
-- **想快速验证**：看 [QUICK_START.md](./QUICK_START.md)
-- **想完整学习**：看 [README_TESTING.md](./README_TESTING.md)
+### 问题3：Python命令不可用
 
-### Q: 脚本运行失败怎么办？
+**Windows:**
+```cmd
+# 使用 py 命令代替 python
+py batch_create_users_simple.py
 
-**A**: 
-1. 检查后端服务是否运行（`http://localhost:8080`）
-2. 检查Redis是否运行
-3. 查看脚本输出的错误信息
+# 或使用 python3
+python3 batch_create_users_simple.py
+```
 
-### Q: JMeter不会用怎么办？
+**Linux/Mac:**
+```bash
+# 使用 python3
+python3 batch_create_users_simple.py
+```
 
-**A**: 查看 [JMETER_GUIDE.md](./JMETER_GUIDE.md)，里面有详细的图文说明。
+### 问题4：依赖包安装失败
 
-### Q: 测试结果怎么看？
+**解决方案：**
+```bash
+# 使用 pip3
+pip3 install -r requirements.txt
 
-**A**: 
-1. 查看数据库中的库存和订单数
-2. 查看JMeter的聚合报告
-3. 参考 [README_TESTING.md](./README_TESTING.md) 中的验证步骤
+# 或使用 py -m pip (Windows)
+py -m pip install -r requirements.txt
+```
 
----
+## 📊 JMeter测试说明
 
-## 📝 文件清单
+### 配置CSV数据源
 
-### 📚 文档（7个）
-1. **README.md** - 本文件（总览和导航）
-2. **QUICK_START.md** - 5分钟快速开始 ⚡
-3. **README_TESTING.md** - 完整测试指南 ⭐
-4. **README_BATCH_USERS.md** - 用户创建脚本说明
-5. **JMETER_GUIDE.md** - JMeter快速入门
-6. **STOCK_OVERSALE_SOLUTION.md** - 库存超卖解决方案
-7. **JMETER_STOCK_OVERSALE_TEST.md** - JMeter详细技术文档
+1. 添加 **CSV Data Set Config**
+2. 配置：
+   - Filename: `user_tokens.csv`
+   - Variable Names: `username,phone,token,userId`
+   - Delimiter: `,`
+   - Recycle on EOF: `True`
+   - Stop thread on EOF: `False`
 
-### 🛠️ 脚本（2个）
-1. **batch_create_users_simple.py** - 简化版用户创建脚本 ⭐推荐
-2. **batch_create_users.py** - 完整版用户创建脚本
+### 使用Token
 
-### 📋 配置文件（2个）
-1. **requirements.txt** - Python依赖包
-2. **user_tokens_template.csv** - CSV文件模板
+在HTTP请求头中添加：
+```
+Authorization: Bearer ${token}
+```
 
----
+### 测试场景
 
-**适合人群**：初学者开发者  
-**最后更新**：2025-01-XX
+- **商品浏览**：`GET /api/public/commodity/search`
+- **下单测试**：`POST /api/user/order/create`
+- **订单查询**：`GET /api/user/order/buyer`
+
+## 🏗️ 微服务架构说明
+
+本脚本通过 **API Gateway** 访问后端服务：
+
+```
+Python脚本 → API Gateway (8080) → Auth Service (8091)
+```
+
+**API路径：**
+- 注册：`POST http://localhost:8080/api/user/auth/register-new`
+- 登录：`POST http://localhost:8080/api/user/auth/login`
+
+**注意：**
+- 所有请求必须通过 Gateway（端口8080）
+- 不要直接访问各个微服务的端口
+- Gateway 负责路由和认证
+
+## 📚 相关文档
+
+- 项目文档：`../docs/PROJECT_DOCUMENTATION_V2.0.md`
+- 微服务配置：`../docs/MICROSERVICES_SETUP_GUIDE.md`
+- 数据库初始化：`../database/README.md`
+
+## ⚠️ 注意事项
+
+1. **测试环境专用**：本脚本仅用于测试环境，不要在生产环境使用
+2. **密码安全**：生成的用户密码统一为 `123456`，仅用于测试
+3. **数据清理**：测试完成后建议清理测试用户数据
+4. **服务依赖**：确保所有微服务正常运行后再执行脚本
+
+## 🎯 适用场景
+
+- ✅ 软件工程课程演示
+- ✅ 压力测试准备
+- ✅ 功能测试数据准备
+- ✅ 开发环境快速搭建

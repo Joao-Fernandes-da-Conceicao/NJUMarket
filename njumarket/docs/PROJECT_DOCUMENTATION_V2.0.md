@@ -2,6 +2,7 @@
 
 ## 📋 目录
 - [版本概述](#版本概述)
+- [快速启动指南](#快速启动指南)
 - [从单体到微服务：不仅仅是代码迁移](#从单体到微服务不仅仅是代码迁移)
 - [微服务架构设计](#微服务架构设计)
 - [核心连接规范与实现](#核心连接规范与实现)
@@ -1037,6 +1038,133 @@ if (!"ACTIVE".equals(user.getAccountStatus())) {
 
 ---
 
+## 快速启动指南
+
+### 前置要求
+
+- **JDK**: 17+
+- **Maven**: 3.6+
+- **MySQL**: 8.0+
+- **Redis**: 6.0+
+
+### 启动步骤
+
+#### 1. 启动MySQL和Redis
+
+确保MySQL和Redis服务已启动并运行。
+
+#### 2. 初始化数据库
+
+执行 `database/schema.sql` 脚本创建数据库结构：
+
+   ```bash
+mysql -u root -p nju_market < database/schema.sql
+```
+
+#### 3. 启动Eureka Server
+
+```bash
+cd njumarket/njumarket-discovery
+   mvn spring-boot:run
+   ```
+
+**验证**: 访问 http://localhost:8761
+
+#### 4. 启动各微服务
+
+**方式一：使用启动脚本（推荐）**
+
+   ```bash
+# Windows
+start-all-services.bat
+
+# Linux/Mac
+./start-all-services.sh
+```
+
+**方式二：分别启动（用于开发调试）**
+
+```bash
+# 终端1 - Auth Service (8091)
+cd njumarket/njumarket-service-auth
+   mvn spring-boot:run
+   
+# 终端2 - Commodity Service (8092)
+cd njumarket/njumarket-service-commodity
+   mvn spring-boot:run
+   
+# 终端3 - Order Service (8093)
+cd njumarket/njumarket-service-order
+   mvn spring-boot:run
+   
+# 终端4 - Message Service (8094)
+cd njumarket/njumarket-service-message
+mvn spring-boot:run
+
+# 终端5 - Image Service (8095)
+cd njumarket/njumarket-service-image
+mvn spring-boot:run
+
+# 终端6 - Admin Service (8096)
+cd njumarket/njumarket-service-admin
+   mvn spring-boot:run
+   ```
+
+**方式三：使用IDE**
+
+在IDE中分别运行各服务的Application类：
+- `DiscoveryServerApplication` (8761)
+- `GatewayApplication` (8080)
+- `AuthServiceApplication` (8091)
+- `CommodityServiceApplication` (8092)
+- `OrderServiceApplication` (8093)
+- `MessageServiceApplication` (8094)
+- `ImageServiceApplication` (8095)
+- `AdminServiceApplication` (8096)
+
+#### 5. 启动Gateway
+
+   ```bash
+cd njumarket/njumarket-gateway
+   mvn spring-boot:run
+   ```
+
+**验证**: 访问 http://localhost:8080
+
+### 验证服务注册
+
+访问 Eureka Dashboard: http://localhost:8761
+
+应看到以下服务：
+- `njumarket-gateway`
+- `njumarket-service-auth`
+- `njumarket-service-commodity`
+- `njumarket-service-order`
+- `njumarket-service-message`
+- `njumarket-service-image`
+- `njumarket-service-admin`
+
+### 测试API
+
+通过Gateway访问API：
+
+```bash
+# 测试Gateway健康检查
+curl http://localhost:8080/actuator/health
+
+# 测试服务路由
+curl http://localhost:8080/api/public/commodity/search
+```
+
+### 注意事项
+
+1. **启动顺序**: 必须先启动Eureka Server，再启动其他服务
+2. **端口占用**: 确保端口8761, 8080, 8091-8096未被占用
+3. **数据库**: 确保数据库已创建并配置正确
+4. **Redis**: 确保Redis服务运行正常
+
+---
+
 ## 技术栈与配置
 
 ### 后端技术栈
@@ -1065,6 +1193,117 @@ if (!"ACTIVE".equals(user.getAccountStatus())) {
 - **Maven**: 3.6+
 - **MySQL**: 8.0+
 - **Redis**: 6.0+
+
+### 配置标准化
+
+#### Redis配置统一
+
+**各服务的Redis数据库分配**：
+- `auth-service`: database 2
+- `commodity-service`: database 2
+- `message-service`: database 3
+- `order-service`: database 4
+- `gateway`: database 2
+
+**标准配置格式**：
+```yaml
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${AUTH_REDIS_DATABASE:2}  # 每个服务使用不同的数据库
+```
+
+#### Feign Client配置统一
+
+**标准配置**：
+```yaml
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000  # 连接超时（毫秒）
+        readTimeout: 10000     # 读取超时（毫秒）
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true
+```
+
+#### 日志配置统一
+
+**标准配置**：
+```yaml
+logging:
+  level:
+    com.njumarket.{service}.client: DEBUG      # Feign Client 调用日志
+    com.njumarket.{service}.filter: INFO        # Filter 日志
+    com.njumarket.{service}.service: INFO       # Service 日志
+    com.njumarket.{service}.controller: INFO   # Controller 日志
+    com.njumarket.njumarket.resolver: INFO      # 参数解析器日志
+```
+
+#### WebMvcConfig配置
+
+所有使用 `@CurrentUser` 注解的服务都需要创建 `WebMvcConfig`：
+
+```java
+@Configuration
+@RequiredArgsConstructor
+public class WebMvcConfig implements WebMvcConfigurer {
+    private final CurrentUserArgumentResolver currentUserArgumentResolver;
+
+    @Override
+    public void addArgumentResolvers(@NonNull List<HandlerMethodArgumentResolver> resolvers) {
+        resolvers.add(currentUserArgumentResolver);
+    }
+}
+```
+
+#### 配置规范检查清单
+
+每个微服务都应该包含以下配置：
+
+1. **服务基本信息**
+   - `server.port`: 服务端口
+   - `spring.application.name`: 服务名称
+
+2. **数据库配置**
+   - `spring.datasource.*`: 数据源配置
+   - `spring.jpa.*`: JPA 配置
+
+3. **Redis配置**（如果服务使用Redis）
+   - `spring.data.redis.*`: Redis连接配置
+   - 使用环境变量支持不同环境
+
+4. **Eureka配置**
+   - `eureka.client.service-url.defaultZone`: Eureka服务地址
+
+5. **Feign Client配置**（如果服务调用其他服务）
+   - `feign.client.config.*`: 超时配置
+   - `feign.compression.*`: 压缩配置
+
+6. **日志配置**
+   - `logging.level.*`: 日志级别配置
+   - 至少包含：service、controller、filter、resolver
+
+7. **WebMvcConfig**（如果使用 `@CurrentUser` 注解）
+   - 注册 `CurrentUserArgumentResolver`
+
+#### 内部接口路径规范
+
+- **内部接口**（服务间调用）：`/api/internal`
+- **公开接口**（前端调用）：`/api/public` 或 `/api/user`
+- **管理接口**：`/api/admin`
+
+#### 服务间调用规范
+
+1. 服务间调用必须使用 Feign Client
+2. 禁止直接注入其他服务的 Repository 或 Service
+3. 服务间传输数据必须使用内部 DTO，不能直接传输 Entity
 
 ---
 
@@ -1213,9 +1452,8 @@ NJUMarket v2.0 完成了从单体架构到微服务架构的重大升级，**不
 
 ---
 
-## 相关文档
+## 相关资源
 
-- [微服务配置规范化](./MICROSERVICE_CONFIGURATION_STANDARDIZATION.md)
-- [安全机制重构总结](./SECURITY_REFACTORING_SUMMARY.md)
-- [Feign Client迁移指南](./FEIGN_CLIENT_MIGRATION_GUIDE.md)
-- [2.1.x版本TODO](./TODO_V2.1.x.md)
+- **数据库初始化**: 参见 `database/README.md`
+- **测试脚本**: 参见 `scripts/README.md`
+- **项目根目录**: 包含启动脚本 `start-all-services.bat` / `start-all-services.sh`

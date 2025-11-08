@@ -1,0 +1,101 @@
+# ============================================
+# NJUMarket 项目根目录 .gitignore
+# ============================================
+
+# 上传文件目录（自动生成，不应提交到版本控制）
+uploads/
+uploads/**
+
+# ============================================
+# IDE 配置
+# ============================================
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+*.swp
+*.swo
+*~
+
+# ============================================
+# 系统文件
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ============================================
+# 日志文件
+# ============================================
+*.log
+*.log.*
+logs/
+*.out
+
+# ============================================
+# 环境变量文件
+# ============================================
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ============================================
+# 临时文件
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.cache
+*.swp
+*.swo
+
+# ============================================
+# 编译输出（后端）
+# ============================================
+njumarket/**/target/
+njumarket/.mvn/wrapper/maven-wrapper.jar
+njumarket/.mvn/wrapper/maven-wrapper.properties
+
+# ============================================
+# 编译输出（前端）
+# ============================================
+njumarket-front/**/node_modules/
+njumarket-front/**/dist/
+njumarket-front/**/.nuxt/
+njumarket-front/**/.next/
+njumarket-front/**/.cache/
+njumarket-front/**/.parcel-cache/
+njumarket-front/**/.vite/
+
+njumarket-front-admin/**/node_modules/
+njumarket-front-admin/**/dist/
+njumarket-front-admin/**/.nuxt/
+njumarket-front-admin/**/.next/
+njumarket-front-admin/**/.cache/
+njumarket-front-admin/**/.parcel-cache/
+njumarket-front-admin/**/.vite/
+
+# ============================================
+# 测试覆盖率报告
+# ============================================
+coverage/
+*.lcov
+.nyc_output/
+
+# ============================================
+# 其他
+# ============================================
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache

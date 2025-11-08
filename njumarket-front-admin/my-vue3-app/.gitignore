@@ -1,68 +1,39 @@
 # ============================================
-# NJUMarket 后端项目 .gitignore
+# NJUMarket 前端管理端项目 .gitignore
 # ============================================
 
 # ============================================
-# Maven 构建输出
+# 依赖目录
 # ============================================
-target/
-!**/src/main/**/target/
-!**/src/test/**/target/
-.mvn/wrapper/maven-wrapper.jar
-.mvn/wrapper/maven-wrapper.properties
+node_modules/
+.pnp
+.pnp.js
 
 # ============================================
-# 编译类文件
+# 构建输出
 # ============================================
-*.class
-*.jar
-*.war
-*.ear
-*.nar
-hs_err_pid*
-
-# ============================================
-# IDE 配置
-# ============================================
-### IntelliJ IDEA ###
-.idea/
-*.iws
-*.iml
-*.ipr
-out/
-
-### Eclipse ###
-.classpath
-.project
-.settings/
-bin/
-tmp/
-*.tmp
-*.bak
-*.swp
-*~.nib
-local.properties
-.loadpath
-.recommenders
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+dist/
+dist-ssr/
 build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+.nuxt/
+.next/
+out/
+.output/
+.vercel/
+.netlify/
 
-### VS Code ###
-.vscode/
-*.code-workspace
-
-### STS ###
-.apt_generated
-.springBeans
-.sts4-cache/
+# ============================================
+# 缓存目录
+# ============================================
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+.npm/
+.yarn/
+.pnp.*
+.eslintcache
+.stylelintcache
 
 # ============================================
 # 上传文件目录（自动生成，不应提交到版本控制）
@@ -71,19 +42,49 @@ uploads/
 uploads/**
 
 # ============================================
-# 日志文件
-# ============================================
-*.log
-*.log.*
-logs/
-*.out
-
-# ============================================
 # 环境变量文件
 # ============================================
 .env
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
 .env.*.local
+
+# ============================================
+# 日志文件
+# ============================================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# ============================================
+# IDE 配置
+# ============================================
+### IntelliJ IDEA ###
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+### VS Code ###
+.vscode/
+*.code-workspace
+
+### Visual Studio ###
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+### Sublime Text ###
+*.sublime-project
+*.sublime-workspace
 
 # ============================================
 # 系统文件
@@ -91,9 +92,19 @@ logs/
 .DS_Store
 .DS_Store?
 ._*
-Thumbs.db
+.Spotlight-V100
+.Trashes
 ehthumbs.db
+Thumbs.db
 Desktop.ini
+
+# ============================================
+# 测试覆盖率报告
+# ============================================
+coverage/
+*.lcov
+.nyc_output/
+.jest/
 
 # ============================================
 # 临时文件
@@ -107,17 +118,11 @@ Desktop.ini
 *~
 
 # ============================================
-# 测试覆盖率报告
-# ============================================
-coverage/
-*.lcov
-.nyc_output/
-.jacoco/
-
-# ============================================
 # 其他
 # ============================================
-HELP.md
 *.pid
 *.seed
 *.pid.lock
+.npm
+.yarn-integrity
+

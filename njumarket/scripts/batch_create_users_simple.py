@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-简化版批量用户创建脚本
-无需验证码，直接注册用户
+批量用户创建脚本（微服务版本）
+通过 API Gateway 批量创建测试用户并获取 Token
 
 使用方法：
 python batch_create_users_simple.py
+
+注意：
+- 需要先启动所有微服务（使用 start-all-services.bat 或 start-all-services.sh）
+- API Gateway 默认运行在 http://localhost:8080
+- 脚本会自动生成 user_tokens.csv 和 user_tokens.json 文件
 """
 
 import requests
@@ -14,9 +19,9 @@ import json
 import csv
 from typing import List, Dict, Optional
 
-# 配置
-BASE_URL = "http://localhost:8080"
-API_PREFIX = "/api/user/auth"
+# 配置（微服务架构 - 通过 Gateway 访问）
+BASE_URL = "http://localhost:8080"  # API Gateway 地址
+API_PREFIX = "/api/user/auth"       # 认证服务路径（通过 Gateway 路由）
 
 # 用户配置
 USER_COUNT = 100
@@ -61,10 +66,12 @@ class SimpleUserCreator:
                 result = response.json()
                 if result.get("success"):
                     data = result.get("data", {})
+                    # 兼容 accessToken 和 token 两种字段名
+                    token = data.get("accessToken") or data.get("token")
                     return {
                         "username": username,
                         "phone": phone,
-                        "token": data.get("token"),
+                        "token": token,
                         "refreshToken": data.get("refreshToken"),
                         "userId": data.get("userInfo", {}).get("userId")
                     }
@@ -103,9 +110,11 @@ class SimpleUserCreator:
                 result = response.json()
                 if result.get("success"):
                     data = result.get("data", {})
+                    # 兼容 accessToken 和 token 两种字段名
+                    token = data.get("accessToken") or data.get("token")
                     return {
                         "phone": phone,
-                        "token": data.get("token"),
+                        "token": token,
                         "refreshToken": data.get("refreshToken"),
                         "userId": data.get("userInfo", {}).get("userId")
                     }
