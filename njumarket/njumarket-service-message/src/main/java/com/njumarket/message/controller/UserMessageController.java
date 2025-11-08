@@ -3,6 +3,7 @@ package com.njumarket.message.controller;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.MessageDTO;
 import com.njumarket.message.service.MessageService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,7 +27,7 @@ public class UserMessageController {
         @ApiResponse(responseCode = "404", description = "接收用户不存在")
     })
     @PostMapping("/send")
-    public Result sendMessage(@RequestBody MessageDTO messageDTO) {
+    public Result sendMessage(@Valid @RequestBody MessageDTO messageDTO) {
         return messageService.sendMessage(messageDTO);
     }
 

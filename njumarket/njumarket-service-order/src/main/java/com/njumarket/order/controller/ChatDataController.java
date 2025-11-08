@@ -1,6 +1,7 @@
 package com.njumarket.order.controller;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.vo.IncrementalUpdateResultVO;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.order.service.OrderService;
 import com.njumarket.order.client.ChangeRecordClient;
@@ -50,7 +51,6 @@ public class ChatDataController {
                description = "根据上次轮询的时间戳，查询之后变更的商品和订单信息，用于聊天界面增量更新")
     @GetMapping("/incremental-update")
     public Result getIncrementalUpdate(@RequestParam String lastPollTimestamp) {
-        try {
             log.info("Incremental update request - lastPollTimestamp: {}", lastPollTimestamp);
             
             // Parse timestamp (supports various ISO formats)
@@ -80,7 +80,7 @@ public class ChatDataController {
                 }
             } catch (Exception e) {
                 log.error("Timestamp format error: {}, error message: {}", lastPollTimestamp, e.getMessage());
-                throw new BusinessException("Timestamp format error, please use ISO format (e.g., 2025-01-20T10:30:00 or 2025-01-20T10:30:00.000Z)");
+            throw new BusinessException("Timestamp format error, please use ISO format (e.g., 2025-01-20T10:30:00 or 2025-01-20T10:30:00.000Z)");
             }
             
             // Note: timestamp已转换为系统时区，但epoch秒数计算使用UTC（与Redis ZSet score计算方式一致）
@@ -134,34 +134,60 @@ public class ChatDataController {
             }
             
             // 3. 批量查询商品和订单的最新状态
-            Map<String, Object> result = new HashMap<>();
+        IncrementalUpdateResultVO result = new IncrementalUpdateResultVO();
             
             // ✅ 查询商品（使用Feign Client）
             if (!commodityIds.isEmpty()) {
                 Result commodityResult = commodityQueryClient.getCommoditiesBatchStatus(
                     new ArrayList<>(commodityIds)
                 );
-                if (commodityResult.getSuccess()) {
-                    result.put("commodities", commodityResult.getData());
-                } else {
-                    log.warn("Failed to batch query commodity status: {}", commodityResult.getMessage());
-                    result.put("commodities", new ArrayList<>());
+            if (commodityResult.getSuccess() && commodityResult.getData() != null) {
+                // 注意：getCommoditiesBatchStatus 返回的是 List<Map<String, Object>>，不是 List<CommodityDTO>
+                // 需要转换为 CommodityDTO 列表
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> commodityMaps = (List<Map<String, Object>>) commodityResult.getData();
+                List<com.njumarket.njumarket.dto.CommodityDTO> commodities = new ArrayList<>();
+                for (Map<String, Object> commodityMap : commodityMaps) {
+                    try {
+                        com.njumarket.njumarket.dto.CommodityDTO commodityDTO = objectMapper.convertValue(commodityMap, com.njumarket.njumarket.dto.CommodityDTO.class);
+                        commodities.add(commodityDTO);
+                    } catch (Exception e) {
+                        log.warn("Failed to convert commodity map to CommodityDTO: {}, error: {}", commodityMap, e.getMessage());
+                    }
                 }
+                result.setCommodities(commodities);
             } else {
-                result.put("commodities", new ArrayList<>());
+                log.warn("Failed to batch query commodity status: {}", commodityResult.getMessage());
+                result.setCommodities(new ArrayList<>());
+            }
+        } else {
+            result.setCommodities(new ArrayList<>());
             }
             
             // Query orders
             if (!orderIds.isEmpty()) {
                 Result orderResult = orderService.getOrdersBatchStatus(new ArrayList<>(orderIds));
-                if (orderResult.getSuccess()) {
-                    result.put("orders", orderResult.getData());
-                } else {
-                    log.warn("Failed to batch query order status: {}", orderResult.getMessage());
-                    result.put("orders", new ArrayList<>());
+            if (orderResult.getSuccess() && orderResult.getData() != null) {
+                // 注意：getOrdersBatchStatus 返回的是 List<Map<String, Object>>，不是 List<OrderDTO>
+                // 需要转换为 OrderDTO 列表
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> orderMaps = (List<Map<String, Object>>) orderResult.getData();
+                List<com.njumarket.njumarket.dto.OrderDTO> orders = new ArrayList<>();
+                for (Map<String, Object> orderMap : orderMaps) {
+                    try {
+                        com.njumarket.njumarket.dto.OrderDTO orderDTO = objectMapper.convertValue(orderMap, com.njumarket.njumarket.dto.OrderDTO.class);
+                        orders.add(orderDTO);
+                    } catch (Exception e) {
+                        log.warn("Failed to convert order map to OrderDTO: {}, error: {}", orderMap, e.getMessage());
+                    }
                 }
+                result.setOrders(orders);
             } else {
-                result.put("orders", new ArrayList<>());
+                log.warn("Failed to batch query order status: {}", orderResult.getMessage());
+                result.setOrders(new ArrayList<>());
+            }
+        } else {
+            result.setOrders(new ArrayList<>());
             }
             
             // 4. Return result
@@ -169,6 +195,6 @@ public class ChatDataController {
             log.info("Incremental query completed - commodities: {}, orders: {}, total changes: {}", 
                 commodityIds.size(), orderIds.size(), totalChanges);
             
-        return Result.ok("Incremental query successful", result);
+            return Result.ok("Incremental query successful", result);
     }
 }

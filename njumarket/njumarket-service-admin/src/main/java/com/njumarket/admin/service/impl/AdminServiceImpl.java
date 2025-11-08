@@ -2,6 +2,7 @@ package com.njumarket.admin.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.AdminLoginDTO;
+import com.njumarket.njumarket.vo.*;
 import com.njumarket.njumarket.entity.Admin;
 import com.njumarket.njumarket.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,15 +59,9 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result login(AdminLoginDTO loginDTO, HttpSession session) {
         try {
-            // 1. 参数验证
-            if (!StringUtils.hasText(loginDTO.getUsername())) {
-                throw new BusinessException("用户名不能为空");
-            }
-            if (!StringUtils.hasText(loginDTO.getPassword())) {
-                throw new BusinessException("密码不能为空");
-            }
+            // 参数验证已由@Valid注解自动完成，无需手动验证
 
-            // 2. 查找管理员
+            // 1. 查找管理员
             Optional<Admin> adminOpt = adminRepository.findByUsername(loginDTO.getUsername().trim());
             if (adminOpt.isEmpty()) {
                 log.warn("error in username, 管理员登录失败: 用户名不存在, username={}", loginDTO.getUsername());
@@ -93,7 +88,7 @@ public class AdminServiceImpl implements AdminService {
             adminRepository.save(admin);
 
             // 6. 生成Token
-            Map<String, Object> tokenResult = generateAndStoreTokens(admin);
+            AdminLoginResultVO tokenResult = generateAndStoreTokens(admin);
 
             // 7. 存储到Session
             session.setAttribute("admin", admin);
@@ -212,7 +207,7 @@ public class AdminServiceImpl implements AdminService {
             log.info("创建管理员成功: adminId={}, username={}, operatorId={}", 
                 savedAdmin.getAdminId(), savedAdmin.getUsername(), currentAdmin.getAdminId());
 
-            Map<String, Object> result = toSimpleAdmin(savedAdmin);
+            AdminSimpleVO result = toSimpleAdmin(savedAdmin);
             return Result.ok("创建管理员成功", result);
 
         } catch (BusinessException e) {
@@ -349,18 +344,16 @@ public class AdminServiceImpl implements AdminService {
             Page<Admin> adminPage = adminRepository.findAll(spec, pageable);
 
             // ✅ 移除密码字段，避免返回敏感信息
-            List<Map<String, Object>> adminList = new ArrayList<>();
-            for (Admin admin : adminPage.getContent()) {
-                Map<String, Object> adminMap = toSimpleAdmin(admin);
-                adminList.add(adminMap);
-            }
+            List<AdminSimpleVO> adminList = adminPage.getContent().stream()
+                    .map(this::toSimpleAdmin)
+                    .collect(java.util.stream.Collectors.toList());
 
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", adminList);
-            result.put("total", adminPage.getTotalElements());
-            result.put("page", page);
-            result.put("size", size);
-            result.put("totalPages", adminPage.getTotalPages());
+            PageResultVO<AdminSimpleVO> result = new PageResultVO<>();
+            result.setList(adminList);
+            result.setTotal(adminPage.getTotalElements());
+            result.setCurrent(page);
+            result.setSize(size);
+            result.setPages(adminPage.getTotalPages());
 
             return Result.ok(result);
 
@@ -388,7 +381,7 @@ public class AdminServiceImpl implements AdminService {
 
             Admin admin = adminOpt.get();
             // ✅ 返回简化的管理员信息（不包含密码）
-            Map<String, Object> adminMap = toSimpleAdmin(admin);
+            AdminSimpleVO adminMap = toSimpleAdmin(admin);
 
             return Result.ok(adminMap);
 
@@ -480,15 +473,15 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result getAdminStatistics() {
         try {
-            Map<String, Object> statistics = new HashMap<>();
+            AdminStatisticsVO statistics = new AdminStatisticsVO();
             
             // 总管理员数
             long totalAdmins = adminRepository.count();
-            statistics.put("totalAdmins", totalAdmins);
+            statistics.setTotalAdmins(totalAdmins);
             
             // 活跃管理员数
             long activeAdmins = adminRepository.countActiveAdmins();
-            statistics.put("activeAdmins", activeAdmins);
+            statistics.setActiveAdmins(activeAdmins);
             
             // 各级别管理员数量
             List<Object[]> levelCounts = adminRepository.countAdminsByLevel();
@@ -496,15 +489,15 @@ public class AdminServiceImpl implements AdminService {
             for (Object[] levelCount : levelCounts) {
                 levelStats.put((String) levelCount[0], (Long) levelCount[1]);
             }
-            statistics.put("levelStats", levelStats);
+            statistics.setLevelStats(levelStats);
             
             // 系统管理员数量
             long systemAdmins = adminRepository.findByAdminLevel("system").size();
-            statistics.put("systemAdmins", systemAdmins);
+            statistics.setSystemAdmins(systemAdmins);
             
             // 普通管理员数量
             long administratorCount = adminRepository.findByAdminLevel("administrator").size();
-            statistics.put("administratorCount", administratorCount);
+            statistics.setAdministratorCount(administratorCount);
             
             return Result.ok(statistics);
 
@@ -525,10 +518,10 @@ public class AdminServiceImpl implements AdminService {
             Admin admin = adminOpt.get();
             boolean hasPermission = admin.hasPermission(permission);
 
-            Map<String, Object> result = new HashMap<>();
-            result.put("adminId", adminId);
-            result.put("permission", permission);
-            result.put("hasPermission", hasPermission);
+            PermissionCheckVO result = new PermissionCheckVO();
+            result.setAdminId(adminId);
+            result.setPermission(permission);
+            result.setHasPermission(hasPermission);
 
             return Result.ok(result);
 
@@ -636,7 +629,7 @@ public class AdminServiceImpl implements AdminService {
 
             log.info("更新管理员信息成功: adminId={}, operatorId={}", adminId, currentAdmin.getAdminId());
 
-            Map<String, Object> result = toSimpleAdmin(admin);
+            AdminSimpleVO result = toSimpleAdmin(admin);
             return Result.ok("更新成功", result);
 
         } catch (BusinessException e) {
@@ -677,16 +670,16 @@ public class AdminServiceImpl implements AdminService {
     /**
      * 生成并存储Token
      */
-    private Map<String, Object> generateAndStoreTokens(Admin admin) {
+    private AdminLoginResultVO generateAndStoreTokens(Admin admin) {
         // 生成JWT Token
         String token = jwtUtils.generateToken(admin.getAdminId(), admin.getUsername());
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("token", token);
-        result.put("adminId", admin.getAdminId());
-        result.put("username", admin.getUsername());
-        result.put("adminLevel", admin.getAdminLevel());
-        result.put("expiresIn", 24 * 60 * 60); // 24小时
+        AdminLoginResultVO result = new AdminLoginResultVO();
+        result.setToken(token);
+        result.setAdminId(admin.getAdminId());
+        result.setUsername(admin.getUsername());
+        result.setAdminLevel(admin.getAdminLevel());
+        result.setExpiresIn(24 * 60 * 60L); // 24小时
         
         return result;
     }
@@ -756,12 +749,12 @@ public class AdminServiceImpl implements AdminService {
                     .map(this::toSimpleUser)
                     .collect(java.util.stream.Collectors.toList());
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", simpleList);
-            result.put("total", userPage.getTotalElements());
-            result.put("pages", userPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
+            PageResultVO<Map<String, Object>> result = new PageResultVO<>();
+            result.setList(simpleList);
+            result.setTotal(userPage.getTotalElements());
+            result.setPages(userPage.getTotalPages());
+            result.setCurrent(page);
+            result.setSize(size);
             return Result.ok(result);
         } catch (Exception e) {
             log.error("获取用户列表异常: {}", e.getMessage(), e);
@@ -1110,12 +1103,12 @@ public class AdminServiceImpl implements AdminService {
                     })
                     .collect(java.util.stream.Collectors.toList());
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", commodityList);
-            result.put("total", commodityPage.getTotalElements());
-            result.put("pages", commodityPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
+            PageResultVO<Map<String, Object>> result = new PageResultVO<>();
+            result.setList(commodityList);
+            result.setTotal(commodityPage.getTotalElements());
+            result.setPages(commodityPage.getTotalPages());
+            result.setCurrent(page);
+            result.setSize(size);
             
             return Result.ok(result);
         } catch (Exception e) {
@@ -1282,12 +1275,12 @@ public class AdminServiceImpl implements AdminService {
                     })
                     .collect(java.util.stream.Collectors.toList());
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("list", orderList);
-            result.put("total", orderPage.getTotalElements());
-            result.put("pages", orderPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
+            PageResultVO<Map<String, Object>> result = new PageResultVO<>();
+            result.setList(orderList);
+            result.setTotal(orderPage.getTotalElements());
+            result.setPages(orderPage.getTotalPages());
+            result.setCurrent(page);
+            result.setSize(size);
             
             return Result.ok(result);
         } catch (Exception e) {
@@ -1735,27 +1728,27 @@ public class AdminServiceImpl implements AdminService {
 
     // ===================== 简化映射，避免循环引用 =====================
     /**
-     * 将管理员实体转换为简单Map（不包含密码）
+     * 将管理员实体转换为简单VO（不包含密码）
      */
-    private Map<String, Object> toSimpleAdmin(Admin admin) {
-        Map<String, Object> m = new HashMap<>();
-        m.put("adminId", admin.getAdminId());
-        m.put("username", admin.getUsername());
-        m.put("realName", admin.getRealName());
-        m.put("email", admin.getEmail());
-        m.put("department", admin.getDepartment());
-        m.put("position", admin.getPosition());
-        m.put("adminLevel", admin.getAdminLevel());
-        m.put("permissions", admin.getPermissions());
-        m.put("accountStatus", admin.getAccountStatus());
-        m.put("createTime", admin.getCreateTime());
-        m.put("updateTime", admin.getUpdateTime());
-        m.put("lastLoginTime", admin.getLastLoginTime());
-        m.put("lastLoginIp", admin.getLastLoginIp());
-        m.put("loginCount", admin.getLoginCount());
-        m.put("remark", admin.getRemark());
+    private AdminSimpleVO toSimpleAdmin(Admin admin) {
+        AdminSimpleVO vo = new AdminSimpleVO();
+        vo.setAdminId(admin.getAdminId());
+        vo.setUsername(admin.getUsername());
+        vo.setRealName(admin.getRealName());
+        vo.setEmail(admin.getEmail());
+        vo.setDepartment(admin.getDepartment());
+        vo.setPosition(admin.getPosition());
+        vo.setAdminLevel(admin.getAdminLevel());
+        vo.setPermissions(admin.getPermissions());
+        vo.setAccountStatus(admin.getAccountStatus());
+        vo.setCreateTime(admin.getCreateTime());
+        vo.setUpdateTime(admin.getUpdateTime());
+        vo.setLastLoginTime(admin.getLastLoginTime());
+        vo.setLastLoginIp(admin.getLastLoginIp());
+        vo.setLoginCount(admin.getLoginCount());
+        vo.setRemark(admin.getRemark());
         // ✅ 不包含密码字段
-        return m;
+        return vo;
     }
 
     /**

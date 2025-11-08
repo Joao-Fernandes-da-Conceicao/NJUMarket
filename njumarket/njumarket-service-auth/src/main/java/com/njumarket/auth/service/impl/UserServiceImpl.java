@@ -4,6 +4,8 @@ import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.UserDTO;
 import com.njumarket.njumarket.dto.LoginFormDTO;
 import com.njumarket.njumarket.dto.RegisterDTO;
+import com.njumarket.njumarket.vo.LoginResultVO;
+import com.njumarket.njumarket.vo.TokenResultVO;
 import com.njumarket.njumarket.entity.User;
 import com.njumarket.njumarket.entity.UserProfile;
 import com.njumarket.auth.repository.UserRepository;
@@ -11,7 +13,6 @@ import com.njumarket.auth.service.UserService;
 import com.njumarket.auth.service.PasswordService;
 import com.njumarket.auth.service.UserProfileService;
 import com.njumarket.njumarket.exception.BusinessException;
-import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.RedisConstants;
@@ -46,15 +47,13 @@ public class UserServiceImpl implements UserService {
     // ========== 认证相关 ==========
     @Override
     public Result login(LoginFormDTO loginForm, HttpSession session) {
+        // 参数验证已由@Valid注解自动完成，无需手动验证
+        
         // 1. 获取登录标识符（用户名或手机号）和密码
         String identifier = loginForm.getIdentifier();
         String password = loginForm.getPassword();
         
-        // 2. 校验输入参数
-        BusinessValidator.requireNotBlank(identifier, "用户名或手机号不能为空");
-        BusinessValidator.requireNotBlank(password, "密码不能为空");
-        
-        // 3. 根据标识符查询用户（支持用户名或手机号登录）
+        // 2. 根据标识符查询用户（支持用户名或手机号登录）
         User user = userRepository.findByUsernameOrPhone(identifier.trim())
             .orElseThrow(() -> new BusinessException("用户名或手机号不存在"));
         
@@ -75,26 +74,26 @@ public class UserServiceImpl implements UserService {
         }
         
         // 6. 生成并存储Token
-        Map<String, Object> tokenResult = generateAndStoreTokens(user);
+        TokenResultVO tokenResult = generateAndStoreTokens(user);
         
         // 7. 返回登录结果
-        Map<String, Object> result = new HashMap<>();
-        result.put("accessToken", tokenResult.get("accessToken"));
-        result.put("refreshToken", tokenResult.get("refreshToken"));
-        result.put("expiresIn", tokenResult.get("expiresIn"));
-        result.put("userInfo", convertToUserDTO(user));
+        LoginResultVO result = new LoginResultVO();
+        result.setAccessToken(tokenResult.getAccessToken());
+        result.setRefreshToken(tokenResult.getRefreshToken());
+        result.setExpiresIn(tokenResult.getExpiresIn());
+        result.setUserInfo(convertToUserDTO(user));
         
         // ✅ v1.3.x: 添加订单提醒状态（向后兼容，如果字段不存在则返回false）
         try {
             Map<String, Boolean> orderReminderStatus = userProfileService.getOrderReminderStatus(user.getUserId());
-            result.put("orderReminderStatus", orderReminderStatus);
+            result.setOrderReminderStatus(orderReminderStatus);
         } catch (Exception e) {
             log.debug("获取订单提醒状态失败（可能是旧版本数据库）: userId={}, error={}", user.getUserId(), e.getMessage());
             // 兼容性处理：如果获取失败，返回默认值
             Map<String, Boolean> defaultStatus = new HashMap<>();
             defaultStatus.put("sellerOrderHasNew", false);
             defaultStatus.put("buyerOrderHasNew", false);
-            result.put("orderReminderStatus", defaultStatus);
+            result.setOrderReminderStatus(defaultStatus);
         }
         
         return Result.ok(result);
@@ -108,23 +107,18 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Result registerUser(RegisterDTO registerDTO) {
-        // 1. 校验输入参数
-        BusinessValidator.requireNotBlank(registerDTO.getPhone(), "手机号不能为空");
-        BusinessValidator.requireNotBlank(registerDTO.getPassword(), "密码不能为空");
+        // 参数验证已由@Valid注解自动完成（包括手机号非空、密码非空和长度验证）
         
-        // 2. 校验手机号格式
+        // 1. 校验手机号格式
         String phone = registerDTO.getPhone().trim();
         if (RegexUtils.isPhoneInvalid(phone)) {
             throw new BusinessException("手机号格式错误");
         }
         
-        // 3. 校验密码强度
+        // 2. 获取密码（长度验证已由@Size注解完成）
         String password = registerDTO.getPassword().trim();
-        if (password.length() < 6) {
-            throw new BusinessException("密码长度不能少于6位");
-        }
         
-        // 4. 校验密码确认
+        // 3. 校验密码确认
         if (registerDTO.getConfirmPassword() != null && 
             !password.equals(registerDTO.getConfirmPassword().trim())) {
             throw new BusinessException("两次输入的密码不一致");
@@ -169,14 +163,14 @@ public class UserServiceImpl implements UserService {
         createUserProfile(savedUser, registerDTO.getNickname());
         
         // 11. 生成并存储Token（自动登录）
-        Map<String, Object> tokenResult = generateAndStoreTokens(savedUser);
+        TokenResultVO tokenResult = generateAndStoreTokens(savedUser);
         
         // 12. 返回注册结果
-        Map<String, Object> result = new HashMap<>();
-        result.put("accessToken", tokenResult.get("accessToken"));
-        result.put("refreshToken", tokenResult.get("refreshToken"));
-        result.put("expiresIn", tokenResult.get("expiresIn"));
-        result.put("userInfo", convertToUserDTO(savedUser));
+        LoginResultVO result = new LoginResultVO();
+        result.setAccessToken(tokenResult.getAccessToken());
+        result.setRefreshToken(tokenResult.getRefreshToken());
+        result.setExpiresIn(tokenResult.getExpiresIn());
+        result.setUserInfo(convertToUserDTO(savedUser));
         
         return Result.ok(result);
     }
@@ -247,26 +241,26 @@ public class UserServiceImpl implements UserService {
         }
         
         // 7. 生成并存储Token（AccessToken和RefreshToken）
-        Map<String, Object> tokenResult = generateAndStoreTokens(user);
+        TokenResultVO tokenResult = generateAndStoreTokens(user);
         
         // 8. 返回登录结果
-        Map<String, Object> result = new HashMap<>();
-        result.put("accessToken", tokenResult.get("accessToken"));
-        result.put("refreshToken", tokenResult.get("refreshToken"));
-        result.put("expiresIn", tokenResult.get("expiresIn"));
-        result.put("userInfo", convertToUserDTO(user));
+        LoginResultVO result = new LoginResultVO();
+        result.setAccessToken(tokenResult.getAccessToken());
+        result.setRefreshToken(tokenResult.getRefreshToken());
+        result.setExpiresIn(tokenResult.getExpiresIn());
+        result.setUserInfo(convertToUserDTO(user));
         
         // ✅ v1.3.x: 添加订单提醒状态（向后兼容，如果字段不存在则返回false）
         try {
             Map<String, Boolean> orderReminderStatus = userProfileService.getOrderReminderStatus(user.getUserId());
-            result.put("orderReminderStatus", orderReminderStatus);
+            result.setOrderReminderStatus(orderReminderStatus);
         } catch (Exception e) {
             log.debug("获取订单提醒状态失败（可能是旧版本数据库）: userId={}, error={}", user.getUserId(), e.getMessage());
             // 兼容性处理：如果获取失败，返回默认值
             Map<String, Boolean> defaultStatus = new HashMap<>();
             defaultStatus.put("sellerOrderHasNew", false);
             defaultStatus.put("buyerOrderHasNew", false);
-            result.put("orderReminderStatus", defaultStatus);
+            result.setOrderReminderStatus(defaultStatus);
         }
         
         return Result.ok(result);
@@ -422,10 +416,10 @@ public class UserServiceImpl implements UserService {
             user.getUserId(), refreshKey, RedisConstants.REFRESH_TOKEN_TTL, hasOldRefreshToken);
         
         // 11. 返回新Token
-        Map<String, Object> result = new HashMap<>();
-        result.put("accessToken", newAccessToken);
-        result.put("refreshToken", newRefreshToken);
-        result.put("expiresIn", RedisConstants.LOGIN_TOKEN_TTL * 60); // 转换为秒
+        TokenResultVO result = new TokenResultVO();
+        result.setAccessToken(newAccessToken);
+        result.setRefreshToken(newRefreshToken);
+        result.setExpiresIn(RedisConstants.LOGIN_TOKEN_TTL * 60L); // 转换为秒
         
         log.debug("Token刷新成功: userId={}", userId);
         return Result.ok(result);
@@ -433,50 +427,42 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Result resetPassword(String phone, String code, String newPassword) {
+        // 参数验证已由@Valid注解自动完成（手机号、验证码、密码非空和长度验证）
+        
         // 1. 校验手机号格式
         if (RegexUtils.isPhoneInvalid(phone)) {
             throw new BusinessException("手机号格式错误");
         }
         
-        // 2. 校验验证码
-        if (code == null || code.trim().isEmpty()) {
-            throw new BusinessException("验证码不能为空");
-        }
-        
-        // 3. 从Redis中获取验证码
+        // 2. 从Redis中获取验证码
         String codeKey = RedisConstants.LOGIN_CODE_KEY + phone;
         String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
         if (cachedCode == null) {
             throw new BusinessException("验证码已过期，请重新获取");
         }
         
-        // 4. 验证验证码
+        // 3. 验证验证码
         if (!cachedCode.equals(code.trim())) {
             throw new BusinessException("验证码错误");
         }
         
-        // 5. 校验新密码
-        if (newPassword == null || newPassword.trim().length() < 6) {
-            throw new BusinessException("密码长度不能少于6位");
-        }
-        
-        // 6. 查找用户
+        // 4. 查找用户
         User user = userRepository.findByPrimaryPhone(phone).orElse(null);
         if (user == null) {
             throw new BusinessException("该手机号未注册");
         }
         
-        // 7. 检查账户状态
+        // 5. 检查账户状态
         if (!"ACTIVE".equals(user.getAccountStatus())) {
             throw new BusinessException("账户已被禁用，无法重置密码");
         }
         
-        // 8. 加密并设置新密码
+        // 6. 加密并设置新密码
         String encodedPassword = passwordService.encodePassword(newPassword.trim());
         user.setPassword(encodedPassword);
         userRepository.save(user);
         
-        // 9. 删除验证码
+        // 7. 删除验证码
         stringRedisTemplate.delete(codeKey);
         
         log.info("用户密码重置成功: phone={}, userId={}", phone, user.getUserId());
@@ -486,15 +472,15 @@ public class UserServiceImpl implements UserService {
     // ========== 用户档案相关 ==========
     @Override
     public Result getCurrentUser() {
-        // 获取当前用户信息（使用 SecurityUtils）
-        User currentUser = SecurityUtils.getCurrentUser();
-        if (currentUser == null) {
+            // 获取当前用户信息（使用 SecurityUtils）
+            User currentUser = SecurityUtils.getCurrentUser();
+            if (currentUser == null) {
             throw new BusinessException("用户未登录");
-        }
-        
-        // 转换为UserDTO（包含profile信息）
-        UserDTO userDTO = convertToUserDTO(currentUser);
-        return Result.ok(userDTO);
+            }
+            
+            // 转换为UserDTO（包含profile信息）
+            UserDTO userDTO = convertToUserDTO(currentUser);
+            return Result.ok(userDTO);
     }
 
     @Override
@@ -742,9 +728,9 @@ public class UserServiceImpl implements UserService {
      * 策略：新登录会覆盖旧Token（单设备登录），确保Token唯一性
      * 
      * @param user 用户对象
-     * @return 包含accessToken和refreshToken的Map
+     * @return 包含accessToken和refreshToken的TokenResultVO
      */
-    private Map<String, Object> generateAndStoreTokens(User user) {
+    private TokenResultVO generateAndStoreTokens(User user) {
         String userId = user.getUserId();
         log.info("开始生成并存储Token: userId={}", userId);
         
@@ -819,10 +805,10 @@ public class UserServiceImpl implements UserService {
                 userId, refreshKey, RedisConstants.REFRESH_TOKEN_TTL, hasOldRefreshToken);
             
             // 4. 返回Token信息
-            Map<String, Object> tokenResult = new HashMap<>();
-            tokenResult.put("accessToken", accessToken);
-            tokenResult.put("refreshToken", refreshToken);
-            tokenResult.put("expiresIn", RedisConstants.LOGIN_TOKEN_TTL * 60); // 转换为秒
+            TokenResultVO tokenResult = new TokenResultVO();
+            tokenResult.setAccessToken(accessToken);
+            tokenResult.setRefreshToken(refreshToken);
+            tokenResult.setExpiresIn(RedisConstants.LOGIN_TOKEN_TTL * 60L); // 转换为秒
             
             log.info("双Token机制：Token生成并存储完成: userId={}, accessTokenKey={}, refreshTokenKey={}, 覆盖旧Token={}", 
                 userId, tokenKey, refreshKey, (hasOldToken || hasOldRefreshToken));

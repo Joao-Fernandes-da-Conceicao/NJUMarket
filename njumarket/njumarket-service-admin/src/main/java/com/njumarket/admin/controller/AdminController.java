@@ -4,6 +4,7 @@ import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.AdminLoginDTO;
 import com.njumarket.njumarket.entity.Admin;
 import com.njumarket.admin.service.AdminService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,7 +35,7 @@ public class AdminController {
         @ApiResponse(responseCode = "401", description = "用户名或密码错误")
     })
     @PostMapping("/login")
-    public Result login(@RequestBody AdminLoginDTO loginDTO, HttpSession session) {
+    public Result login(@Valid @RequestBody AdminLoginDTO loginDTO, HttpSession session) {
         return adminService.login(loginDTO, session);
     }
 

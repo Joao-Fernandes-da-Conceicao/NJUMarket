@@ -2,6 +2,7 @@ package com.njumarket.commodity.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.CommodityDTO;
+import com.njumarket.njumarket.vo.*;
 import com.njumarket.njumarket.dto.ImageUploadDTO;
 import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
@@ -418,10 +419,10 @@ public class CommodityServiceImpl implements CommodityService {
             }
         }
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("successCount", successCount);
-        result.put("failCount", failCount);
-        result.put("total", commodityIds.length);
+        BatchOperationResultVO result = new BatchOperationResultVO();
+        result.setSuccessCount(successCount);
+        result.setFailCount(failCount);
+        result.setTotal(commodityIds.length);
         
         return Result.ok(String.format("批量操作完成，成功%d个，失败%d个", successCount, failCount), result);
     }
@@ -502,12 +503,12 @@ public class CommodityServiceImpl implements CommodityService {
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("commodities", commodityDTOs);
-        result.put("total", commodityPage.getTotalElements());
-        result.put("pages", commodityPage.getTotalPages());
-        result.put("current", page);
-        result.put("size", size);
+        CommodityPageResultVO result = new CommodityPageResultVO();
+        result.setCommodities(commodityDTOs);
+        result.setTotal(commodityPage.getTotalElements());
+        result.setPages(commodityPage.getTotalPages());
+        result.setCurrent(page);
+        result.setSize(size);
         
         return Result.ok("获取商品列表成功", result);
     }

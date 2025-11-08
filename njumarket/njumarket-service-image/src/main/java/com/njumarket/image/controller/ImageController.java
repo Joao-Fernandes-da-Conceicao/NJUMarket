@@ -33,6 +33,16 @@ public class ImageController {
     @Value("${app.upload.commodity-path:uploads/commodities}")
     private String commodityUploadPath;
 
+    @Operation(summary = "获取默认头像", description = "获取默认头像图片")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "获取成功"),
+        @ApiResponse(responseCode = "404", description = "默认头像不存在")
+    })
+    @GetMapping("/avatars/default")
+    public ResponseEntity<Resource> getDefaultAvatar() {
+        return getImage(avatarUploadPath, "default.png");
+    }
+
     @Operation(summary = "获取头像图片", description = "根据文件名获取用户头像")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "获取成功"),

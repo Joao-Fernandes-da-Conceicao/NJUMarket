@@ -12,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * 内部API控制器
@@ -154,25 +153,24 @@ public class InternalController {
     public Result listConversations(@RequestParam(defaultValue = "1") Integer page,
                                     @RequestParam(defaultValue = "10") Integer size,
                                     @RequestParam(required = false) String keyword) {
-        try {
-            org.springframework.data.jpa.domain.Specification<Conversation> spec = (root, query, cb) -> {
-                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-                if (org.springframework.util.StringUtils.hasText(keyword)) {
-                    String kw = keyword.trim();
-                    predicates.add(cb.or(
-                        cb.like(root.get("userId1"), "%" + kw + "%"),
-                        cb.like(root.get("userId2"), "%" + kw + "%"),
-                        cb.like(root.get("lastMessageContent"), "%" + kw + "%")
-                    ));
-                }
-                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
-            };
-            
-            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-                Math.max(0, page - 1), size, 
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "lastMessageTime"));
-            org.springframework.data.domain.Page<Conversation> p = conversationRepository.findAll(spec, pageable);
-            
+        org.springframework.data.jpa.domain.Specification<Conversation> spec = (root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+            if (org.springframework.util.StringUtils.hasText(keyword)) {
+                String kw = keyword.trim();
+                predicates.add(cb.or(
+                    cb.like(root.get("userId1"), "%" + kw + "%"),
+                    cb.like(root.get("userId2"), "%" + kw + "%"),
+                    cb.like(root.get("lastMessageContent"), "%" + kw + "%")
+                ));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+        
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+            Math.max(0, page - 1), size, 
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "lastMessageTime"));
+        org.springframework.data.domain.Page<Conversation> p = conversationRepository.findAll(spec, pageable);
+        
         return Result.ok("查询成功", p);
     }
     
@@ -183,16 +181,15 @@ public class InternalController {
     public Result listMessages(@RequestParam String conversationId,
                                @RequestParam(defaultValue = "1") Integer page,
                                @RequestParam(defaultValue = "10") Integer size) {
-        try {
-            org.springframework.data.jpa.domain.Specification<Message> spec = (root, query, cb) -> {
-                return cb.equal(root.get("conversationId"), conversationId);
-            };
-            
-            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-                Math.max(0, page - 1), size,
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
-            org.springframework.data.domain.Page<Message> p = messageRepository.findAll(spec, pageable);
-            
+        org.springframework.data.jpa.domain.Specification<Message> spec = (root, query, cb) -> {
+            return cb.equal(root.get("conversationId"), conversationId);
+        };
+        
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+            Math.max(0, page - 1), size,
+            org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        org.springframework.data.domain.Page<Message> p = messageRepository.findAll(spec, pageable);
+        
         return Result.ok("查询成功", p);
     }
 }

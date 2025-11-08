@@ -6,6 +6,7 @@ import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
 import com.njumarket.njumarket.entity.User;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserProfileService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -56,7 +57,7 @@ public class UserProfileController {
         @ApiResponse(responseCode = "401", description = "用户未登录")
     })
     @PutMapping("/me")
-    public Result updateCurrentUserProfile(@RequestBody UserProfileUpdateDTO updateDTO) {
+    public Result updateCurrentUserProfile(@Valid @RequestBody UserProfileUpdateDTO updateDTO) {
         return userProfileService.updateCurrentUserProfile(updateDTO);
     }
 

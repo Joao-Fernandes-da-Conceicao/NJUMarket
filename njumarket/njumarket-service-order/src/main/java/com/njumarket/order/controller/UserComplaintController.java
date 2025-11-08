@@ -3,6 +3,7 @@ package com.njumarket.order.controller;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.ComplaintDTO;
 import com.njumarket.order.service.ComplaintService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,7 +27,7 @@ public class UserComplaintController {
         @ApiResponse(responseCode = "400", description = "参数错误")
     })
     @PostMapping("/submit")
-    public Result submitComplaint(@RequestBody ComplaintDTO complaintDTO) {
+    public Result submitComplaint(@Valid @RequestBody ComplaintDTO complaintDTO) {
         return complaintService.submitComplaint(complaintDTO);
     }
 

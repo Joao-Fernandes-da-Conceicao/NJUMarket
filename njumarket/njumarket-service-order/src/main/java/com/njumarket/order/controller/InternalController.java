@@ -124,71 +124,70 @@ public class InternalController {
                             @RequestParam(required = false) String buyerVisibility,
                             @RequestParam(required = false) String sortProp,
                             @RequestParam(required = false) String sortOrder) {
-        try {
-            // 构建分页参数
-            org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort.by(
-                org.springframework.data.domain.Sort.Direction.DESC, "createTime"
-            );
-            if (org.springframework.util.StringUtils.hasText(sortProp)) {
-                org.springframework.data.domain.Sort.Direction direction = 
-                    "desc".equalsIgnoreCase(sortOrder) ? 
-                    org.springframework.data.domain.Sort.Direction.DESC : 
-                    org.springframework.data.domain.Sort.Direction.ASC;
-                sort = org.springframework.data.domain.Sort.by(direction, sortProp);
+        // 构建分页参数
+        org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort.by(
+            org.springframework.data.domain.Sort.Direction.DESC, "createTime"
+        );
+        if (org.springframework.util.StringUtils.hasText(sortProp)) {
+            org.springframework.data.domain.Sort.Direction direction = 
+                "desc".equalsIgnoreCase(sortOrder) ? 
+                org.springframework.data.domain.Sort.Direction.DESC : 
+                org.springframework.data.domain.Sort.Direction.ASC;
+            sort = org.springframework.data.domain.Sort.by(direction, sortProp);
+        }
+        org.springframework.data.domain.Pageable pageable = 
+            org.springframework.data.domain.PageRequest.of(Math.max(0, page - 1), size, sort);
+        
+        // 构建查询条件
+        org.springframework.data.jpa.domain.Specification<Order> spec = (root, query, cb) -> {
+            java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+            
+            // 关键词搜索：订单ID、商品标题、买家ID、卖家ID（处理空字符串）
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                String kw = keyword.trim().toLowerCase();
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("orderId")), "%" + kw + "%"),
+                    cb.like(cb.lower(root.get("commodityTitle")), "%" + kw + "%"),
+                    cb.like(cb.lower(root.get("buyerId")), "%" + kw + "%"),
+                    cb.like(cb.lower(root.get("sellerId")), "%" + kw + "%")
+                ));
             }
-            org.springframework.data.domain.Pageable pageable = 
-                org.springframework.data.domain.PageRequest.of(Math.max(0, page - 1), size, sort);
             
-            // 构建查询条件
-            org.springframework.data.jpa.domain.Specification<Order> spec = (root, query, cb) -> {
-                java.util.List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-                
-                // 关键词搜索：订单ID、商品标题、买家ID、卖家ID（处理空字符串）
-                if (keyword != null && !keyword.trim().isEmpty()) {
-                    String kw = keyword.trim().toLowerCase();
-                    predicates.add(cb.or(
-                        cb.like(cb.lower(root.get("orderId")), "%" + kw + "%"),
-                        cb.like(cb.lower(root.get("commodityTitle")), "%" + kw + "%"),
-                        cb.like(cb.lower(root.get("buyerId")), "%" + kw + "%"),
-                        cb.like(cb.lower(root.get("sellerId")), "%" + kw + "%")
-                    ));
-                }
-                
-                // 状态筛选（处理空字符串）
-                if (status != null && !status.trim().isEmpty()) {
-                    predicates.add(cb.equal(root.get("orderStatus"), status.trim()));
-                }
-                
-                // 卖家可见性筛选（处理空字符串）
-                if (sellerVisibility != null && !sellerVisibility.trim().isEmpty()) {
-                    predicates.add(cb.equal(root.get("sellerVisibility"), sellerVisibility.trim()));
-                }
-                
-                // 买家可见性筛选（处理空字符串）
-                if (buyerVisibility != null && !buyerVisibility.trim().isEmpty()) {
-                    predicates.add(cb.equal(root.get("buyerVisibility"), buyerVisibility.trim()));
-                }
-                
-                return predicates.isEmpty() ? cb.conjunction() : 
-                    cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
-            };
+            // 状态筛选（处理空字符串）
+            if (status != null && !status.trim().isEmpty()) {
+                predicates.add(cb.equal(root.get("orderStatus"), status.trim()));
+            }
             
-            org.springframework.data.domain.Page<Order> orderPage = 
-                orderRepository.findAll(spec, pageable);
+            // 卖家可见性筛选（处理空字符串）
+            if (sellerVisibility != null && !sellerVisibility.trim().isEmpty()) {
+                predicates.add(cb.equal(root.get("sellerVisibility"), sellerVisibility.trim()));
+            }
             
-            // 转换为内部 DTO 列表
-            List<OrderInternalDTO> orderDTOs = orderPage.getContent().stream()
-                .map(internalDTOConverter::toInternalDTO)
-                .collect(java.util.stream.Collectors.toList());
+            // 买家可见性筛选（处理空字符串）
+            if (buyerVisibility != null && !buyerVisibility.trim().isEmpty()) {
+                predicates.add(cb.equal(root.get("buyerVisibility"), buyerVisibility.trim()));
+            }
             
-            // 构建分页结果
-            Map<String, Object> result = new java.util.HashMap<>();
-            result.put("content", orderDTOs);
-            result.put("totalElements", orderPage.getTotalElements());
-            result.put("totalPages", orderPage.getTotalPages());
-            result.put("number", orderPage.getNumber());
-            result.put("size", orderPage.getSize());
-            
+            return predicates.isEmpty() ? cb.conjunction() : 
+                cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+        
+        org.springframework.data.domain.Page<Order> orderPage = 
+            orderRepository.findAll(spec, pageable);
+        
+        // 转换为内部 DTO 列表
+        List<OrderInternalDTO> orderDTOs = orderPage.getContent().stream()
+            .map(internalDTOConverter::toInternalDTO)
+            .collect(java.util.stream.Collectors.toList());
+        
+        // 构建分页结果
+        Map<String, Object> result = new java.util.HashMap<>();
+        result.put("content", orderDTOs);
+        result.put("totalElements", orderPage.getTotalElements());
+        result.put("totalPages", orderPage.getTotalPages());
+        result.put("number", orderPage.getNumber());
+        result.put("size", orderPage.getSize());
+        
         return Result.ok("查询成功", result);
     }
 }

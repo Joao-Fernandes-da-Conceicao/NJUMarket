@@ -7,6 +7,7 @@ import com.njumarket.njumarket.dto.PasswordDTO;
 import com.njumarket.njumarket.dto.RegisterDTO;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserService;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,7 +36,7 @@ public class UserAuthController {
         @ApiResponse(responseCode = "400", description = "登录失败")
     })
     @PostMapping("/login")
-    public Result login(@RequestBody LoginFormDTO loginForm, HttpSession session) {
+    public Result login(@Valid @RequestBody LoginFormDTO loginForm, HttpSession session) {
         return userService.login(loginForm, session);
     }
 
@@ -55,7 +56,7 @@ public class UserAuthController {
         @ApiResponse(responseCode = "400", description = "注册失败，参数错误或手机号已存在")
     })
     @PostMapping("/register-new")
-    public Result registerNew(@RequestBody RegisterDTO registerDTO) {
+    public Result registerNew(@Valid @RequestBody RegisterDTO registerDTO) {
         return userService.registerUser(registerDTO);
     }
 
@@ -126,7 +127,7 @@ public class UserAuthController {
         @ApiResponse(responseCode = "400", description = "验证码错误或密码格式不正确")
     })
     @PostMapping("/reset-password")
-    public Result resetPassword(@RequestBody PasswordDTO passwordDTO) {
+    public Result resetPassword(@Valid @RequestBody PasswordDTO passwordDTO) {
         // 验证密码确认
         if (passwordDTO.getConfirmPassword() != null && 
             !passwordDTO.getNewPassword().equals(passwordDTO.getConfirmPassword())) {

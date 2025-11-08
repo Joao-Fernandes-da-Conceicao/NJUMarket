@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.CommodityDTO;
+import com.njumarket.njumarket.vo.*;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
 import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
@@ -79,12 +80,12 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
             List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(filteredCommodities);
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("commodities", commodityDTOs);
-            result.put("total", commodityPage.getTotalElements());
-            result.put("pages", commodityPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
+            CommodityPageResultVO result = new CommodityPageResultVO();
+            result.setCommodities(commodityDTOs);
+            result.setTotal(commodityPage.getTotalElements());
+            result.setPages(commodityPage.getTotalPages());
+            result.setCurrent(page);
+            result.setSize(size);
             
             log.info("搜索商品成功 - 找到 {} 个商品", commodityDTOs.size());
             return Result.ok("搜索商品成功", result);
@@ -106,12 +107,12 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
             List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodityPage.getContent());
             
-            Map<String, Object> result = new HashMap<>();
-            result.put("commodities", commodityDTOs);
-            result.put("total", commodityPage.getTotalElements());
-            result.put("pages", commodityPage.getTotalPages());
-            result.put("current", page);
-            result.put("size", size);
+            CommodityPageResultVO result = new CommodityPageResultVO();
+            result.setCommodities(commodityDTOs);
+            result.setTotal(commodityPage.getTotalElements());
+            result.setPages(commodityPage.getTotalPages());
+            result.setCurrent(page);
+            result.setSize(size);
             
             return Result.ok("获取分类商品成功", result);
             
@@ -478,11 +479,11 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             CommodityDTO commodityDTO = dtos.isEmpty() ? convertToDTO(commodity) : dtos.get(0);
             
             // 添加商品状态信息
-            Map<String, Object> result = new HashMap<>();
-            result.put("commodity", commodityDTO);
-            result.put("canOrder", canCommodityBeOrdered(commodity));
-            result.put("isOffShelf", !canCommodityBeOrdered(commodity));
-            result.put("statusMessage", getCommodityStatusMessage(commodity));
+            CommodityDetailVO result = new CommodityDetailVO();
+            result.setCommodity(commodityDTO);
+            result.setCanOrder(canCommodityBeOrdered(commodity));
+            result.setIsOffShelf(!canCommodityBeOrdered(commodity));
+            result.setStatusMessage(getCommodityStatusMessage(commodity));
             
             return Result.ok("获取商品详情成功", result);
             

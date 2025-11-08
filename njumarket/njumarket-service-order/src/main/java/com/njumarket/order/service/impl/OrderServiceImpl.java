@@ -2,6 +2,7 @@ package com.njumarket.order.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.OrderDTO;
+import com.njumarket.njumarket.vo.OrderPageResultVO;
 import com.njumarket.njumarket.entity.Order;
 import com.njumarket.njumarket.entity.Commodity;
 import com.njumarket.njumarket.entity.User;
@@ -480,12 +481,12 @@ public class OrderServiceImpl implements OrderService {
                 .map(order -> convertToDTOWithProfile(order, finalProfileMap))
                 .collect(Collectors.toList());
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("orders", orderDTOs);
-        result.put("total", orderPage.getTotalElements()); // ✅ 使用数据库查询的总数
-        result.put("pages", orderPage.getTotalPages());
-        result.put("current", page);
-        result.put("size", size);
+        OrderPageResultVO result = new OrderPageResultVO();
+        result.setOrders(orderDTOs);
+        result.setTotal(orderPage.getTotalElements()); // ✅ 使用数据库查询的总数
+        result.setPages(orderPage.getTotalPages());
+        result.setCurrent(page);
+        result.setSize(size);
         
         return Result.ok("获取买家订单列表成功", result);
     }
@@ -637,12 +638,12 @@ public class OrderServiceImpl implements OrderService {
                 .map(order -> convertToDTOWithProfile(order, finalProfileMap))
                 .collect(Collectors.toList());
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("orders", orderDTOs);
-        result.put("total", orderPage.getTotalElements()); // ✅ 使用数据库查询的总数
-        result.put("pages", orderPage.getTotalPages());
-        result.put("current", page);
-        result.put("size", size);
+        OrderPageResultVO result = new OrderPageResultVO();
+        result.setOrders(orderDTOs);
+        result.setTotal(orderPage.getTotalElements()); // ✅ 使用数据库查询的总数
+        result.setPages(orderPage.getTotalPages());
+        result.setCurrent(page);
+        result.setSize(size);
         
         return Result.ok("获取卖家订单列表成功", result);
     }
@@ -1122,12 +1123,12 @@ public class OrderServiceImpl implements OrderService {
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("orders", orderDTOs);
-        result.put("total", orderPage.getTotalElements());
-        result.put("pages", orderPage.getTotalPages());
-        result.put("current", page);
-        result.put("size", size);
+        OrderPageResultVO result = new OrderPageResultVO();
+        result.setOrders(orderDTOs);
+        result.setTotal(orderPage.getTotalElements());
+        result.setPages(orderPage.getTotalPages());
+        result.setCurrent(page);
+        result.setSize(size);
         
         return Result.ok("获取退货申请列表成功", result);
     }
@@ -1154,12 +1155,12 @@ public class OrderServiceImpl implements OrderService {
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("orders", orderDTOs);
-        result.put("total", orderPage.getTotalElements());
-        result.put("pages", orderPage.getTotalPages());
-        result.put("current", page);
-        result.put("size", size);
+        OrderPageResultVO result = new OrderPageResultVO();
+        result.setOrders(orderDTOs);
+        result.setTotal(orderPage.getTotalElements());
+        result.setPages(orderPage.getTotalPages());
+        result.setCurrent(page);
+        result.setSize(size);
         
         return Result.ok("获取我的退货记录成功", result);
     }
@@ -1446,11 +1447,13 @@ public class OrderServiceImpl implements OrderService {
         
         // ✅ 转换为轻量级DTO（包含profile信息，并检查权限）
         final Map<String, UserProfileInternalDTO> finalProfileMap = profileMap;
+        String currentUserId = currentUser.getUserId();
         List<Map<String, Object>> result = orders.stream()
             .filter(order -> {
                 // 权限检查：订单必须属于当前用户（买家或卖家）
-                return order.getBuyerId().equals(currentUser.getUserId()) 
-                    || order.getSellerId().equals(currentUser.getUserId());
+                // 添加空值检查，避免NullPointerException
+                return (order.getBuyerId() != null && order.getBuyerId().equals(currentUserId)) 
+                    || (order.getSellerId() != null && order.getSellerId().equals(currentUserId));
             })
             .map(order -> {
                 Map<String, Object> item = new HashMap<>();

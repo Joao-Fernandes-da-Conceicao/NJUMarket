@@ -1,5 +1,7 @@
 package com.njumarket.njumarket.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -10,12 +12,15 @@ import lombok.Data;
 @Data
 public class RegisterDTO {
 
+    @NotBlank(message = "手机号不能为空")
     @Schema(description = "手机号", example = "13800138000", required = true)
     private String phone;
 
     @Schema(description = "用户名（可选）", example = "user123")
     private String username;
 
+    @NotBlank(message = "密码不能为空")
+    @Size(min = 6, message = "密码长度不能少于6位")
     @Schema(description = "密码", example = "password123", required = true)
     private String password;
 

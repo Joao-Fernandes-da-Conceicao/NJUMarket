@@ -1319,26 +1319,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 ---
 
-## 2.0阶段总结
-
-### v2.0.0 核心成就
-- ✅ **7个微服务全部实现**：Discovery、Gateway、Auth、Commodity、Order、Message、Image、Admin
-- ✅ **用户端功能完整**：商品发布、订单管理、实时消息、用户中心等全部功能
-- ✅ **管理端功能完整**：用户管理、商品管理、订单管理、会话管理、消息管理、管理员管理等全部功能
-- ✅ **数据同步机制**：消息软删除时自动更新会话最新消息（用户端和管理端均已实现）
-- ✅ **权限管理**：管理员两级权限（system/administrator），完整的权限控制
-
-### v2.0.1 核心改进
-- ✅ **DTO验证优化**：使用Bean Validation注解替代硬编码验证，提升代码质量
-- ✅ **异常处理完善**：添加更多异常类型处理，提升系统健壮性
-- ✅ **关键Bug修复**：修复增量轮询、Feign Client路径、空指针异常等问题
-
-**详细内容请参考**: [PROJECT_DOCUMENTATION_V2.0.1.md](./PROJECT_DOCUMENTATION_V2.0.1.md)
-
-### 2.0阶段状态
-✅ **2.0阶段已完成** - 微服务架构已稳定，代码质量已提升，可以进入下一阶段开发
-
-**详细总结请参考**: [PROJECT_DOCUMENTATION_V2.0.1.md](./PROJECT_DOCUMENTATION_V2.0.1.md) 中的"v2.0阶段总结"部分
+**注意**：v2.0阶段的完整总结请参考 [PROJECT_DOCUMENTATION_V2.0.1.md](./PROJECT_DOCUMENTATION_V2.0.1.md) 文档中的"v2.0阶段总结"部分。
 
 ---
 

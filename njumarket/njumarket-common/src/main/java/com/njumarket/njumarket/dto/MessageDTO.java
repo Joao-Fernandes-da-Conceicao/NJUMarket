@@ -1,13 +1,21 @@
 package com.njumarket.njumarket.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import java.time.LocalDateTime;
 
 public class MessageDTO {
     private String messageId;
+    
+    @NotBlank(message = "会话ID不能为空")
     private String conversationId;
+    
     private String senderId;
+    
+    @NotBlank(message = "接收者ID不能为空")
     private String receiverId;
+    
     private String messageType;
+    
     private String content;
     private String imageUrl;
     private String commodityId; // 商品ID（实时查询，用于商品卡片）

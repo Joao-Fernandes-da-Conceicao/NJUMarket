@@ -61,7 +61,7 @@ public class UserCommodityController {
     @Operation(summary = "更新商品信息", description = "更新商品的基本信息")
     @PutMapping("/{commodityId}")
     public Result updateCommodity(@PathVariable String commodityId,
-                                @RequestBody CommodityDTO commodityDTO) {
+                                @Valid @RequestBody CommodityDTO commodityDTO) {
         return commodityService.updateCommodity(commodityId, commodityDTO);
     }
 
