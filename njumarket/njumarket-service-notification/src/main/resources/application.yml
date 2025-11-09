@@ -1,0 +1,46 @@
+server:
+  port: 8097
+
+spring:
+  application:
+    name: njumarket-service-notification
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${NOTIFICATION_REDIS_DATABASE:2}  # 统一使用db2作为缓存数据库
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+# Feign Client 配置
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+      njumarket-service-commodity:
+        connectTimeout: 3000
+        readTimeout: 8000
+      njumarket-service-order:
+        connectTimeout: 3000
+        readTimeout: 8000
+      njumarket-service-auth:
+        connectTimeout: 3000
+        readTimeout: 5000
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true
+  logging:
+    level:
+      com.njumarket.notification.client: DEBUG
+      com.njumarket.notification.service: INFO
+      com.njumarket.notification.filter: INFO
+      com.njumarket.notification.controller: INFO
+

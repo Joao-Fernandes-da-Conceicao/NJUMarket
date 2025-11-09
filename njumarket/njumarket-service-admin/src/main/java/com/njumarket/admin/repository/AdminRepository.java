@@ -1,6 +1,6 @@
 package com.njumarket.admin.repository;
 
-import com.njumarket.njumarket.entity.Admin;
+import com.njumarket.admin.entity.Admin;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

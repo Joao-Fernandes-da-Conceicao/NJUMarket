@@ -1,6 +1,6 @@
 package com.njumarket.image.repository;
 
-import com.njumarket.njumarket.entity.ImageReference;
+import com.njumarket.image.entity.ImageReference;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;

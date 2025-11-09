@@ -1,10 +1,10 @@
 package com.njumarket.auth.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.UserDTO;
-import com.njumarket.njumarket.dto.LoginFormDTO;
-import com.njumarket.njumarket.dto.PasswordDTO;
-import com.njumarket.njumarket.dto.RegisterDTO;
+import com.njumarket.auth.dto.UserDTO;
+import com.njumarket.auth.dto.LoginFormDTO;
+import com.njumarket.auth.dto.PasswordDTO;
+import com.njumarket.auth.dto.RegisterDTO;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserService;
 import jakarta.validation.Valid;

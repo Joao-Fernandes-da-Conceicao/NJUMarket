@@ -1,7 +1,7 @@
 package com.njumarket.message.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.MessageDTO;
+import com.njumarket.message.dto.MessageDTO;
 import com.njumarket.message.service.MessageService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;

@@ -1,7 +1,7 @@
 package com.njumarket.commodity.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.CommodityDTO;
+import com.njumarket.commodity.dto.CommodityDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 /**

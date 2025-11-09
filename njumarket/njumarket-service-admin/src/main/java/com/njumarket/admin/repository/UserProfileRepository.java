@@ -1,6 +1,6 @@
 package com.njumarket.admin.repository;
 
-import com.njumarket.njumarket.entity.UserProfile;
+import com.njumarket.admin.entity.UserProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

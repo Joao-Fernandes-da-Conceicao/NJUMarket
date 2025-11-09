@@ -2,8 +2,8 @@ package com.njumarket.auth.controller;
 
 import com.njumarket.njumarket.annotation.CurrentUser;
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.auth.dto.UserProfileUpdateDTO;
+import com.njumarket.auth.entity.User;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserProfileService;
 import jakarta.validation.Valid;

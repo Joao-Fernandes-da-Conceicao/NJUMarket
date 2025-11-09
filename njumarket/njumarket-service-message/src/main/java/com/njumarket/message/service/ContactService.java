@@ -1,8 +1,8 @@
 package com.njumarket.message.service;
 
-//import com.njumarket.njumarket.dto.ConversationDTO;
-//import com.njumarket.njumarket.dto.MessageDTO;
-import com.njumarket.njumarket.dto.SendMessageRequest;
+//import com.njumarket.message.dto.ConversationDTO;
+//import com.njumarket.message.dto.MessageDTO;
+import com.njumarket.message.dto.SendMessageRequest;
 import com.njumarket.njumarket.dto.Result;
 //import org.springframework.data.domain.Page;
 

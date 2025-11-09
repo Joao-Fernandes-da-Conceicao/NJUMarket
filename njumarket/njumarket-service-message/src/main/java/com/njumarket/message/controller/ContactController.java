@@ -1,9 +1,9 @@
 package com.njumarket.message.controller;
 
 import com.njumarket.njumarket.annotation.CurrentUser;
-import com.njumarket.njumarket.dto.SendMessageRequest;
+import com.njumarket.message.dto.SendMessageRequest;
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.message.entity.User; // User 实体（Message Service专用）
 import com.njumarket.message.service.ContactService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

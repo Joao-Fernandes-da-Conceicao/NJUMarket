@@ -1,7 +1,7 @@
 package com.njumarket.admin.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.entity.Admin;
+import com.njumarket.admin.entity.Admin;
 import com.njumarket.admin.repository.AdminRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -2,8 +2,7 @@ package com.njumarket.message.client;
 
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.entity.User;
-import com.njumarket.njumarket.entity.UserProfile;
+// User 和 UserProfile 实体不再直接引用，通过 Feign Client 返回 DTO
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

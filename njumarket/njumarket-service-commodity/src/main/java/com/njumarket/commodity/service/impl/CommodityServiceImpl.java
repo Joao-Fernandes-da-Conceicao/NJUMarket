@@ -1,21 +1,23 @@
 package com.njumarket.commodity.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.CommodityDTO;
-import com.njumarket.njumarket.vo.*;
-import com.njumarket.njumarket.dto.ImageUploadDTO;
-import com.njumarket.njumarket.entity.Commodity;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.commodity.dto.CommodityDTO;
+import com.njumarket.commodity.vo.CommodityPageResultVO;
+import com.njumarket.commodity.vo.CommodityDetailVO;
+import com.njumarket.njumarket.vo.BatchOperationResultVO;
+import com.njumarket.commodity.entity.Commodity;
+import com.njumarket.commodity.entity.User; // User 实体（Commodity Service专用）
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.commodity.repository.CommodityRepository;
-import com.njumarket.commodity.service.ChangeRecordService;
 import com.njumarket.commodity.service.CommodityService;
 import com.njumarket.commodity.service.CommodityQueryService;
 import com.njumarket.commodity.client.ImageClient;
 import com.njumarket.commodity.client.MessageClient;
+import com.njumarket.commodity.client.NotificationClient;
 import com.njumarket.commodity.client.OrderClient;
 import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
+import com.njumarket.commodity.utils.CommodityValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -47,7 +49,7 @@ public class CommodityServiceImpl implements CommodityService {
     private final ImageClient imageClient;
     private final MessageClient messageClient;
     private final CommodityQueryService commodityQueryService;
-    private final ChangeRecordService changeRecordService;
+    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper;
 
     // ========== 商品管理核心功能 ==========
@@ -55,7 +57,8 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result publishCommodity(CommodityDTO commodityDTO) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 创建商品实体
         Commodity commodity = new Commodity();
@@ -84,7 +87,8 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result createDraftCommodity(CommodityDTO commodityDTO) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 创建商品实体
         Commodity commodity = new Commodity();
@@ -113,10 +117,11 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result publishDraftCommodity(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
-        BusinessValidator.requireCommodityStatus(commodity, "DRAFT");
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        CommodityValidator.requireCommodityStatus(commodity, "DRAFT");
         
         // 发布商品
         commodity.setCommodityStatus("PUBLISHED");
@@ -129,9 +134,10 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result updateCommodity(String commodityId, CommodityDTO commodityDTO) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         // 更新商品信息
         commodity.setTitle(commodityDTO.getTitle());
@@ -147,12 +153,14 @@ public class CommodityServiceImpl implements CommodityService {
         LocalDateTime now = LocalDateTime.now();
         Commodity updatedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更（用于增量轮询）- 只有已上架的商品变更才记录（避免草稿频繁变更）
+        // ✅ 记录商品变更并推送通知（使用推送服务）- 只有已上架的商品变更才记录（避免草稿频繁变更）
         if ("ON_SHELF".equals(updatedCommodity.getCommodityStatus())) {
-            changeRecordService.recordCommodityChange(commodityId, "UPDATE", now);
-            
-            // ✅ WebSocket 推送：商品更新通知给卖家
-            pushCommodityChangeNotification(updatedCommodity.getSellerId(), commodityId, "COMMODITY_UPDATED", updatedCommodity.getCommodityStatus(), convertToDTO(updatedCommodity));
+            try {
+                notificationClient.recordCommodityChange(commodityId, "UPDATE", now.toString());
+                notificationClient.pushCommodityChange(updatedCommodity.getSellerId(), commodityId, "COMMODITY_UPDATED");
+            } catch (Exception e) {
+                log.warn("记录商品变更或推送失败（不影响商品更新）: commodityId={}, error={}", commodityId, e.getMessage());
+            }
         }
         
         return Result.ok("商品更新成功", convertToDTO(updatedCommodity));
@@ -161,9 +169,10 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result deleteCommodity(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         // 通过Feign Client检查是否有订单
         Result checkResult = orderClient.checkCommodityHasOrders(commodityId);
@@ -182,21 +191,24 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result shelfCommodity(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
-        BusinessValidator.requireCommodityStatus(commodity, "PUBLISHED");
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        CommodityValidator.requireCommodityStatus(commodity, "PUBLISHED");
         
         commodity.setCommodityStatus("ON_SHELF");
         LocalDateTime now = LocalDateTime.now();
         commodity.setPublishTime(now);
         Commodity savedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更（用于增量轮询）
-        changeRecordService.recordCommodityChange(commodityId, "SHELF", now);
-        
-        // ✅ WebSocket 推送：商品上架通知给卖家
-        pushCommodityChangeNotification(savedCommodity.getSellerId(), commodityId, "COMMODITY_SHELVED", savedCommodity.getCommodityStatus(), convertToDTO(savedCommodity));
+        // ✅ 记录商品变更并推送通知（使用推送服务）
+        try {
+            notificationClient.recordCommodityChange(commodityId, "SHELF", now.toString());
+            notificationClient.pushCommodityChange(savedCommodity.getSellerId(), commodityId, "COMMODITY_SHELVED");
+        } catch (Exception e) {
+            log.warn("记录商品变更或推送失败（不影响商品上架）: commodityId={}, error={}", commodityId, e.getMessage());
+        }
         
         return Result.ok("商品上架成功");
     }
@@ -204,19 +216,22 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result unshelfCommodity(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         commodity.setCommodityStatus("OFF_SHELF");
         LocalDateTime now = LocalDateTime.now();
         Commodity savedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更（用于增量轮询）- 下架操作影响聊天界面显示
-        changeRecordService.recordCommodityChange(commodityId, "UNSHELF", now);
-        
-        // ✅ WebSocket 推送：商品下架通知给卖家
-        pushCommodityChangeNotification(savedCommodity.getSellerId(), commodityId, "COMMODITY_UNSHELVED", savedCommodity.getCommodityStatus(), convertToDTO(savedCommodity));
+        // ✅ 记录商品变更并推送通知（使用推送服务）- 下架操作影响聊天界面显示
+        try {
+            notificationClient.recordCommodityChange(commodityId, "UNSHELF", now.toString());
+            notificationClient.pushCommodityChange(savedCommodity.getSellerId(), commodityId, "COMMODITY_UNSHELVED");
+        } catch (Exception e) {
+            log.warn("记录商品变更或推送失败（不影响商品下架）: commodityId={}, error={}", commodityId, e.getMessage());
+        }
         
         return Result.ok("商品下架成功");
     }
@@ -224,9 +239,10 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result draftCommodity(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         // ✅ 获取变更前的状态（用于判断是否需要记录变更）
         String previousStatus = commodity.getCommodityStatus();
@@ -239,7 +255,11 @@ public class CommodityServiceImpl implements CommodityService {
         // 原因：只有已上架的商品才会出现在聊天界面中，设为草稿后需要更新卡片状态
         // 如果商品本来就是草稿或其他状态，不会出现在聊天中，无需记录变更
         if ("ON_SHELF".equals(previousStatus)) {
-            changeRecordService.recordCommodityChange(commodityId, "DRAFT", now);
+            try {
+                notificationClient.recordCommodityChange(commodityId, "DRAFT", now.toString());
+            } catch (Exception e) {
+                log.warn("记录商品变更失败（不影响商品保存为草稿）: commodityId={}, error={}", commodityId, e.getMessage());
+            }
         }
         
         return Result.ok("商品设为草稿成功");
@@ -248,20 +268,23 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result republishCommodity(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         commodity.setCommodityStatus("ON_SHELF");
         LocalDateTime now = LocalDateTime.now();
         commodity.setPublishTime(now);
         Commodity savedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更（用于增量轮询）
-        changeRecordService.recordCommodityChange(commodityId, "SHELF", now);
-        
-        // ✅ WebSocket 推送：商品重新上架通知给卖家
-        pushCommodityChangeNotification(savedCommodity.getSellerId(), commodityId, "COMMODITY_REPUBLISHED", savedCommodity.getCommodityStatus(), convertToDTO(savedCommodity));
+        // ✅ 记录商品变更并推送通知（使用推送服务）
+        try {
+            notificationClient.recordCommodityChange(commodityId, "SHELF", now.toString());
+            notificationClient.pushCommodityChange(savedCommodity.getSellerId(), commodityId, "COMMODITY_REPUBLISHED");
+        } catch (Exception e) {
+            log.warn("记录商品变更或推送失败（不影响商品上架）: commodityId={}, error={}", commodityId, e.getMessage());
+        }
         
         return Result.ok("商品重新上架成功");
     }
@@ -271,9 +294,10 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result updateCommodityVisibility(String commodityId, String visibility) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         // 验证可见性值
         if (!"PUBLIC".equals(visibility) && !"PRIVATE".equals(visibility) && !"HIDDEN".equals(visibility)) {
@@ -290,9 +314,10 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result updateCommoditySellerVisibility(String commodityId, String sellerVisibility) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         // 验证可见性值
         if (!"PUBLIC".equals(sellerVisibility) && !"PRIVATE".equals(sellerVisibility) && !"HIDDEN".equals(sellerVisibility)) {
@@ -308,9 +333,10 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result updateCommodityBuyerVisibility(String commodityId, String buyerVisibility) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         // 验证可见性值
         if (!"PUBLIC".equals(buyerVisibility) && !"PRIVATE".equals(buyerVisibility) && !"HIDDEN".equals(buyerVisibility)) {
@@ -327,7 +353,8 @@ public class CommodityServiceImpl implements CommodityService {
     
     @Override
     public Result uploadImage(MultipartFile file) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         try {
             Result uploadResult = imageClient.uploadCommodityImage(currentUser.getUserId(), file);
@@ -335,18 +362,18 @@ public class CommodityServiceImpl implements CommodityService {
                 throw new BusinessException(uploadResult.getErrorMsg() != null ? uploadResult.getErrorMsg() : "图片上传失败");
             }
             
-            // ✅ 使用ObjectMapper正确转换类型（避免ClassCastException）
-            ImageUploadDTO uploadDTO;
+            // ⚠️ 注意：不直接引用 ImageUploadDTO，避免跨服务依赖
+            // 从 Result.getData() 中提取数据（Feign Client 返回的是 LinkedHashMap）
+            Map<String, Object> uploadResponse;
             try {
-                uploadDTO = objectMapper.convertValue(
-                    uploadResult.getData(),
-                    new TypeReference<ImageUploadDTO>() {}
-                );
-            } catch (Exception e) {
-                log.error("转换ImageUploadDTO失败: error={}", e.getMessage(), e);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dataMap = (Map<String, Object>) uploadResult.getData();
+                uploadResponse = new HashMap<>(dataMap);
+            } catch (ClassCastException e) {
+                log.error("解析图片上传响应失败: error={}", e.getMessage(), e);
                 throw new BusinessException("图片上传信息解析失败");
             }
-            return Result.ok("图片上传成功", uploadDTO);
+            return Result.ok("图片上传成功", uploadResponse);
         } catch (Exception e) {
             throw new BusinessException("图片上传失败: " + e.getMessage());
         }
@@ -354,9 +381,10 @@ public class CommodityServiceImpl implements CommodityService {
     
     @Override
     public Result uploadCommodityImage(String commodityId, MultipartFile file) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         try {
             Result uploadResult = imageClient.uploadCommodityImageForCommodity(commodityId, file);
@@ -364,18 +392,18 @@ public class CommodityServiceImpl implements CommodityService {
                 throw new BusinessException(uploadResult.getErrorMsg() != null ? uploadResult.getErrorMsg() : "图片上传失败");
             }
             
-            // ✅ 使用ObjectMapper正确转换类型（避免ClassCastException）
-            ImageUploadDTO uploadDTO;
+            // ⚠️ 注意：不直接引用 ImageUploadDTO，避免跨服务依赖
+            // 从 Result.getData() 中提取数据（Feign Client 返回的是 LinkedHashMap）
+            Map<String, Object> uploadResponse;
             try {
-                uploadDTO = objectMapper.convertValue(
-                    uploadResult.getData(),
-                    new TypeReference<ImageUploadDTO>() {}
-                );
-            } catch (Exception e) {
-                log.error("转换ImageUploadDTO失败: error={}", e.getMessage(), e);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dataMap = (Map<String, Object>) uploadResult.getData();
+                uploadResponse = new HashMap<>(dataMap);
+            } catch (ClassCastException e) {
+                log.error("解析图片上传响应失败: error={}", e.getMessage(), e);
                 throw new BusinessException("图片上传信息解析失败");
             }
-            return Result.ok("图片上传成功", uploadDTO);
+            return Result.ok("图片上传成功", uploadResponse);
         } catch (Exception e) {
             throw new BusinessException("图片上传失败: " + e.getMessage());
         }
@@ -430,9 +458,10 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result copyCommodity(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity originalCommodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(originalCommodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity originalCommodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(originalCommodity, currentUser.getUserId());
         
         // 创建新商品
         Commodity newCommodity = new Commodity();
@@ -461,7 +490,8 @@ public class CommodityServiceImpl implements CommodityService {
     
     @Override
     public Result getSalesStatistics(String period) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 使用CommodityQueryService获取统计信息
         return commodityQueryService.getCommodityStats(currentUser);
@@ -471,7 +501,8 @@ public class CommodityServiceImpl implements CommodityService {
     
     @Override
     public Result getMyCommodities(Integer page, Integer size, String status) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 统一使用 getUserCommodities 方法，sellerId 为 null 表示查询自己的商品
         return commodityQueryService.getUserCommodities(currentUser, null, status, page, size);
@@ -479,9 +510,10 @@ public class CommodityServiceImpl implements CommodityService {
     
     @Override
     public Result getMyCommodityDetail(String commodityId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
-        BusinessValidator.requireCommodityOwner(commodity, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
+        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         return Result.ok("获取商品详情成功", convertToDTO(commodity));
     }
@@ -516,14 +548,18 @@ public class CommodityServiceImpl implements CommodityService {
     @Override
     @Transactional
     public Result removeCommodity(String commodityId, String reason) {
-        Commodity commodity = BusinessValidator.requireCommodity(commodityId, commodityRepository);
+        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
         
         commodity.setCommodityStatus("OFF_SHELF");
         LocalDateTime now = LocalDateTime.now();
         commodityRepository.save(commodity);
         
         // ✅ 记录商品变更（用于增量轮询）- 管理端强制下架也需要更新聊天界面
-        changeRecordService.recordCommodityChange(commodityId, "UNSHELF", now);
+        try {
+            notificationClient.recordCommodityChange(commodityId, "UNSHELF", now.toString());
+        } catch (Exception e) {
+            log.warn("记录商品变更失败（不影响商品下架）: commodityId={}, error={}", commodityId, e.getMessage());
+        }
         
         return Result.ok("商品强制下架成功");
     }
@@ -588,44 +624,6 @@ public class CommodityServiceImpl implements CommodityService {
         dto.setClickCount(commodity.getClickCount());
         
         return dto;
-    }
-    
-    /**
-     * 推送商品变化通知
-     * @param sellerId 卖家ID
-     * @param commodityId 商品ID
-     * @param changeType 变化类型（COMMODITY_UPDATED, COMMODITY_SHELVED, COMMODITY_UNSHELVED, COMMODITY_REPUBLISHED）
-     * @param commodityStatus 商品状态
-     * @param commodityDTO 完整的商品DTO（可选）
-     */
-    private void pushCommodityChangeNotification(String sellerId, String commodityId, String changeType, String commodityStatus, CommodityDTO commodityDTO) {
-        try {
-            Map<String, Object> notification = new HashMap<>();
-            notification.put("type", "COMMODITY_CHANGE");
-            notification.put("commodityId", commodityId);
-            notification.put("changeType", changeType);
-            notification.put("commodityStatus", commodityStatus);
-            notification.put("timestamp", LocalDateTime.now().toString());
-            
-            // 包含完整商品信息
-            if (commodityDTO != null) {
-                notification.put("commodity", commodityDTO);
-            }
-            
-            // ✅ WebSocket推送（使用Feign Client调用Message Service）
-            try {
-                messageClient.pushMessage(sellerId, "COMMODITY_CHANGE", notification);
-                log.debug("商品变化通知推送: sellerId={}, commodityId={}, changeType={}, commodityStatus={}", 
-                    sellerId, commodityId, changeType, commodityStatus);
-            } catch (Exception e) {
-                log.warn("WebSocket推送失败（不影响商品操作）: sellerId={}, commodityId={}, error={}", 
-                    sellerId, commodityId, e.getMessage());
-            }
-        } catch (Exception e) {
-            log.error("推送商品变化通知失败: sellerId={}, commodityId={}, changeType={}, error={}", 
-                    sellerId, commodityId, changeType, e.getMessage(), e);
-            // WebSocket 推送失败不影响商品操作的成功返回
-        }
     }
 }
 

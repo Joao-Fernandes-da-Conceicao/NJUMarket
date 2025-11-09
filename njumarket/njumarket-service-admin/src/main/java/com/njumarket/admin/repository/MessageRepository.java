@@ -1,6 +1,6 @@
 package com.njumarket.admin.repository;
 
-import com.njumarket.njumarket.entity.Message;
+import com.njumarket.admin.entity.Message;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;

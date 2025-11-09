@@ -31,6 +31,7 @@
 		<module>njumarket-service-message</module>
 		<module>njumarket-service-image</module>
 		<module>njumarket-service-admin</module>
+		<module>njumarket-service-notification</module>
 	</modules>
 
 	<dependencyManagement>

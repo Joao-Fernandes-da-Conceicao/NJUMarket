@@ -1,6 +1,6 @@
 package com.njumarket.image.service.impl;
 
-import com.njumarket.njumarket.dto.ImageUploadDTO;
+import com.njumarket.image.dto.ImageUploadDTO;
 import com.njumarket.image.service.ImageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

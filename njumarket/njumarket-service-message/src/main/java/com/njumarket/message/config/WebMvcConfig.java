@@ -1,6 +1,6 @@
 package com.njumarket.message.config;
 
-import com.njumarket.njumarket.resolver.CurrentUserArgumentResolver;
+import com.njumarket.message.resolver.CurrentUserArgumentResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;

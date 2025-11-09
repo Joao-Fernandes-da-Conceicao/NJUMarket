@@ -1,6 +1,6 @@
 package com.njumarket.auth.repository;
 
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.auth.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;

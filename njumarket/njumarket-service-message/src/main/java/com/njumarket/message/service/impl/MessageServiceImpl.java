@@ -1,7 +1,7 @@
 package com.njumarket.message.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.MessageDTO;
+import com.njumarket.message.dto.MessageDTO;
 import com.njumarket.message.service.MessageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

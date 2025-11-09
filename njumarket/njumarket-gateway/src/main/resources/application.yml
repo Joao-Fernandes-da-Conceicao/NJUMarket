@@ -40,11 +40,17 @@ spring:
           predicates:
             - Path=/api/user/commodity/**
           # 不StripPrefix，直接转发
+        # 推送服务路由（聊天数据API，增量轮询）- 必须在 /api/user/** 之前
+        - id: notification-service-chat
+          uri: lb://njumarket-service-notification
+          predicates:
+            - Path=/api/user/chat/**
+          # 不StripPrefix，直接转发
         # 订单服务路由 - 必须在 /api/user/** 之前
         - id: order-service
           uri: lb://njumarket-service-order
           predicates:
-            - Path=/api/user/order/**,/api/user/chat/**,/api/user/complaint/**
+            - Path=/api/user/order/**,/api/user/complaint/**
           # 不StripPrefix，直接转发
         # 消息服务路由（用户消息API）- 必须在 /api/user/** 之前
         - id: message-service-user
@@ -65,13 +71,16 @@ spring:
           predicates:
             - Path=/api/user/**
           # 不StripPrefix，直接转发到服务（服务内部路径就是/api/user/**）
-        # WebSocket路由（消息服务）
-        - id: websocket-service
-          uri: lb://njumarket-service-message
+        # ⚠️ 重要：WebSocket路由顺序 - 更具体的路径必须在更通用的路径之前
+        # WebSocket路由（推送服务 - 统一管理所有WebSocket连接）
+        # 注意：WebSocket的CORS由服务端处理，Gateway不处理，避免重复添加CORS头
+        - id: websocket-notification-service
+          uri: lb://njumarket-service-notification
           predicates:
             - Path=/api/ws/**
           filters:
-            - StripPrefix=1  # 将/api/ws转换为/ws，因为message-service的WebSocket端点是/ws
+            - StripPrefix=1  # 将/api/ws转换为/ws，因为notification-service的WebSocket端点是/ws
+            # 不添加CORS过滤器，由notification-service的WebSocketConfig处理CORS
         # 图片服务路由
         - id: image-service
           uri: lb://njumarket-service-image
@@ -85,10 +94,13 @@ spring:
             - Path=/api/admin/**
           # 不StripPrefix，直接转发
       # 全局CORS配置
+      # 注意：WebSocket路径(/api/ws/**)的CORS由服务端处理，不在此配置中
+      # 排除WebSocket路径，避免与服务端CORS配置冲突
       globalcors:
         cors-configurations:
-          '[/**]':
-            allowedOriginPatterns: "*"  # 使用allowedOriginPatterns替代allowedOrigins，支持allowCredentials
+          # 排除WebSocket路径，只配置其他API路径的CORS
+          '[/api/user/**]':
+            allowedOriginPatterns: "*"
             allowedMethods:
               - GET
               - POST
@@ -97,6 +109,47 @@ spring:
               - OPTIONS
             allowedHeaders: "*"
             allowCredentials: true
+          '[/api/contact/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/admin/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/public/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/images/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          # 注意：/api/ws/** 不在此配置中，由服务端处理CORS
 
 eureka:
   client:

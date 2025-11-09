@@ -48,6 +48,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         if (isAuthEndpoint(requestURI)) {
             return chain.filter(exchange);
         }
+        
+        // 排除 WebSocket info 端点（SockJS 需要这个端点来获取服务器信息，不需要 JWT）
+        // SockJS 会在建立 WebSocket 连接前先请求 /info 端点
+        if (requestURI.equals("/api/ws/info") || requestURI.equals("/api/ws/order/info")) {
+            return chain.filter(exchange);
+        }
 
         // 1. 从请求头获取Token
         String token = getTokenFromRequest(request);

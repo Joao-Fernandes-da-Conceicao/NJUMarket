@@ -1,6 +1,6 @@
 package com.njumarket.order.repository;
 
-import com.njumarket.njumarket.entity.OrderSnapshot;
+import com.njumarket.order.entity.OrderSnapshot;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

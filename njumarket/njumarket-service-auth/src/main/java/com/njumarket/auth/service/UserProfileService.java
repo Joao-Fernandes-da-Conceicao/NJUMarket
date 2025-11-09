@@ -1,8 +1,8 @@
 package com.njumarket.auth.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.UserProfileDTO;
-import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
+import com.njumarket.auth.dto.UserProfileDTO;
+import com.njumarket.auth.dto.UserProfileUpdateDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

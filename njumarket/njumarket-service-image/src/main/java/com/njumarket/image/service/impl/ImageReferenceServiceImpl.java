@@ -1,6 +1,6 @@
 package com.njumarket.image.service.impl;
 
-import com.njumarket.njumarket.entity.ImageReference;
+import com.njumarket.image.entity.ImageReference; // ImageReference 实体从 image-service 导入
 import com.njumarket.image.repository.ImageReferenceRepository;
 import com.njumarket.image.service.ImageReferenceService;
 

@@ -1,8 +1,8 @@
 package com.njumarket.commodity.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.entity.Commodity;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.commodity.entity.Commodity;
+import com.njumarket.commodity.entity.User; // User 实体（Commodity Service专用）
 
 import java.util.List;
 

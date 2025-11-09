@@ -1,11 +1,12 @@
 package com.njumarket.auth.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.internal.InternalDTOConverter;
+import com.njumarket.auth.dto.internal.UserInternalDTOConverter;
+import com.njumarket.auth.dto.internal.UserProfileInternalDTOConverter;
 import com.njumarket.njumarket.dto.internal.UserInternalDTO;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
-import com.njumarket.njumarket.entity.User;
-import com.njumarket.njumarket.entity.UserProfile;
+import com.njumarket.auth.entity.User;
+import com.njumarket.auth.entity.UserProfile;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.repository.UserProfileRepository;
@@ -33,7 +34,8 @@ public class InternalController {
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
     private final UserProfileService userProfileService;
-    private final InternalDTOConverter internalDTOConverter;
+    private final UserInternalDTOConverter userInternalDTOConverter;
+    private final UserProfileInternalDTOConverter userProfileInternalDTOConverter;
     
     /**
      * 根据ID查询用户（内部接口）
@@ -48,7 +50,7 @@ public class InternalController {
             log.info("auth-service查询用户: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
                 user.getUserId(), user.getAccountStatus(), user.getAccountStatus() == null);
             
-            UserInternalDTO dto = internalDTOConverter.toInternalDTO(user);
+            UserInternalDTO dto = userInternalDTOConverter.toInternalDTO(user);
             
             // 调试：打印DTO状态信息
             log.info("auth-service返回UserInternalDTO: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
@@ -64,7 +66,7 @@ public class InternalController {
     @GetMapping("/user/batch")
     public Result getUsersByIds(@RequestParam List<String> userIds) {
             List<User> users = userRepository.findAllById(userIds);
-            List<UserInternalDTO> dtos = internalDTOConverter.toUserInternalDTOList(users);
+            List<UserInternalDTO> dtos = userInternalDTOConverter.toUserInternalDTOList(users);
             return Result.ok("批量查询成功", dtos);
     }
     
@@ -75,7 +77,7 @@ public class InternalController {
     @GetMapping("/user/profile/batch")
     public Result getUserProfilesByIds(@RequestParam List<String> userIds) {
             List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
-            List<UserProfileInternalDTO> dtos = internalDTOConverter.toUserProfileInternalDTOList(profiles);
+            List<UserProfileInternalDTO> dtos = userProfileInternalDTOConverter.toUserProfileInternalDTOList(profiles);
             return Result.ok("批量查询成功", dtos);
     }
     
@@ -177,7 +179,7 @@ public class InternalController {
             Page<User> userPage = userRepository.findAll(spec, pageable);
             
             // 转换为内部 DTO 列表
-            List<UserInternalDTO> userDTOs = internalDTOConverter.toUserInternalDTOList(userPage.getContent());
+            List<UserInternalDTO> userDTOs = userInternalDTOConverter.toUserInternalDTOList(userPage.getContent());
             
             // 构建分页结果
             Map<String, Object> result = new java.util.HashMap<>();

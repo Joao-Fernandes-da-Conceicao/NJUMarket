@@ -1,6 +1,6 @@
 package com.njumarket.commodity.repository;
 
-import com.njumarket.njumarket.entity.Commodity;
+import com.njumarket.commodity.entity.Commodity;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

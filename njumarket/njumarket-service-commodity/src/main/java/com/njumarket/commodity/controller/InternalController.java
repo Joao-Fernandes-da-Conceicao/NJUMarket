@@ -2,11 +2,10 @@ package com.njumarket.commodity.controller;
 
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.internal.CommodityInternalDTO;
-import com.njumarket.njumarket.dto.internal.InternalDTOConverter;
-import com.njumarket.njumarket.entity.Commodity;
+import com.njumarket.commodity.dto.internal.CommodityInternalDTOConverter;
+import com.njumarket.commodity.entity.Commodity;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.commodity.repository.CommodityRepository;
-import com.njumarket.commodity.service.ChangeRecordService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,8 +26,7 @@ import java.util.Map;
 public class InternalController {
     
     private final CommodityRepository commodityRepository;
-    private final ChangeRecordService changeRecordService;
-    private final InternalDTOConverter internalDTOConverter;
+    private final CommodityInternalDTOConverter commodityInternalDTOConverter;
     
     /**
      * 根据ID查询商品详情（管理端内部接口）
@@ -38,7 +36,7 @@ public class InternalController {
     public Result getCommodityById(@PathVariable String commodityId) {
         Commodity commodity = commodityRepository.findById(commodityId)
             .orElseThrow(() -> new BusinessException("商品不存在"));
-        CommodityInternalDTO dto = internalDTOConverter.toInternalDTO(commodity);
+        CommodityInternalDTO dto = commodityInternalDTOConverter.toInternalDTO(commodity);
             return Result.ok("查询成功", dto);
     }
     
@@ -53,7 +51,7 @@ public class InternalController {
     public Result getCommodityForUpdate(@PathVariable String commodityId) {
         Commodity commodity = commodityRepository.findByIdForUpdate(commodityId)
             .orElseThrow(() -> new BusinessException("商品不存在"));
-        CommodityInternalDTO dto = internalDTOConverter.toInternalDTO(commodity);
+        CommodityInternalDTO dto = commodityInternalDTOConverter.toInternalDTO(commodity);
             return Result.ok("查询成功", dto);
     }
     
@@ -90,38 +88,6 @@ public class InternalController {
         }
                 commodityRepository.save(commodity);
                 return Result.ok("库存恢复成功");
-    }
-    
-    /**
-     * 获取商品变更记录
-     */
-    @GetMapping("/change-record/commodity")
-    public Result getCommodityChangesAfter(@RequestParam String timestamp) {
-            LocalDateTime afterTimestamp = LocalDateTime.parse(timestamp);
-            List<String> changes = changeRecordService.getCommodityChangesAfter(afterTimestamp);
-            return Result.ok("查询成功", changes);
-    }
-    
-    /**
-     * 获取订单变更记录
-     */
-    @GetMapping("/change-record/order")
-    public Result getOrderChangesAfter(@RequestParam String timestamp) {
-            LocalDateTime afterTimestamp = LocalDateTime.parse(timestamp);
-            List<String> changes = changeRecordService.getOrderChangesAfter(afterTimestamp);
-            return Result.ok("查询成功", changes);
-    }
-    
-    /**
-     * 记录订单变更（内部接口，供Order Service调用）
-     */
-    @PostMapping("/change-record/order")
-    public Result recordOrderChange(@RequestParam String orderId,
-                                    @RequestParam String operation,
-                                    @RequestParam String timestamp) {
-            LocalDateTime changeTimestamp = LocalDateTime.parse(timestamp);
-            changeRecordService.recordOrderChange(orderId, operation, changeTimestamp);
-            return Result.ok("记录成功");
     }
     
     /**
@@ -340,7 +306,7 @@ public class InternalController {
             
             // 转换为内部 DTO 列表
             List<CommodityInternalDTO> commodityDTOs = commodityPage.getContent().stream()
-                .map(internalDTOConverter::toInternalDTO)
+                .map(commodityInternalDTOConverter::toInternalDTO)
                 .collect(java.util.stream.Collectors.toList());
             
             // 构建分页结果

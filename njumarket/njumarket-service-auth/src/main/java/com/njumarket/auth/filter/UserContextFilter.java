@@ -1,6 +1,6 @@
 package com.njumarket.auth.filter;
 
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.auth.entity.User;
 import com.njumarket.njumarket.utils.UserHolder;
 import com.njumarket.auth.repository.UserRepository;
 import jakarta.servlet.FilterChain;

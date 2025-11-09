@@ -42,10 +42,8 @@ public class AuditRecord {
     @Column(name = "audit_type", length = 20, nullable = false)
     private String auditType; // AUTO, MANUAL
 
-    // 多对一关系：审核记录属于某个商品
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "commodity_id", insertable = false, updatable = false)
-    private Commodity commodity;
+    // ⚠️ 注意：不再使用 @ManyToOne 关系，因为 Commodity 实体已迁移到 commodity-service
+    // 如果需要访问商品信息，应通过 Feign Client 调用 commodity-service
 
     /**
      * 创建审核记录

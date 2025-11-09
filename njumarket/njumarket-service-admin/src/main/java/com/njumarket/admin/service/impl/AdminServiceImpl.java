@@ -1,14 +1,21 @@
 package com.njumarket.admin.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.AdminLoginDTO;
-import com.njumarket.njumarket.vo.*;
-import com.njumarket.njumarket.entity.Admin;
-import com.njumarket.njumarket.entity.User;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.njumarket.admin.dto.AdminLoginDTO;
+import com.njumarket.admin.vo.AdminLoginResultVO;
+import com.njumarket.njumarket.vo.AdminSimpleVO;
+import com.njumarket.njumarket.vo.PageResultVO;
+import com.njumarket.njumarket.vo.AdminStatisticsVO;
+import com.njumarket.njumarket.vo.PermissionCheckVO;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
-import com.njumarket.njumarket.entity.Conversation;
-import com.njumarket.njumarket.entity.Message;
+import com.njumarket.admin.entity.Admin;
+import com.njumarket.admin.entity.User;
+import com.njumarket.admin.entity.UserProfile;
+import com.njumarket.admin.entity.Commodity;
+import com.njumarket.admin.entity.Order;
+import com.njumarket.admin.entity.Conversation;
+import com.njumarket.admin.entity.Message;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.njumarket.admin.repository.AdminRepository;
 import com.njumarket.admin.repository.UserRepository;
 import com.njumarket.admin.repository.UserProfileRepository;
@@ -16,14 +23,11 @@ import com.njumarket.admin.repository.CommodityRepository;
 import com.njumarket.admin.repository.OrderRepository;
 import com.njumarket.admin.repository.ConversationRepository;
 import com.njumarket.admin.repository.MessageRepository;
-import com.njumarket.njumarket.entity.UserProfile;
 import com.njumarket.admin.service.AdminService;
 import com.njumarket.admin.service.PasswordService;
 import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.exception.BusinessException;
-import com.njumarket.njumarket.entity.Commodity;
-import com.njumarket.njumarket.entity.Order;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -131,7 +135,17 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result getCurrentAdmin() {
         try {
-            Admin admin = SecurityUtils.requireCurrentAdmin();
+            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
+            // 使用反射获取adminId
+            String adminId;
+            try {
+                adminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
+            } catch (Exception e) {
+                throw new BusinessException("无法获取管理员ID");
+            }
+            // 从数据库查询admin-service的Admin实体
+            Admin admin = adminRepository.findById(adminId)
+                    .orElseThrow(() -> new BusinessException("管理员不存在"));
             
             // 不返回密码等敏感信息
             Map<String, Object> adminInfo = new HashMap<>();
@@ -162,7 +176,17 @@ public class AdminServiceImpl implements AdminService {
     public Result createAdmin(Admin admin) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能创建管理员
-            Admin currentAdmin = com.njumarket.njumarket.utils.SecurityUtils.requireCurrentAdmin();
+            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
+            // 使用反射获取adminId
+            String adminId;
+            try {
+                adminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
+            } catch (Exception e) {
+                throw new BusinessException("无法获取管理员ID");
+            }
+            // 从数据库查询admin-service的Admin实体
+            Admin currentAdmin = adminRepository.findById(adminId)
+                    .orElseThrow(() -> new BusinessException("管理员不存在"));
             if (!currentAdmin.isSystemAdmin()) {
                 log.warn("非system权限管理员尝试创建管理员: adminId={}", 
                     currentAdmin.getAdminId());
@@ -298,7 +322,17 @@ public class AdminServiceImpl implements AdminService {
     public Result getAdminList(Integer page, Integer size, String keyword, String accountStatus, String sortProp, String sortOrder) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能查看管理员列表
-            Admin currentAdmin = com.njumarket.njumarket.utils.SecurityUtils.requireCurrentAdmin();
+            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
+            // 使用反射获取adminId
+            String adminId;
+            try {
+                adminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
+            } catch (Exception e) {
+                throw new BusinessException("无法获取管理员ID");
+            }
+            // 从数据库查询admin-service的Admin实体
+            Admin currentAdmin = adminRepository.findById(adminId)
+                    .orElseThrow(() -> new BusinessException("管理员不存在"));
             if (!currentAdmin.isSystemAdmin()) {
                 log.warn("非system权限管理员尝试访问管理员列表: adminId={}", 
                     currentAdmin.getAdminId());
@@ -367,7 +401,17 @@ public class AdminServiceImpl implements AdminService {
     public Result getAdminById(String adminId) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能查看其他管理员信息
-            Admin currentAdmin = com.njumarket.njumarket.utils.SecurityUtils.requireCurrentAdmin();
+            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
+            // 使用反射获取当前管理员ID
+            String currentAdminId;
+            try {
+                currentAdminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
+            } catch (Exception e) {
+                throw new BusinessException("无法获取管理员ID");
+            }
+            // 从数据库查询admin-service的Admin实体
+            Admin currentAdmin = adminRepository.findById(currentAdminId)
+                    .orElseThrow(() -> new BusinessException("管理员不存在"));
             if (!currentAdmin.isSystemAdmin()) {
                 log.warn("非system权限管理员尝试查看管理员信息: adminId={}, targetAdminId={}", 
                     currentAdmin.getAdminId(), adminId);
@@ -535,7 +579,17 @@ public class AdminServiceImpl implements AdminService {
     public Result updateAdminFull(String adminId, java.util.Map<String, Object> payload) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能更新其他管理员信息
-            Admin currentAdmin = com.njumarket.njumarket.utils.SecurityUtils.requireCurrentAdmin();
+            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
+            // 使用反射获取当前管理员ID
+            String currentAdminId;
+            try {
+                currentAdminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
+            } catch (Exception e) {
+                throw new BusinessException("无法获取管理员ID");
+            }
+            // 从数据库查询admin-service的Admin实体
+            Admin currentAdmin = adminRepository.findById(currentAdminId)
+                    .orElseThrow(() -> new BusinessException("管理员不存在"));
             if (!currentAdmin.isSystemAdmin()) {
                 log.warn("非system权限管理员尝试更新管理员信息: adminId={}, targetAdminId={}", 
                     currentAdmin.getAdminId(), adminId);
@@ -670,7 +724,7 @@ public class AdminServiceImpl implements AdminService {
     /**
      * 生成并存储Token
      */
-    private AdminLoginResultVO generateAndStoreTokens(Admin admin) {
+    private AdminLoginResultVO generateAndStoreTokens(com.njumarket.admin.entity.Admin admin) {
         // 生成JWT Token
         String token = jwtUtils.generateToken(admin.getAdminId(), admin.getUsername());
         
@@ -688,6 +742,14 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result listUsers(Integer page, Integer size, String keyword, String accountStatus, String sortProp, String sortOrder) {
         try {
+            // ✅ 权限检查：确保管理员已登录（但不限制权限级别，所有管理员都可以查看用户列表）
+            try {
+                SecurityUtils.requireCurrentAdmin();
+            } catch (Exception e) {
+                log.warn("获取用户列表时权限检查失败: {}", e.getMessage());
+                throw new BusinessException("管理员未登录，请先登录");
+            }
+            
             // ✅ 直接访问数据库，不需要通过FeignClient
             // 构建分页参数
             Sort sort = Sort.by(Sort.Direction.DESC, "registerTime");
@@ -1844,7 +1906,7 @@ public class AdminServiceImpl implements AdminService {
         }
     }
 
-    private Map<String, Object> toSimpleCommodity(com.njumarket.njumarket.entity.Commodity c) {
+    private Map<String, Object> toSimpleCommodity(Commodity c) {
         return toSimpleCommodityWithSeller(c, null);
     }
     
@@ -1854,7 +1916,7 @@ public class AdminServiceImpl implements AdminService {
      * @param sellerProfile 卖家Profile（可选，如果为null则不在结果中包含卖家信息）
      * @return 简单Map对象
      */
-    private Map<String, Object> toSimpleCommodityWithSeller(com.njumarket.njumarket.entity.Commodity c, UserProfileInternalDTO sellerProfile) {
+    private Map<String, Object> toSimpleCommodityWithSeller(Commodity c, UserProfileInternalDTO sellerProfile) {
         Map<String, Object> m = new HashMap<>();
         m.put("commodityId", c.getCommodityId());
         m.put("sellerId", c.getSellerId());
@@ -2036,7 +2098,7 @@ public class AdminServiceImpl implements AdminService {
         }
     }
 
-    private Map<String, Object> toSimpleOrder(com.njumarket.njumarket.entity.Order o) {
+    private Map<String, Object> toSimpleOrder(Order o) {
         return toSimpleOrderWithUsers(o, null, null);
     }
     
@@ -2047,7 +2109,7 @@ public class AdminServiceImpl implements AdminService {
      * @param sellerProfile 卖家Profile（可选，如果为null则不在结果中包含卖家信息）
      * @return 简单Map对象
      */
-    private Map<String, Object> toSimpleOrderWithUsers(com.njumarket.njumarket.entity.Order o, 
+    private Map<String, Object> toSimpleOrderWithUsers(Order o, 
                                                        UserProfileInternalDTO buyerProfile,
                                                        UserProfileInternalDTO sellerProfile) {
         Map<String, Object> m = new HashMap<>();

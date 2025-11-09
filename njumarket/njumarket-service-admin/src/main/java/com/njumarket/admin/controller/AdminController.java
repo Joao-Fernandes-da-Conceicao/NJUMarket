@@ -1,8 +1,8 @@
 package com.njumarket.admin.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.AdminLoginDTO;
-import com.njumarket.njumarket.entity.Admin;
+import com.njumarket.admin.dto.AdminLoginDTO;
+import com.njumarket.admin.entity.Admin;
 import com.njumarket.admin.service.AdminService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;

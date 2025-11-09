@@ -2,7 +2,7 @@ package com.njumarket.order.service;
 
 import com.njumarket.njumarket.dto.Result;
 import java.util.List;
-import com.njumarket.njumarket.dto.OrderDTO;
+import com.njumarket.order.dto.OrderDTO;
 
 /**
  * 订单服务接口
@@ -141,7 +141,7 @@ public interface OrderService {
     /**
      * 创建新订单（基于商品快照，但允许用户修改信息）
      */
-    Result createOrderFromSnapshot(String orderId, com.njumarket.njumarket.dto.OrderSnapshotDTO orderSnapshotDTO);
+    Result createOrderFromSnapshot(String orderId, com.njumarket.order.dto.OrderSnapshotDTO orderSnapshotDTO);
     
     /**
      * 批量查询订单基本信息（用于聊天界面，轻量级查询）

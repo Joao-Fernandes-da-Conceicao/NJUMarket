@@ -1,7 +1,7 @@
 package com.njumarket.order.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.OrderDTO;
+import com.njumarket.order.dto.OrderDTO;
 import com.njumarket.order.service.OrderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -97,7 +97,7 @@ public class UserOrderController {
     })
     @PostMapping("/{orderId}/create-from-snapshot")
     public Result createOrderFromSnapshot(@Parameter(description = "订单ID", required = true) @PathVariable String orderId, 
-                                         @Valid @RequestBody com.njumarket.njumarket.dto.OrderSnapshotDTO orderSnapshotDTO) {
+                                         @Valid @RequestBody com.njumarket.order.dto.OrderSnapshotDTO orderSnapshotDTO) {
         return orderService.createOrderFromSnapshot(orderId, orderSnapshotDTO);
     }
 

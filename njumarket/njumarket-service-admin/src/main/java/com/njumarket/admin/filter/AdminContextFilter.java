@@ -1,8 +1,8 @@
 package com.njumarket.admin.filter;
 
-import com.njumarket.njumarket.entity.Admin;
-import com.njumarket.njumarket.utils.UserHolder;
+import com.njumarket.admin.entity.Admin;
 import com.njumarket.admin.repository.AdminRepository;
+import com.njumarket.njumarket.utils.UserHolder;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,7 +44,7 @@ public class AdminContextFilter extends OncePerRequestFilter {
             String adminId = request.getHeader("X-Admin-Id");
             String requestURI = request.getRequestURI();
             
-            log.debug("AdminContextFilter处理请求: uri={}, X-Admin-Id={}", requestURI, adminId);
+            log.info("AdminContextFilter处理请求: uri={}, X-Admin-Id={}", requestURI, adminId);
             
             // 登录接口不需要处理管理员上下文
             if (requestURI.equals("/api/admin/login")) {
@@ -55,7 +55,7 @@ public class AdminContextFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(adminId)) {
                 // 直接从数据库查询管理员（Admin Service不需要通过Feign Client）
                 try {
-                    log.debug("从数据库查询管理员: adminId={}", adminId);
+                    log.info("从数据库查询管理员: adminId={}", adminId);
                     Optional<Admin> adminOpt = adminRepository.findById(adminId);
                     
                     if (adminOpt.isPresent()) {
@@ -82,7 +82,7 @@ public class AdminContextFilter extends OncePerRequestFilter {
                             return;
                         }
                         
-                        // 1. 设置Spring Security SecurityContext（用于@PreAuthorize和@CurrentAdmin注解）
+                        // ✅ 设置Spring Security SecurityContext（用于@PreAuthorize和@CurrentAdmin注解）
                         // 根据adminLevel设置角色：system -> ROLE_SYSTEM, administrator -> ROLE_ADMINISTRATOR
                         String role = "ROLE_" + (admin.isSystemAdmin() ? "SYSTEM" : "ADMINISTRATOR");
                         List<SimpleGrantedAuthority> authorities = Collections.singletonList(
@@ -96,10 +96,10 @@ public class AdminContextFilter extends OncePerRequestFilter {
                         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                         
-                        // 2. 同时设置UserHolder（向后兼容，用于Service层）
+                        // ✅ 同时设置UserHolder（作为备用，用于Service层）
                         UserHolder.saveAdmin(admin);
                         
-                        log.debug("管理员信息已设置: adminId={}, username={}, adminLevel={}, accountStatus={}, SecurityContext已设置", 
+                        log.info("✅ 管理员信息已设置: adminId={}, username={}, adminLevel={}, accountStatus={}, SecurityContext和UserHolder已设置", 
                             admin.getAdminId(), admin.getUsername(), admin.getAdminLevel(), admin.getAccountStatus());
                     } else {
                         log.warn("管理员不存在: adminId={}, uri={}", adminId, requestURI);
@@ -108,14 +108,16 @@ public class AdminContextFilter extends OncePerRequestFilter {
                     log.error("查询管理员信息时发生异常: adminId={}, error={}", adminId, e.getMessage(), e);
                 }
             } else {
-                log.debug("请求头中未找到X-Admin-Id: uri={}", requestURI);
+                log.warn("⚠️ 请求头中未找到X-Admin-Id: uri={}, 所有请求头={}", requestURI, 
+                    java.util.Collections.list(request.getHeaderNames()));
             }
             
             // 继续处理请求
             filterChain.doFilter(request, response);
         } finally {
-            // 请求结束后清理SecurityContext和ThreadLocal，避免内存泄漏
-            SecurityContextHolder.clearContext();
+            // ✅ 注意：不要清理SecurityContext，因为Service层需要访问
+            // Spring Security 会在请求结束时自动清理SecurityContext
+            // 清理UserHolder（ThreadLocal）
             UserHolder.removeAdmin();
         }
     }
@@ -134,5 +136,6 @@ public class AdminContextFilter extends OncePerRequestFilter {
             default -> "账户状态异常，请联系系统管理员";
         };
     }
+    
 }
 

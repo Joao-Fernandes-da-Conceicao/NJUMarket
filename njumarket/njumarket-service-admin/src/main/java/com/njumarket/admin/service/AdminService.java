@@ -1,8 +1,8 @@
 package com.njumarket.admin.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.AdminLoginDTO;
-import com.njumarket.njumarket.entity.Admin;
+import com.njumarket.admin.dto.AdminLoginDTO;
+// Admin 实体已迁移到 auth-service
 import jakarta.servlet.http.HttpSession;
 
 import java.util.List;
@@ -19,9 +19,9 @@ public interface AdminService {
     /** 获取当前登录的管理员信息 */
     Result getCurrentAdmin();
     /** 创建管理员账号 */
-    Result createAdmin(Admin admin);
+    Result createAdmin(com.njumarket.admin.entity.Admin admin);
     /** 更新管理员信息 */
-    Result updateAdmin(String adminId, Admin admin);
+    Result updateAdmin(String adminId, com.njumarket.admin.entity.Admin admin);
     /** 完整更新管理员信息（包括所有非客观字段，只有system权限可用） */
     Result updateAdminFull(String adminId, java.util.Map<String, Object> payload);
     /** 删除管理员账号 */

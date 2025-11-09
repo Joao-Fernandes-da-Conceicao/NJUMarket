@@ -1,14 +1,13 @@
 package com.njumarket.auth.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.UserDTO;
-import com.njumarket.njumarket.dto.PublicUserDTO;
-import com.njumarket.njumarket.dto.UserProfileDTO;
-import com.njumarket.njumarket.dto.PublicUserProfileDTO;
-import com.njumarket.njumarket.dto.UserProfileUpdateDTO;
-import com.njumarket.njumarket.dto.ImageUploadDTO;
-import com.njumarket.njumarket.entity.User;
-import com.njumarket.njumarket.entity.UserProfile;
+import com.njumarket.auth.dto.UserDTO;
+import com.njumarket.auth.dto.PublicUserDTO;
+import com.njumarket.auth.dto.UserProfileDTO;
+import com.njumarket.auth.dto.PublicUserProfileDTO;
+import com.njumarket.auth.dto.UserProfileUpdateDTO;
+import com.njumarket.auth.entity.User;
+import com.njumarket.auth.entity.UserProfile;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.repository.UserProfileRepository;
 import com.njumarket.auth.service.UserProfileService;
@@ -47,7 +46,8 @@ public class UserProfileServiceImpl implements UserProfileService {
             .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
         // 检查是否是查看自己的资料（使用 SecurityUtils）
-        User currentUser = SecurityUtils.getCurrentUser();
+        Object userObj = SecurityUtils.getCurrentUser();
+        User currentUser = userObj instanceof User ? (User) userObj : null;
         boolean isSelf = currentUser != null && currentUser.getUserId().equals(userId);
         
         if (isSelf) {
@@ -74,7 +74,8 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     @Override
     public Result getCurrentUserProfile() {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         return getUserProfile(currentUser.getUserId());
     }
 
@@ -104,7 +105,8 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     @Override
     public Result updateCurrentUserProfile(UserProfileUpdateDTO updateDTO) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         return updateUserProfile(currentUser.getUserId(), updateDTO);
     }
 
@@ -150,21 +152,32 @@ public class UserProfileServiceImpl implements UserProfileService {
             }
             
             // 3. 更新用户档案中的头像URL
-            // ✅ 使用ObjectMapper正确转换类型（避免ClassCastException）
-            ImageUploadDTO uploadDTO;
+            // ⚠️ 注意：不直接引用 ImageUploadDTO，避免跨服务依赖
+            // 从 Result.getData() 中提取 imageUrl（Feign Client 返回的是 LinkedHashMap）
+            String imageUrl;
             try {
-                uploadDTO = objectMapper.convertValue(
-                    uploadResult.getData(),
-                    new TypeReference<ImageUploadDTO>() {}
-                );
-            } catch (Exception e) {
-                log.error("转换ImageUploadDTO失败: error={}", e.getMessage(), e);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dataMap = (Map<String, Object>) uploadResult.getData();
+                Object imageUrlObj = dataMap.get("imageUrl");
+                if (imageUrlObj == null) {
+                    throw new BusinessException("图片上传响应中缺少 imageUrl 字段");
+                }
+                imageUrl = imageUrlObj.toString();
+            } catch (ClassCastException e) {
+                log.error("解析图片上传响应失败: error={}", e.getMessage(), e);
                 throw new BusinessException("图片上传信息解析失败");
             }
-            profile.setAvatar(uploadDTO.getImageUrl());
+            
+            profile.setAvatar(imageUrl);
             userProfileRepository.save(profile);
             
-            return Result.ok("头像上传成功", uploadDTO);
+            // 返回上传结果（只包含必要的字段，不依赖 ImageUploadDTO）
+            Map<String, Object> uploadResponse = new HashMap<>();
+            uploadResponse.put("imageUrl", imageUrl);
+            uploadResponse.put("success", true);
+            uploadResponse.put("message", "头像上传成功");
+            
+            return Result.ok("头像上传成功", uploadResponse);
         } catch (Exception e) {
             log.error("头像上传失败: userId={}, error={}", userId, e.getMessage(), e);
             throw new BusinessException("头像上传失败: " + e.getMessage());

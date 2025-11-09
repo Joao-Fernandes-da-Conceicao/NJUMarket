@@ -1,6 +1,6 @@
 package com.njumarket.admin.repository;
 
-import com.njumarket.njumarket.entity.Conversation;
+import com.njumarket.admin.entity.Conversation;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;

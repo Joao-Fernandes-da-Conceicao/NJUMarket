@@ -1,14 +1,16 @@
 package com.njumarket.message.service.impl;
 
-import com.njumarket.njumarket.dto.ConversationDTO;
-import com.njumarket.njumarket.dto.MessageDTO;
-import com.njumarket.njumarket.dto.SendMessageRequest;
+import com.njumarket.message.dto.ConversationDTO;
+import com.njumarket.message.dto.MessageDTO;
+import com.njumarket.message.dto.SendMessageRequest;
 import com.njumarket.njumarket.dto.Result;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
 import com.njumarket.njumarket.dto.internal.UserInternalDTO;
-import com.njumarket.njumarket.entity.*;
+import com.njumarket.message.entity.Conversation; // Conversation 实体从 message-service 导入
+import com.njumarket.message.entity.Message; // Message 实体从 message-service 导入
+import com.njumarket.message.entity.User; // User 实体（Message Service专用）
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.message.repository.ConversationRepository;
 import com.njumarket.message.repository.MessageRepository;
@@ -63,7 +65,8 @@ public class ContactServiceImpl implements ContactService {
     public Result sendMessage(String userId, SendMessageRequest request) {
         try {
             // ✅ 鉴权检查：验证当前登录用户（使用 SecurityUtils）
-            User currentUser = com.njumarket.njumarket.utils.SecurityUtils.requireCurrentUser();
+            Object userObj = com.njumarket.njumarket.utils.SecurityUtils.requireCurrentUser();
+            User currentUser = (User) userObj;
             
             // ✅ 鉴权检查：验证传入的userId与当前登录用户匹配（防止用户冒充）
             if (!currentUser.getUserId().equals(userId)) {
@@ -315,14 +318,13 @@ public class ContactServiceImpl implements ContactService {
                 if (!commodityResult.getSuccess() || commodityResult.getData() == null) {
                     throw new BusinessException("商品不存在");
                 }
-                // 从Result中提取CommodityDTO，需要转换为Commodity实体
+                // ⚠️ 注意：不再转换为Commodity实体，直接使用DTO数据
                 @SuppressWarnings("unchecked")
                 Map<String, Object> commodityData = (Map<String, Object>) commodityResult.getData();
-                Commodity commodity = new Commodity();
-                commodity.setCommodityId((String) commodityData.get("commodityId"));
-                commodity.setSellerId((String) commodityData.get("sellerId"));
-                commodity.setTitle((String) commodityData.get("title"));
-                commodity.setCommodityStatus((String) commodityData.get("commodityStatus"));
+                String commodityId = (String) commodityData.get("commodityId");
+                String sellerId = (String) commodityData.get("sellerId");
+                String title = (String) commodityData.get("title");
+                String commodityStatus = (String) commodityData.get("commodityStatus");
                 
                 // ✅ 商品卡片鉴权：验证商品的卖家必须是对话双方之一
                 // 获取对话的对方用户
@@ -332,10 +334,10 @@ public class ContactServiceImpl implements ContactService {
                 }
                 
                 // ✅ 验证商品的卖家必须匹配对话的双方用户之一
-                // 场景1：卖家（commodity.sellerId）向买家发送商品卡片
+                // 场景1：卖家（sellerId）向买家发送商品卡片
                 // 场景2：买家咨询卖家的商品
-                boolean sellerIsSender = commodity.getSellerId().equals(userId);
-                boolean sellerIsReceiver = commodity.getSellerId().equals(otherUserId);
+                boolean sellerIsSender = sellerId != null && sellerId.equals(userId);
+                boolean sellerIsReceiver = sellerId != null && sellerId.equals(otherUserId);
                 
                 // 商品卖家必须是对话双方之一
                 if (!sellerIsSender && !sellerIsReceiver) {
@@ -344,7 +346,7 @@ public class ContactServiceImpl implements ContactService {
                 
                 // ✅ 商品卡片鉴权：验证商品状态（可选，根据业务需求）
                 // 已下架或草稿状态的商品可能不允许发送
-                if ("OFF_SHELF".equals(commodity.getCommodityStatus()) || "DRAFT".equals(commodity.getCommodityStatus())) {
+                if ("OFF_SHELF".equals(commodityStatus) || "DRAFT".equals(commodityStatus)) {
                     throw new BusinessException("商品状态不允许发送：商品已下架或为草稿状态");
                 }
                 
@@ -352,7 +354,7 @@ public class ContactServiceImpl implements ContactService {
                 message.setCommodityId(request.getCommodityId());
                 message.setMessageType("COMMODITY_CARD");
                 if (message.getContent() == null || message.getContent().isEmpty()) {
-                    message.setContent("商品：" + commodity.getTitle());
+                    message.setContent("商品：" + (title != null ? title : "未知商品"));
                 }
             }
             
@@ -362,21 +364,20 @@ public class ContactServiceImpl implements ContactService {
                 if (!orderResult.getSuccess() || orderResult.getData() == null) {
                     throw new BusinessException("订单不存在");
                 }
-                // 从Result中提取OrderDTO，需要转换为Order实体
+                // ⚠️ 注意：不再转换为Order实体，直接使用DTO数据
                 @SuppressWarnings("unchecked")
                 Map<String, Object> orderData = (Map<String, Object>) orderResult.getData();
-                Order order = new Order();
-                order.setOrderId((String) orderData.get("orderId"));
-                order.setBuyerId((String) orderData.get("buyerId"));
-                order.setSellerId((String) orderData.get("sellerId"));
+                String orderId = (String) orderData.get("orderId");
+                String buyerId = (String) orderData.get("buyerId");
+                String sellerId = (String) orderData.get("sellerId");
                 String otherUserId = conversation.getOtherUserId(userId);
                 if (otherUserId == null) {
                     throw new BusinessException("无法确定对话对方用户");
                 }
                 
                 // 验证订单的买卖双方必须匹配对话的双方用户
-                boolean buyerMatches = order.getBuyerId().equals(userId) || order.getBuyerId().equals(otherUserId);
-                boolean sellerMatches = order.getSellerId().equals(userId) || order.getSellerId().equals(otherUserId);
+                boolean buyerMatches = buyerId != null && (buyerId.equals(userId) || buyerId.equals(otherUserId));
+                boolean sellerMatches = sellerId != null && (sellerId.equals(userId) || sellerId.equals(otherUserId));
                 if (!buyerMatches || !sellerMatches) {
                     throw new BusinessException("无权发送此订单卡片：订单不属于当前对话双方");
                 }
@@ -385,7 +386,7 @@ public class ContactServiceImpl implements ContactService {
                 message.setOrderId(request.getOrderId());
                 message.setMessageType("ORDER_CARD");
                 if (message.getContent() == null || message.getContent().isEmpty()) {
-                    message.setContent("订单：" + order.getOrderId());
+                    message.setContent("订单：" + (orderId != null ? orderId : request.getOrderId()));
                 }
             }
             

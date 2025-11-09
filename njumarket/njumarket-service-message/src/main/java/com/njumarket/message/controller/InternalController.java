@@ -1,8 +1,8 @@
 package com.njumarket.message.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.entity.Conversation;
-import com.njumarket.njumarket.entity.Message;
+import com.njumarket.message.entity.Conversation; // Conversation 实体从 message-service 导入
+import com.njumarket.message.entity.Message; // Message 实体从 message-service 导入
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.message.repository.ConversationRepository;
 import com.njumarket.message.repository.MessageRepository;

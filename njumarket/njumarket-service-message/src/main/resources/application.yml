@@ -21,7 +21,7 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:hqz20050316}
-      database: ${MESSAGE_REDIS_DATABASE:3}
+      database: ${MESSAGE_REDIS_DATABASE:2}  # 统一使用db2作为缓存数据库
 
 eureka:
   client:

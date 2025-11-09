@@ -1,6 +1,6 @@
 package com.njumarket.order.config;
 
-import com.njumarket.njumarket.resolver.CurrentUserArgumentResolver;
+import com.njumarket.order.resolver.CurrentUserArgumentResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;

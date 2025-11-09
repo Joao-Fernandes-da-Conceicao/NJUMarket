@@ -12,7 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         "com.njumarket.message",
         "com.njumarket.njumarket"
 })
-@EntityScan(basePackages = "com.njumarket.njumarket.entity")
+@EntityScan(basePackages = "com.njumarket.message.entity")
 @EnableJpaRepositories(basePackages = "com.njumarket.message.repository")
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = "com.njumarket")

@@ -1,7 +1,7 @@
 package com.njumarket.message.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.MessageDTO;
+import com.njumarket.message.dto.MessageDTO;
 
 /**
  * 消息服务接口

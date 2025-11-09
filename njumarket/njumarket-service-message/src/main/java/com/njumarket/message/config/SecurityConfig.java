@@ -30,7 +30,11 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             // 允许所有请求（认证由UserContextFilter处理）
             // Gateway已经验证了JWT，这里只需要设置SecurityContext
-            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+            // 特别注意：WebSocket 端点（/ws/**）必须允许，否则会返回 403
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/ws/**", "/ws/info").permitAll()  // WebSocket 端点
+                .anyRequest().permitAll()
+            );
         
         return http.build();
     }

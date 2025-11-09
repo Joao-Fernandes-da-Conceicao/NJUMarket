@@ -1,7 +1,7 @@
 package com.njumarket.image.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.ImageUploadDTO;
+import com.njumarket.image.dto.ImageUploadDTO;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.image.service.ImageService;
 import lombok.RequiredArgsConstructor;

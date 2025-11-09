@@ -66,6 +66,8 @@ public class AdminAuthenticationFilter implements GlobalFilter, Ordered {
             return unauthorizedResponse(exchange, "Token格式错误，请重新登录");
         }
 
+        log.info("✅ 管理员Token验证成功: adminId={}, uri={}", adminId, requestURI);
+
         // 4. 将管理员ID添加到请求头，传递给后端服务
         // 注意：管理员账户状态检查由后端服务负责（Gateway不访问数据库）
         ServerHttpRequest modifiedRequest = request.mutate()
@@ -73,6 +75,8 @@ public class AdminAuthenticationFilter implements GlobalFilter, Ordered {
                 .header("X-Authenticated", "true")
                 .header("X-User-Type", "admin")
                 .build();
+
+        log.info("✅ 已设置X-Admin-Id请求头: adminId={}, 准备转发到Admin Service", adminId);
 
         return chain.filter(exchange.mutate().request(modifiedRequest).build());
     }

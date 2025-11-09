@@ -1,9 +1,9 @@
 package com.njumarket.auth.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.UserDTO;
-import com.njumarket.njumarket.dto.LoginFormDTO;
-import com.njumarket.njumarket.dto.RegisterDTO;
+import com.njumarket.auth.dto.UserDTO;
+import com.njumarket.auth.dto.LoginFormDTO;
+import com.njumarket.auth.dto.RegisterDTO;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.multipart.MultipartFile;
 

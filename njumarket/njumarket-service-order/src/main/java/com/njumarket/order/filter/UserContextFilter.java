@@ -3,7 +3,7 @@ package com.njumarket.order.filter;
 import com.njumarket.order.client.AuthClient;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.internal.UserInternalDTO;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.order.entity.User; // User 实体（Order Service专用）
 import com.njumarket.njumarket.utils.UserHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -49,14 +49,30 @@ public class UserContextFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
-            // 从请求头获取用户ID（Gateway已添加）
-            String userId = request.getHeader("X-User-Id");
             String requestURI = request.getRequestURI();
             
-            log.info("UserContextFilter处理请求: uri={}, X-User-Id={}, X-User-Id是否为null={}", 
-                requestURI, userId, userId == null);
+            // ⚠️ 重要：WebSocket 握手请求由 WebSocketHandshakeInterceptor 处理
+            // UserContextFilter 不应该阻止 WebSocket 握手，即使获取用户信息失败也要允许通过
+            // WebSocket 握手时，X-User-Id 会由 Gateway 传递，WebSocketHandshakeInterceptor 会提取
+            boolean isWebSocketHandshake = requestURI.startsWith("/ws/order/") || 
+                                          requestURI.contains("/websocket") ||
+                                          "websocket".equalsIgnoreCase(request.getHeader("Upgrade"));
             
-            if (StringUtils.hasText(userId)) {
+            // 从请求头获取用户ID（Gateway已添加）
+            String userId = request.getHeader("X-User-Id");
+            
+            log.info("UserContextFilter处理请求: uri={}, X-User-Id={}, isWebSocketHandshake={}", 
+                requestURI, userId, isWebSocketHandshake);
+            
+            // WebSocket 握手请求：只设置 SecurityContext，不进行账户状态检查
+            // 账户状态检查由 WebSocketHandshakeInterceptor 在握手时进行
+            if (isWebSocketHandshake && StringUtils.hasText(userId)) {
+                // WebSocket 握手时，只设置基本的用户信息，不进行账户状态检查
+                // 这样可以避免因为 Feign Client 调用失败而阻止 WebSocket 连接
+                log.debug("WebSocket握手请求，跳过用户信息获取: uri={}, userId={}", requestURI, userId);
+                // 继续处理，让 WebSocketHandshakeInterceptor 处理认证
+            } else if (StringUtils.hasText(userId)) {
+                // 普通 HTTP 请求：获取完整的用户信息并检查账户状态
                 // 通过Feign Client获取完整的User对象
                 try {
                     log.info("调用authClient.getUserById: userId={}", userId);

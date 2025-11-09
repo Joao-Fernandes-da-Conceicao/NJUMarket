@@ -1,15 +1,16 @@
 package com.njumarket.order.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.internal.InternalDTOConverter;
+import com.njumarket.order.dto.internal.OrderInternalDTOConverter;
 import com.njumarket.njumarket.dto.internal.OrderInternalDTO;
-import com.njumarket.njumarket.entity.Order;
+import com.njumarket.order.entity.Order;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,7 +26,7 @@ import java.util.Optional;
 public class InternalController {
     
     private final OrderRepository orderRepository;
-    private final InternalDTOConverter internalDTOConverter;
+    private final OrderInternalDTOConverter orderInternalDTOConverter;
     
     /**
      * 获取订单详情（管理端内部接口）
@@ -35,7 +36,7 @@ public class InternalController {
     public Result getOrderById(@PathVariable String orderId) {
         Order order = orderRepository.findById(orderId)
             .orElseThrow(() -> new BusinessException("订单不存在"));
-        OrderInternalDTO dto = internalDTOConverter.toInternalDTO(order);
+        OrderInternalDTO dto = orderInternalDTOConverter.toInternalDTO(order);
         return Result.ok("查询成功", dto);
     }
     
@@ -177,7 +178,7 @@ public class InternalController {
         
         // 转换为内部 DTO 列表
         List<OrderInternalDTO> orderDTOs = orderPage.getContent().stream()
-            .map(internalDTOConverter::toInternalDTO)
+            .map(orderInternalDTOConverter::toInternalDTO)
             .collect(java.util.stream.Collectors.toList());
         
         // 构建分页结果
@@ -190,5 +191,6 @@ public class InternalController {
         
         return Result.ok("查询成功", result);
     }
+    
 }
 

@@ -1,13 +1,13 @@
 package com.njumarket.auth.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.UserDTO;
-import com.njumarket.njumarket.dto.LoginFormDTO;
-import com.njumarket.njumarket.dto.RegisterDTO;
-import com.njumarket.njumarket.vo.LoginResultVO;
-import com.njumarket.njumarket.vo.TokenResultVO;
-import com.njumarket.njumarket.entity.User;
-import com.njumarket.njumarket.entity.UserProfile;
+import com.njumarket.auth.dto.UserDTO;
+import com.njumarket.auth.dto.LoginFormDTO;
+import com.njumarket.auth.dto.RegisterDTO;
+import com.njumarket.auth.vo.LoginResultVO;
+import com.njumarket.auth.vo.TokenResultVO;
+import com.njumarket.auth.entity.User;
+import com.njumarket.auth.entity.UserProfile;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.service.UserService;
 import com.njumarket.auth.service.PasswordService;
@@ -275,7 +275,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result logout(HttpSession session) {
         // 1. 获取当前用户（使用 SecurityUtils）
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         String userId = currentUser.getUserId();
         
         log.info("用户登出开始: userId={}", userId);
@@ -473,7 +474,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result getCurrentUser() {
             // 获取当前用户信息（使用 SecurityUtils）
-            User currentUser = SecurityUtils.getCurrentUser();
+            Object userObj = SecurityUtils.getCurrentUser();
+            User currentUser = userObj instanceof User ? (User) userObj : null;
             if (currentUser == null) {
             throw new BusinessException("用户未登录");
             }

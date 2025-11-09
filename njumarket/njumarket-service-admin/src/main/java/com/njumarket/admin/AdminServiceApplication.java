@@ -11,7 +11,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
         "com.njumarket.admin",
         "com.njumarket.njumarket"
 })
-@EntityScan(basePackages = "com.njumarket.njumarket.entity")
+@EntityScan(basePackages = "com.njumarket.admin.entity")
 @EnableJpaRepositories(basePackages = "com.njumarket.admin.repository")
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = "com.njumarket")

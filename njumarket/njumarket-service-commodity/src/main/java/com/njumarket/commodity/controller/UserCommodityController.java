@@ -1,7 +1,7 @@
 package com.njumarket.commodity.controller;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.CommodityDTO;
+import com.njumarket.commodity.dto.CommodityDTO;
 import com.njumarket.commodity.service.CommodityService;
 import com.njumarket.commodity.service.CommodityQueryService;
 import io.swagger.v3.oas.annotations.Operation;

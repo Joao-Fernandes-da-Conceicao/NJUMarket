@@ -3,7 +3,7 @@ package com.njumarket.commodity.filter;
 import com.njumarket.commodity.client.AuthClient;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.dto.internal.UserInternalDTO;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.commodity.entity.User; // User 实体（Commodity Service专用）
 import com.njumarket.njumarket.utils.UserHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;

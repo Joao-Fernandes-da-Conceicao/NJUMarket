@@ -1,6 +1,6 @@
 package com.njumarket.image.service;
 
-import com.njumarket.njumarket.dto.ImageUploadDTO;
+import com.njumarket.image.dto.ImageUploadDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;

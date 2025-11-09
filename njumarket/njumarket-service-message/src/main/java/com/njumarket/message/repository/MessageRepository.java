@@ -1,6 +1,6 @@
 package com.njumarket.message.repository;
 
-import com.njumarket.njumarket.entity.Message;
+import com.njumarket.message.entity.Message;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,9 +1,9 @@
 package com.njumarket.message.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.njumarket.njumarket.dto.RetryMessageDTO;
+import com.njumarket.message.dto.RetryMessageDTO;
 import com.njumarket.message.service.WebSocketRetryService;
-import com.njumarket.njumarket.websocket.WebSocketEventListener;
+import com.njumarket.message.websocket.WebSocketEventListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;

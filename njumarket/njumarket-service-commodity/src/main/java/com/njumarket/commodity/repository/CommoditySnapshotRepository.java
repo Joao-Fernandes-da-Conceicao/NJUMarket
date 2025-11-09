@@ -1,6 +1,6 @@
 package com.njumarket.commodity.repository;
 
-import com.njumarket.njumarket.entity.CommoditySnapshot;
+import com.njumarket.commodity.entity.CommoditySnapshot;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

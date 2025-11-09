@@ -1,6 +1,6 @@
 package com.njumarket.auth.config;
 
-import com.njumarket.njumarket.resolver.CurrentUserArgumentResolver;
+import com.njumarket.auth.resolver.CurrentUserArgumentResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;

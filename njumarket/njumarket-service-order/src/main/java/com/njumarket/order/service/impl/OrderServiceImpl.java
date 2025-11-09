@@ -1,11 +1,10 @@
 package com.njumarket.order.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.OrderDTO;
-import com.njumarket.njumarket.vo.OrderPageResultVO;
-import com.njumarket.njumarket.entity.Order;
-import com.njumarket.njumarket.entity.Commodity;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.order.dto.OrderDTO;
+import com.njumarket.order.vo.OrderPageResultVO;
+import com.njumarket.order.entity.Order;
+import com.njumarket.order.entity.User; // User 实体（Order Service专用）
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
@@ -17,10 +16,10 @@ import com.njumarket.order.service.OrderService;
 import com.njumarket.order.client.AuthClient;
 import com.njumarket.order.client.CommodityClient;
 import com.njumarket.order.client.CommodityQueryClient;
-import com.njumarket.order.client.ChangeRecordClient;
-import com.njumarket.order.client.MessageClient;
+import com.njumarket.order.client.NotificationClient;
 import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
+import com.njumarket.order.utils.OrderValidator;
 import com.njumarket.njumarket.utils.RedisLockUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
@@ -51,8 +50,7 @@ public class OrderServiceImpl implements OrderService {
     private final AuthClient authClient;
     private final CommodityClient commodityClient;
     private final CommodityQueryClient commodityQueryClient;
-    private final ChangeRecordClient changeRecordClient;
-    private final MessageClient messageClient;
+    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper;
     
     private final RedisLockUtil redisLockUtil;
@@ -62,7 +60,8 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public Result createOrder(OrderDTO orderDTO) {
         // 获取当前用户（使用 SecurityUtils）
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // ✅ 参数验证已由Bean Validation在Controller层完成，此处无需重复验证
         
@@ -100,26 +99,24 @@ public class OrderServiceImpl implements OrderService {
                 throw new BusinessException("商品信息解析失败");
             }
             
-            // 将CommodityInternalDTO转换为Commodity实体
-            Commodity commodity = convertCommodityDTOToEntity(commodityDTO);
-            
+            // ⚠️ 注意：不再转换为Commodity实体，直接使用DTO数据
             // 检查商品状态
-            if (!"ON_SHELF".equals(commodity.getCommodityStatus())) {
+            if (!"ON_SHELF".equals(commodityDTO.getStatus())) {
                 throw new BusinessException("商品未上架，无法购买");
             }
             
             // 检查库存（在锁定的情况下再次检查，确保准确性）
-            if (commodity.getStock() < orderDTO.getQuantity()) {
-                throw new BusinessException("商品库存不足，当前库存：" + commodity.getStock());
+            if (commodityDTO.getStock() < orderDTO.getQuantity()) {
+                throw new BusinessException("商品库存不足，当前库存：" + commodityDTO.getStock());
             }
             
             // 检查是否购买自己的商品
-            if (commodity.getSellerId().equals(currentUser.getUserId())) {
+            if (commodityDTO.getSellerId().equals(currentUser.getUserId())) {
                 throw new BusinessException("不能购买自己的商品");
             }
             
             // 验证价格
-            double expectedAmount = commodity.getPrice() * orderDTO.getQuantity();
+            double expectedAmount = (commodityDTO.getPrice() != null ? commodityDTO.getPrice().doubleValue() : 0.0) * orderDTO.getQuantity();
             if (Math.abs(orderDTO.getPayAmount() - expectedAmount) > 0.01) {
                 throw new BusinessException("支付金额与商品价格不符");
             }
@@ -139,8 +136,8 @@ public class OrderServiceImpl implements OrderService {
             Order order = new Order();
             order.setOrderId(UUID.randomUUID().toString().replace("-", ""));
             order.setBuyerId(currentUser.getUserId());
-            order.setSellerId(commodity.getSellerId());
-            order.setCommodityId(commodity.getCommodityId());
+            order.setSellerId(commodityDTO.getSellerId());
+            order.setCommodityId(commodityDTO.getCommodityId());
             order.setOrderStatus("CREATED");
             order.setSellerVisibility(orderDTO.getSellerVisibility() != null ? orderDTO.getSellerVisibility() : "PUBLIC");
             order.setBuyerVisibility(orderDTO.getBuyerVisibility() != null ? orderDTO.getBuyerVisibility() : "PUBLIC");
@@ -151,7 +148,7 @@ public class OrderServiceImpl implements OrderService {
             order.setCreateTime(LocalDateTime.now());
             
             // ✅ 创建商品快照 - 获取卖家信息（使用Feign Client）
-            Result sellerResult = authClient.getUserById(commodity.getSellerId());
+            Result sellerResult = authClient.getUserById(commodityDTO.getSellerId());
             if (sellerResult.getSuccess() && sellerResult.getData() != null) {
                 try {
                     // ✅ 使用ObjectMapper正确转换类型（避免ClassCastException）
@@ -159,33 +156,48 @@ public class OrderServiceImpl implements OrderService {
                         sellerResult.getData(),
                         new TypeReference<UserInternalDTO>() {}
                     );
-                    // 转换为User实体
-                    User seller = convertUserDTOToEntity(sellerDTO);
-                    order.createCommoditySnapshot(commodity, seller);
+                    // 直接使用DTO数据创建商品快照（不转换为实体）
+                    order.createCommoditySnapshot(
+                        commodityDTO.getTitle(),
+                        commodityDTO.getDescription(),
+                        commodityDTO.getPrice() != null ? commodityDTO.getPrice().doubleValue() : null,
+                        commodityDTO.getLocation(),
+                        commodityDTO.getCategory(),
+                        commodityDTO.getConditionLevel(),
+                        commodityDTO.getImages(),
+                        commodityDTO.getStatus(),
+                        sellerDTO.getUsername() != null ? sellerDTO.getUsername() : "",
+                        sellerDTO.getPrimaryPhone() != null ? sellerDTO.getPrimaryPhone() : "",
+                        "" // 邮箱字段在UserInternalDTO中不存在，使用空字符串
+                    );
                 } catch (Exception e) {
-                    log.error("转换User失败: sellerId={}, error={}", commodity.getSellerId(), e.getMessage(), e);
-                    log.warn("创建订单警告 - sellerId={}, 卖家信息解析失败，无法创建商品快照", commodity.getSellerId());
+                    log.error("转换User失败: sellerId={}, error={}", commodityDTO.getSellerId(), e.getMessage(), e);
+                    log.warn("创建订单警告 - sellerId={}, 卖家信息解析失败，无法创建商品快照", commodityDTO.getSellerId());
                 }
             } else {
-                log.warn("创建订单警告 - sellerId={}, 卖家不存在，无法创建商品快照", commodity.getSellerId());
+                log.warn("创建订单警告 - sellerId={}, 卖家不存在，无法创建商品快照", commodityDTO.getSellerId());
             }
             
             // 保存订单
             orderRepository.save(order);
             
-            // ✅ 记录订单变更（用于增量轮询，使用Feign Client）
+            // ✅ 记录订单变更并推送通知（使用推送服务）
             LocalDateTime now = LocalDateTime.now();
             try {
-                changeRecordClient.recordOrderChange(order.getOrderId(), "CREATE", now.toString());
+                notificationClient.recordOrderChange(order.getOrderId(), "CREATE", now.toString());
+                notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_CREATED");
             } catch (Exception e) {
-                log.warn("记录订单变更失败（不影响订单创建）: orderId={}, error={}", 
+                log.warn("记录订单变更或推送失败（不影响订单创建）: orderId={}, error={}", 
                     order.getOrderId(), e.getMessage());
             }
             
-            // ✅ WebSocket 推送：订单创建通知给卖家（发送完整OrderDTO，包含profile信息）
-            // 注意：pushOrderChangeNotificationWithDTO 内部已包含订单提醒状态更新逻辑
-            OrderDTO orderDTOForNotification = convertToDTOWithProfile(order);
-            pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_CREATED", order.getOrderStatus(), "SELLER", orderDTOForNotification);
+            // 更新订单提醒状态
+            try {
+                authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
+            } catch (Exception e) {
+                log.warn("更新订单提醒状态失败（不影响订单操作）: userId={}, error={}", 
+                    order.getSellerId(), e.getMessage());
+            }
             
             return Result.ok("订单创建成功");
             
@@ -211,7 +223,8 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public Result payOrder(String orderId) {
         // 获取当前用户（使用 SecurityUtils）
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 查找订单
         Optional<Order> orderOpt = orderRepository.findById(orderId);
@@ -236,18 +249,23 @@ public class OrderServiceImpl implements OrderService {
             if (order.payOrder()) {
                 orderRepository.save(order);
                 
-                // ✅ 记录订单变更（用于增量轮询，使用Feign Client）
+                // ✅ 记录订单变更并推送通知（使用推送服务）
                 LocalDateTime now = LocalDateTime.now();
                 try {
-                    changeRecordClient.recordOrderChange(order.getOrderId(), "PAY", now.toString());
+                    notificationClient.recordOrderChange(order.getOrderId(), "PAY", now.toString());
+                    notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_PAID");
                 } catch (Exception e) {
-                    log.warn("记录订单变更失败（不影响订单支付）: orderId={}, error={}", 
+                    log.warn("记录订单变更或推送失败（不影响订单支付）: orderId={}, error={}", 
                         order.getOrderId(), e.getMessage());
                 }
                 
-                // ✅ WebSocket 推送：订单支付通知给卖家（包含profile信息）
-                OrderDTO orderDTOForPay = convertToDTOWithProfile(order);
-                pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_PAID", order.getOrderStatus(), "SELLER", orderDTOForPay);
+                // 更新订单提醒状态
+                try {
+                    authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
+                } catch (Exception e) {
+                    log.warn("更新订单提醒状态失败（不影响订单操作）: userId={}, error={}", 
+                        order.getSellerId(), e.getMessage());
+                }
                 
                 return Result.ok("订单支付成功");
             } else {
@@ -264,7 +282,8 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public Result confirmOrder(String orderId) {
         // 获取当前用户（使用 SecurityUtils）
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 查找订单
         Optional<Order> orderOpt = orderRepository.findById(orderId);
@@ -292,7 +311,7 @@ public class OrderServiceImpl implements OrderService {
                 // ✅ 记录订单变更（用于增量轮询）
                 LocalDateTime now = LocalDateTime.now();
                 try {
-                    changeRecordClient.recordOrderChange(order.getOrderId(), "COMPLETE", now.toString());
+                    notificationClient.recordOrderChange(order.getOrderId(), "COMPLETE", now.toString());
                 } catch (Exception e) {
                     log.warn("记录订单变更失败（不影响订单完成）: orderId={}, error={}", 
                         order.getOrderId(), e.getMessage());
@@ -300,7 +319,8 @@ public class OrderServiceImpl implements OrderService {
                 
                 // ✅ WebSocket 推送：订单完成通知给卖家（包含profile信息）
                 OrderDTO orderDTOForComplete = convertToDTOWithProfile(order);
-                pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED", order.getOrderStatus(), "SELLER", orderDTOForComplete);
+                notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED");
+                authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
                 
                 return Result.ok("订单确认收货成功");
             } else {
@@ -317,7 +337,8 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public Result cancelOrder(String orderId, String reason) {
         // 获取当前用户（使用 SecurityUtils）
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 查找订单
         Optional<Order> orderOpt = orderRepository.findById(orderId);
@@ -361,7 +382,7 @@ public class OrderServiceImpl implements OrderService {
                 // ✅ 记录订单变更（用于增量轮询）
                 LocalDateTime now = LocalDateTime.now();
                 try {
-                    changeRecordClient.recordOrderChange(order.getOrderId(), "CANCEL", now.toString());
+                    notificationClient.recordOrderChange(order.getOrderId(), "CANCEL", now.toString());
                 } catch (Exception e) {
                     log.warn("记录订单变更失败（不影响订单取消）: orderId={}, error={}", 
                         order.getOrderId(), e.getMessage());
@@ -371,9 +392,11 @@ public class OrderServiceImpl implements OrderService {
                 // 如果是买家取消，通知卖家；如果是卖家取消，通知买家
                 OrderDTO orderDTOForCancel = convertToDTOWithProfile(order);
                 if (order.getBuyerId().equals(currentUser.getUserId())) {
-                    pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "SELLER", orderDTOForCancel);
+                    notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_CANCELLED");
+                    authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
                 } else {
-                    pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_CANCELLED", order.getOrderStatus(), "BUYER", orderDTOForCancel);
+                    notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), "ORDER_CANCELLED");
+                    authClient.setOrderReminderStatus(order.getBuyerId(), "BUYER", true);
                 }
                 
                 return Result.ok("订单取消成功");
@@ -390,10 +413,11 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result requestRefund(String orderId, String reason) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyer(order, currentUser.getUserId());
-        BusinessValidator.requireOrderStatus(order, "COMPLETED", "REFUND_REJECTED");
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyer(order, currentUser.getUserId());
+        OrderValidator.requireOrderStatus(order, "COMPLETED", "REFUND_REJECTED");
         
         // 设置退款/退货状态
         order.setOrderStatus("REFUND_REQUESTED");
@@ -411,22 +435,31 @@ public class OrderServiceImpl implements OrderService {
         // ✅ 记录订单变更（用于增量轮询）
         LocalDateTime now = LocalDateTime.now();
         try {
-            changeRecordClient.recordOrderChange(order.getOrderId(), "REFUND_REQUEST", now.toString());
+            log.info("开始记录订单变更: orderId={}, operation=REFUND_REQUEST, timestamp={}", 
+                order.getOrderId(), now.toString());
+            Result result = notificationClient.recordOrderChange(order.getOrderId(), "REFUND_REQUEST", now.toString());
+            if (result != null && Boolean.TRUE.equals(result.getSuccess())) {
+                log.info("✅ 订单变更记录成功: orderId={}, operation=REFUND_REQUEST", order.getOrderId());
+            } else {
+                log.error("❌ 订单变更记录失败: orderId={}, operation=REFUND_REQUEST, result={}", 
+                    order.getOrderId(), result != null ? result.getErrorMsg() : "result is null");
+            }
         } catch (Exception e) {
-            log.warn("记录订单变更失败（不影响退款申请）: orderId={}, error={}", 
-                order.getOrderId(), e.getMessage());
+            log.error("❌ 记录订单变更异常（不影响退款申请）: orderId={}, operation=REFUND_REQUEST, timestamp={}, error={}, errorType={}", 
+                order.getOrderId(), now.toString(), e.getMessage(), e.getClass().getName(), e);
         }
         
         // ✅ WebSocket 推送：退款申请通知给卖家（包含profile信息）
         OrderDTO orderDTOForRefundRequest = convertToDTOWithProfile(order);
-        pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED", order.getOrderStatus(), "SELLER", orderDTOForRefundRequest);
+        notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED");
+        authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
         
         // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
         // 这种情况可能发生在：
         // 1. 从COMPLETED状态申请退款（卖家之前软删除了订单）
         // 2. 从REFUND_REJECTED状态重新申请退款（卖家之前软删除了订单）
         if (sellerVisibilityRestored) {
-            pushOrderChangeNotificationWithDTO(order.getSellerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "SELLER", orderDTOForRefundRequest);
+            notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED");
         }
         
         return Result.ok("退款/退货申请成功");
@@ -434,7 +467,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Result getBuyerOrders(Integer page, Integer size, String status) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 创建分页对象
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createTime"));
@@ -495,10 +529,11 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result shipOrder(String orderId, String trackingNumber) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireSeller(order, currentUser.getUserId());
-        BusinessValidator.requireOrderStatus(order, "PAID");
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireSeller(order, currentUser.getUserId());
+        OrderValidator.requireOrderStatus(order, "PAID");
         
         // 发货
         if (!order.shipOrder(trackingNumber)) {
@@ -510,7 +545,7 @@ public class OrderServiceImpl implements OrderService {
         // ✅ 记录订单变更（用于增量轮询）
         LocalDateTime now = LocalDateTime.now();
         try {
-            changeRecordClient.recordOrderChange(order.getOrderId(), "SHIP", now.toString());
+            notificationClient.recordOrderChange(order.getOrderId(), "SHIP", now.toString());
         } catch (Exception e) {
             log.warn("记录订单变更失败（不影响订单发货）: orderId={}, error={}", 
                 order.getOrderId(), e.getMessage());
@@ -518,7 +553,8 @@ public class OrderServiceImpl implements OrderService {
         
         // ✅ WebSocket 推送：订单发货通知给买家（包含profile信息）
         OrderDTO orderDTOForShip = convertToDTOWithProfile(order);
-        pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED", order.getOrderStatus(), "BUYER", orderDTOForShip);
+        notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED");
+        authClient.setOrderReminderStatus(order.getBuyerId(), "BUYER", true);
         
         return Result.ok("订单发货成功");
     }
@@ -526,10 +562,11 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result handleRefund(String orderId, String decision, String remark) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireSeller(order, currentUser.getUserId());
-        BusinessValidator.requireOrderStatus(order, "REFUND_REQUESTED");
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireSeller(order, currentUser.getUserId());
+        OrderValidator.requireOrderStatus(order, "REFUND_REQUESTED");
         
         // 处理退款/退货申请
         // ✅ 在修改前检测是否恢复可见性
@@ -570,7 +607,7 @@ public class OrderServiceImpl implements OrderService {
         LocalDateTime now = LocalDateTime.now();
         String operation = "APPROVE".equals(decision) ? "REFUND_APPROVE" : "REFUND_REJECT";
         try {
-            changeRecordClient.recordOrderChange(order.getOrderId(), operation, now.toString());
+            notificationClient.recordOrderChange(order.getOrderId(), operation, now.toString());
         } catch (Exception e) {
             log.warn("记录订单变更失败（不影响退款处理）: orderId={}, error={}", 
                 order.getOrderId(), e.getMessage());
@@ -579,11 +616,12 @@ public class OrderServiceImpl implements OrderService {
         // ✅ WebSocket 推送：退款处理结果通知给买家（包含profile信息）
         String notificationType = "APPROVE".equals(decision) ? "REFUND_APPROVED" : "REFUND_REJECTED";
         OrderDTO orderDTOForRefundHandle = convertToDTOWithProfile(order);
-        pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), notificationType, order.getOrderStatus(), "BUYER", orderDTOForRefundHandle);
+        notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), notificationType);
+        authClient.setOrderReminderStatus(order.getBuyerId(), "BUYER", true);
         
         // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
         if (buyerVisibilityRestored) {
-            pushOrderChangeNotificationWithDTO(order.getBuyerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED", order.getOrderStatus(), "BUYER", orderDTOForRefundHandle);
+            notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED");
         }
         
         return Result.ok("退款/退货申请处理成功");
@@ -591,7 +629,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Result getSellerOrders(Integer page, Integer size, String status) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 创建分页对象
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "createTime"));
@@ -651,9 +690,10 @@ public class OrderServiceImpl implements OrderService {
     // ========== 通用功能 ==========
     @Override
     public Result getOrderDetail(String orderId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyerOrSeller(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyerOrSeller(order, currentUser.getUserId());
         
         // ✅ 转换为DTO（包含profile信息）
         OrderDTO orderDTO = convertToDTOWithProfile(order);
@@ -684,13 +724,13 @@ public class OrderServiceImpl implements OrderService {
                 // 继续处理买家信息
                 return handleBuyerInfoAndReturn(order, orderDTO);
             }
-            User seller = convertUserDTOToEntity(sellerDTO);
+            // ⚠️ 注意：不再转换为User实体，直接使用DTO数据
             OrderDTO.SellerInfo sellerInfo = new OrderDTO.SellerInfo();
-            sellerInfo.setUserId(seller.getUserId());
-            sellerInfo.setUsername(seller.getUsername());
+            sellerInfo.setUserId(sellerDTO.getUserId());
+            sellerInfo.setUsername(sellerDTO.getUsername());
             
             // 查询卖家档案信息（使用Feign Client批量查询）
-            List<String> sellerIds = Arrays.asList(seller.getUserId());
+            List<String> sellerIds = Arrays.asList(sellerDTO.getUserId());
             Result sellerProfilesResult = authClient.getUserProfilesByIds(sellerIds);
             if (sellerProfilesResult.getSuccess() && sellerProfilesResult.getData() != null) {
                 try {
@@ -703,22 +743,22 @@ public class OrderServiceImpl implements OrderService {
                         sellerInfo.setNickname(sellerProfile.getNickname());
                         sellerInfo.setAvatar(sellerProfile.getAvatar());
                     } else {
-                        sellerInfo.setNickname(seller.getUsername());
+                        sellerInfo.setNickname(sellerDTO.getUsername());
                         sellerInfo.setAvatar(null);
                     }
                 } catch (Exception e) {
                     log.error("转换UserProfileInternalDTO失败: {}", e.getMessage(), e);
-                    sellerInfo.setNickname(seller.getUsername());
+                    sellerInfo.setNickname(sellerDTO.getUsername());
                     sellerInfo.setAvatar(null);
                 }
             } else {
-                sellerInfo.setNickname(seller.getUsername());
+                sellerInfo.setNickname(sellerDTO.getUsername());
                 sellerInfo.setAvatar(null);
             }
             
-            sellerInfo.setPhone(seller.getPrimaryPhone());
+            sellerInfo.setPhone(sellerDTO.getPrimaryPhone());
             sellerInfo.setEmail(null); // 邮箱需要从contact_info表查询，这里暂时设为null
-            sellerInfo.setIsDeleted("DELETED".equals(seller.getAccountStatus()));
+            sellerInfo.setIsDeleted("DELETED".equals(sellerDTO.getAccountStatus()));
             sellerInfo.setStatus(sellerInfo.getIsDeleted() ? "DELETED" : "ACTIVE");
             orderDTO.setSeller(sellerInfo);
         } else {
@@ -760,13 +800,13 @@ public class OrderServiceImpl implements OrderService {
                 orderDTO.setBuyer(buyerInfo);
                 return Result.ok("获取订单详情成功", orderDTO);
             }
-            User buyer = convertUserDTOToEntity(buyerDTO);
+            // ⚠️ 注意：不再转换为User实体，直接使用DTO数据
             OrderDTO.BuyerInfo buyerInfo = new OrderDTO.BuyerInfo();
-            buyerInfo.setUserId(buyer.getUserId());
-            buyerInfo.setUsername(buyer.getUsername());
+            buyerInfo.setUserId(buyerDTO.getUserId());
+            buyerInfo.setUsername(buyerDTO.getUsername());
             
             // 查询买家档案信息（使用Feign Client批量查询）
-            List<String> buyerIds = Arrays.asList(buyer.getUserId());
+            List<String> buyerIds = Arrays.asList(buyerDTO.getUserId());
             Result buyerProfilesResult = authClient.getUserProfilesByIds(buyerIds);
             if (buyerProfilesResult.getSuccess() && buyerProfilesResult.getData() != null) {
                 try {
@@ -779,22 +819,22 @@ public class OrderServiceImpl implements OrderService {
                         buyerInfo.setNickname(buyerProfile.getNickname());
                         buyerInfo.setAvatar(buyerProfile.getAvatar());
                     } else {
-                        buyerInfo.setNickname(buyer.getUsername());
+                        buyerInfo.setNickname(buyerDTO.getUsername());
                         buyerInfo.setAvatar(null);
                     }
                 } catch (Exception e) {
                     log.error("转换UserProfileInternalDTO失败: {}", e.getMessage(), e);
-                    buyerInfo.setNickname(buyer.getUsername());
+                    buyerInfo.setNickname(buyerDTO.getUsername());
                     buyerInfo.setAvatar(null);
                 }
             } else {
-                buyerInfo.setNickname(buyer.getUsername());
+                buyerInfo.setNickname(buyerDTO.getUsername());
                 buyerInfo.setAvatar(null);
             }
             
-            buyerInfo.setPhone(buyer.getPrimaryPhone());
+            buyerInfo.setPhone(buyerDTO.getPrimaryPhone());
             buyerInfo.setEmail(null); // 邮箱需要从contact_info表查询，这里暂时设为null
-            buyerInfo.setIsDeleted("DELETED".equals(buyer.getAccountStatus()));
+            buyerInfo.setIsDeleted("DELETED".equals(buyerDTO.getAccountStatus()));
             buyerInfo.setStatus(buyerInfo.getIsDeleted() ? "DELETED" : "ACTIVE");
             orderDTO.setBuyer(buyerInfo);
         } else {
@@ -931,9 +971,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result updateOrderVisibility(String orderId, String visibility) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyerOrSeller(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyerOrSeller(order, currentUser.getUserId());
         
         // 检查订单状态：只有未完成的订单可以修改可见性
         if (!order.canModifyVisibility()) {
@@ -957,9 +998,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result updateOrderSellerVisibility(String orderId, String sellerVisibility) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireSeller(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireSeller(order, currentUser.getUserId());
         
         // 检查订单状态：只有未完成的订单可以修改可见性
         if (!order.canModifyVisibility()) {
@@ -983,9 +1025,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result updateOrderBuyerVisibility(String orderId, String buyerVisibility) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyer(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyer(order, currentUser.getUserId());
         
         // 检查订单状态：只有未完成的订单可以修改可见性
         if (!order.canModifyVisibility()) {
@@ -1009,9 +1052,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result requestReturn(String orderId, String returnReason) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyer(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyer(order, currentUser.getUserId());
         
         // 检查是否可以申请退货
         if (!order.canRequestReturn()) {
@@ -1033,9 +1077,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result approveReturnRequest(String orderId, Boolean approved, String rejectionReason) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireSeller(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireSeller(order, currentUser.getUserId());
         
         // 检查是否可以审批退货
         if (!order.canApproveReturn()) {
@@ -1059,9 +1104,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result confirmReturnShipment(String orderId, String returnTrackingNumber) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyer(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyer(order, currentUser.getUserId());
         
         // 检查是否可以确认退货发货
         if (!order.canConfirmReturnShipment()) {
@@ -1083,9 +1129,10 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public Result completeReturn(String orderId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order order = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireSeller(order, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireSeller(order, currentUser.getUserId());
         
         // 检查是否可以完成退货
         if (!order.canCompleteReturn()) {
@@ -1103,7 +1150,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Result getReturnRequests(Integer page, Integer size, String status) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 构建分页参数
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "returnRequestTime"));
@@ -1135,7 +1183,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Result getMyReturnRecords(Integer page, Integer size, String status) {
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 构建分页参数
         Pageable pageable = PageRequest.of(page - 1, size, Sort.by(Sort.Direction.DESC, "returnRequestTime"));
@@ -1188,9 +1237,10 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Result queryOriginalCommodity(String orderId) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order originalOrder = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyer(originalOrder, currentUser.getUserId());
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order originalOrder = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyer(originalOrder, currentUser.getUserId());
         
         // 检查商品快照是否存在
         if (originalOrder.getCommoditySnapshotTitle() == null) {
@@ -1253,10 +1303,11 @@ public class OrderServiceImpl implements OrderService {
     }
     
     @Override
-    public Result createOrderFromSnapshot(String orderId, com.njumarket.njumarket.dto.OrderSnapshotDTO orderSnapshotDTO) {
-        User currentUser = SecurityUtils.requireCurrentUser();
-        Order originalOrder = BusinessValidator.requireOrder(orderId, orderRepository);
-        BusinessValidator.requireBuyer(originalOrder, currentUser.getUserId());
+    public Result createOrderFromSnapshot(String orderId, com.njumarket.order.dto.OrderSnapshotDTO orderSnapshotDTO) {
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        Order originalOrder = OrderValidator.requireOrder(orderId, orderRepository);
+        OrderValidator.requireBuyer(originalOrder, currentUser.getUserId());
         
         // 检查商品快照是否存在
         if (originalOrder.getCommoditySnapshotTitle() == null) {
@@ -1280,8 +1331,8 @@ public class OrderServiceImpl implements OrderService {
                 originalOrder.getCommodityId(), e.getMessage(), e);
             throw new BusinessException("商品信息解析失败");
         }
-        Commodity commodity = convertCommodityDTOToEntity(commodityDTO);
-        if (!"ON_SHELF".equals(commodity.getCommodityStatus())) {
+        // ⚠️ 注意：不再转换为Commodity实体，直接使用DTO数据
+        if (!"ON_SHELF".equals(commodityDTO.getStatus())) {
             throw new BusinessException("商品未上架");
         }
         
@@ -1291,7 +1342,7 @@ public class OrderServiceImpl implements OrderService {
         String remark = orderSnapshotDTO.getRemark();
         
         // ✅ 第一步：获取分布式锁（跨服务器保护）
-        String lockKey = RedisConstants.LOCK_COMMODITY_KEY + commodity.getCommodityId();
+        String lockKey = RedisConstants.LOCK_COMMODITY_KEY + commodityDTO.getCommodityId();
         String lockValue = RedisLockUtil.generateLockValue();
         long lockTimeout = RedisConstants.LOCK_COMMODITY_TTL;
         
@@ -1300,12 +1351,12 @@ public class OrderServiceImpl implements OrderService {
             lockAcquired = redisLockUtil.tryLock(lockKey, lockValue, lockTimeout, 1, 100);
             
             if (!lockAcquired) {
-                log.warn("获取分布式锁失败 - commodityId: {}", commodity.getCommodityId());
+                log.warn("获取分布式锁失败 - commodityId: {}", commodityDTO.getCommodityId());
                 throw new BusinessException("系统繁忙，请稍后重试");
             }
             
             // ✅ 第二步：使用Feign Client重新查询商品（带悲观锁）
-            Result lockedCommodityResult = commodityClient.getCommodityForUpdate(commodity.getCommodityId());
+            Result lockedCommodityResult = commodityClient.getCommodityForUpdate(commodityDTO.getCommodityId());
             if (!lockedCommodityResult.getSuccess() || lockedCommodityResult.getData() == null) {
                 throw new BusinessException("商品不存在");
             }
@@ -1318,42 +1369,42 @@ public class OrderServiceImpl implements OrderService {
                 );
             } catch (Exception e) {
                 log.error("转换CommodityInternalDTO失败: commodityId={}, error={}", 
-                    commodity.getCommodityId(), e.getMessage(), e);
+                    commodityDTO.getCommodityId(), e.getMessage(), e);
                 throw new BusinessException("商品信息解析失败");
             }
-            Commodity lockedCommodity = convertCommodityDTOToEntity(lockedCommodityDTO);
+            // ⚠️ 注意：不再转换为Commodity实体，直接使用DTO数据
             
             // 检查库存（在锁定的情况下再次检查）
-            if (lockedCommodity.getStock() < quantity) {
-                throw new BusinessException("商品库存不足，当前库存：" + lockedCommodity.getStock());
+            if (lockedCommodityDTO.getStock() < quantity) {
+                throw new BusinessException("商品库存不足，当前库存：" + lockedCommodityDTO.getStock());
             }
             
             // 检查是否购买自己的商品
-            if (lockedCommodity.getSellerId().equals(currentUser.getUserId())) {
+            if (lockedCommodityDTO.getSellerId().equals(currentUser.getUserId())) {
                 throw new BusinessException("不能购买自己的商品");
             }
             
             // ✅ 第三步：使用Feign Client更新商品库存（三重保护）
             Result updateResult = commodityClient.updateCommodityStock(
-                lockedCommodity.getCommodityId(), 
+                lockedCommodityDTO.getCommodityId(), 
                 quantity
             );
             
             if (!updateResult.getSuccess()) {
                 log.warn("库存扣减失败 - commodityId: {}, quantity: {}, currentStock: {}", 
-                    lockedCommodity.getCommodityId(), quantity, lockedCommodity.getStock());
+                    lockedCommodityDTO.getCommodityId(), quantity, lockedCommodityDTO.getStock());
                 throw new BusinessException("商品库存不足，请刷新后重试");
             }
             
             // 计算价格
-            double payAmount = lockedCommodity.getPrice() * quantity;
+            double payAmount = (lockedCommodityDTO.getPrice() != null ? lockedCommodityDTO.getPrice().doubleValue() : 0.0) * quantity;
             
             // 创建新订单
             Order newOrder = new Order();
             newOrder.setOrderId(UUID.randomUUID().toString().replace("-", ""));
             newOrder.setBuyerId(currentUser.getUserId());
-            newOrder.setSellerId(lockedCommodity.getSellerId());
-            newOrder.setCommodityId(lockedCommodity.getCommodityId());
+            newOrder.setSellerId(lockedCommodityDTO.getSellerId());
+            newOrder.setCommodityId(lockedCommodityDTO.getCommodityId());
             newOrder.setOrderStatus("CREATED");
             newOrder.setSellerVisibility(originalOrder.getSellerVisibility());
             newOrder.setBuyerVisibility(originalOrder.getBuyerVisibility());
@@ -1364,7 +1415,7 @@ public class OrderServiceImpl implements OrderService {
             newOrder.setCreateTime(LocalDateTime.now());
             
             // 创建商品快照（使用Feign Client）
-            Result sellerResult = authClient.getUserById(lockedCommodity.getSellerId());
+            Result sellerResult = authClient.getUserById(lockedCommodityDTO.getSellerId());
             if (sellerResult.getSuccess() && sellerResult.getData() != null) {
                 try {
                     // ✅ 使用ObjectMapper正确转换类型（避免ClassCastException）
@@ -1372,12 +1423,23 @@ public class OrderServiceImpl implements OrderService {
                         sellerResult.getData(),
                         new TypeReference<UserInternalDTO>() {}
                     );
-                    // 转换为User实体
-                    User seller = convertUserDTOToEntity(sellerDTO);
-                    newOrder.createCommoditySnapshot(lockedCommodity, seller);
+                    // 直接使用DTO数据创建商品快照（不转换为实体）
+                    newOrder.createCommoditySnapshot(
+                        lockedCommodityDTO.getTitle(),
+                        lockedCommodityDTO.getDescription(),
+                        lockedCommodityDTO.getPrice() != null ? lockedCommodityDTO.getPrice().doubleValue() : null,
+                        lockedCommodityDTO.getLocation(),
+                        lockedCommodityDTO.getCategory(),
+                        lockedCommodityDTO.getConditionLevel(),
+                        lockedCommodityDTO.getImages(),
+                        lockedCommodityDTO.getStatus(),
+                        sellerDTO.getUsername() != null ? sellerDTO.getUsername() : "",
+                        sellerDTO.getPrimaryPhone() != null ? sellerDTO.getPrimaryPhone() : "",
+                        "" // 邮箱字段在UserInternalDTO中不存在，使用空字符串
+                    );
                 } catch (Exception e) {
-                    log.error("转换User失败: sellerId={}, error={}", lockedCommodity.getSellerId(), e.getMessage(), e);
-                    log.warn("创建订单警告 - sellerId={}, 卖家信息解析失败，无法创建商品快照", lockedCommodity.getSellerId());
+                    log.error("转换User失败: sellerId={}, error={}", lockedCommodityDTO.getSellerId(), e.getMessage(), e);
+                    log.warn("创建订单警告 - sellerId={}, 卖家信息解析失败，无法创建商品快照", lockedCommodityDTO.getSellerId());
                 }
             }
             
@@ -1392,7 +1454,7 @@ public class OrderServiceImpl implements OrderService {
                 boolean released = redisLockUtil.releaseLock(lockKey, lockValue);
                 if (!released) {
                     log.warn("释放分布式锁失败 - commodityId: {}, lockKey: {}", 
-                        commodity.getCommodityId(), lockKey);
+                        commodityDTO.getCommodityId(), lockKey);
                 }
             }
         }
@@ -1411,7 +1473,8 @@ public class OrderServiceImpl implements OrderService {
             return Result.ok("批量查询成功", Collections.emptyList());
         }
         
-        User currentUser = SecurityUtils.requireCurrentUser();
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
         
         // 去重
         Set<String> uniqueIds = new HashSet<>(orderIds);
@@ -1513,103 +1576,31 @@ public class OrderServiceImpl implements OrderService {
      * @param targetRole 目标角色（"SELLER" 或 "BUYER"），用于前端判断显示哪个角标
      */
     private void pushOrderChangeNotification(String userId, String orderId, String changeType, String orderStatus, String targetRole) {
-        pushOrderChangeNotificationWithDTO(userId, orderId, changeType, orderStatus, targetRole, null);
+        notificationClient.pushOrderChange(userId, orderId, changeType);
+        authClient.setOrderReminderStatus(userId, targetRole, true);
     }
     
+    
+    // ========== 辅助方法：从DTO提取数据 ==========
+    
     /**
-     * 推送订单变化通知（支持发送完整OrderDTO）
-     * @param userId 接收通知的用户ID
-     * @param orderId 订单ID
-     * @param changeType 变化类型（ORDER_CREATED, ORDER_PAID, ORDER_SHIPPED, ORDER_COMPLETED, ORDER_CANCELLED, REFUND_REQUESTED, REFUND_APPROVED, REFUND_REJECTED）
-     * @param orderStatus 订单状态
-     * @param targetRole 目标角色（"SELLER" 或 "BUYER"），用于前端判断显示哪个角标
-     * @param orderDTO 完整的订单DTO（可选，ORDER_CREATED时发送完整订单信息，类似消息发送完整MessageDTO）
+     * 从CommodityInternalDTO提取商品信息（用于创建商品快照）
+     * ⚠️ 注意：不再转换为Commodity实体，直接使用DTO数据
      */
-    private void pushOrderChangeNotificationWithDTO(String userId, String orderId, String changeType, String orderStatus, String targetRole, OrderDTO orderDTO) {
-        try {
-            Map<String, Object> notification = new java.util.HashMap<>();
-            notification.put("type", "ORDER_CHANGE");
-            notification.put("orderId", orderId);
-            notification.put("changeType", changeType);
-            notification.put("orderStatus", orderStatus);
-            notification.put("targetRole", targetRole); // ✅ 添加目标角色字段，用于前端判断
-            notification.put("timestamp", LocalDateTime.now().toString());
-            
-            // ✅ 所有订单变更通知都包含完整OrderDTO（包含profile信息）
-            if (orderDTO != null) {
-                notification.put("order", orderDTO);
-            }
-            
-            // ✅ WebSocket推送（使用Feign Client调用Message Service）
-            try {
-                messageClient.pushMessage(userId, "ORDER_CHANGE", notification);
-                log.debug("订单变化通知推送: userId={}, orderId={}, changeType={}, orderStatus={}, targetRole={}, hasOrderDTO={}", 
-                    userId, orderId, changeType, orderStatus, targetRole, orderDTO != null);
-            } catch (Exception e) {
-                log.warn("WebSocket推送失败（不影响订单操作）: userId={}, orderId={}, error={}", 
-                    userId, orderId, e.getMessage());
-            }
-            
-            // 通过Feign Client更新订单提醒状态
-            try {
-                authClient.setOrderReminderStatus(userId, targetRole, true);
-            } catch (Exception e) {
-                log.warn("更新订单提醒状态失败（不影响订单操作）: userId={}, role={}, error={}", 
-                    userId, targetRole, e.getMessage());
-            }
-        } catch (Exception e) {
-            log.error("推送订单变化通知失败: userId={}, orderId={}, changeType={}, error={}", 
-                    userId, orderId, changeType, e.getMessage(), e);
-            // WebSocket 推送失败不影响订单操作的成功返回
-        }
+    private String getCommodityTitle(CommodityInternalDTO dto) {
+        return dto != null ? dto.getTitle() : null;
     }
     
-    // ========== 辅助方法：DTO转Entity ==========
-    
-    /**
-     * 将CommodityInternalDTO转换为Commodity实体
-     */
-    private Commodity convertCommodityDTOToEntity(CommodityInternalDTO dto) {
-        if (dto == null) {
-            return null;
-        }
-        Commodity commodity = new Commodity();
-        commodity.setCommodityId(dto.getCommodityId());
-        commodity.setSellerId(dto.getSellerId());
-        commodity.setTitle(dto.getTitle());
-        commodity.setDescription(dto.getDescription());
-        // 转换BigDecimal为Double
-        commodity.setPrice(dto.getPrice() != null ? dto.getPrice().doubleValue() : null);
-        commodity.setStock(dto.getStock());
-        commodity.setCategory(dto.getCategory());
-        commodity.setConditionLevel(dto.getConditionLevel());
-        commodity.setCommodityStatus(dto.getStatus()); // status -> commodityStatus
-        commodity.setSellerVisibility(dto.getSellerVisibility());
-        commodity.setBuyerVisibility(dto.getBuyerVisibility());
-        commodity.setLocation(dto.getLocation());
-        commodity.setImages(dto.getImages()); // ✅ 添加图片字段转换
-        commodity.setPublishTime(dto.getCreateTime()); // createTime -> publishTime
-        // 其他字段使用默认值或null
-        commodity.setClickCount(0);
-        commodity.setReportCount(0);
-        return commodity;
+    private String getCommodityDescription(CommodityInternalDTO dto) {
+        return dto != null ? dto.getDescription() : null;
     }
     
-    /**
-     * 将UserInternalDTO转换为User实体
-     */
-    private User convertUserDTOToEntity(UserInternalDTO dto) {
-        if (dto == null) {
-            return null;
-        }
-        User user = new User();
-        user.setUserId(dto.getUserId());
-        user.setUsername(dto.getUsername());
-        user.setPrimaryPhone(dto.getPrimaryPhone());
-        user.setAccountStatus(dto.getAccountStatus());
-        user.setRegisterTime(dto.getRegisterTime());
-        // 其他字段使用默认值或null
-        return user;
+    private Double getCommodityPrice(CommodityInternalDTO dto) {
+        return dto != null && dto.getPrice() != null ? dto.getPrice().doubleValue() : null;
+    }
+    
+    private String getCommodityStatus(CommodityInternalDTO dto) {
+        return dto != null ? dto.getStatus() : null;
     }
     
     /**
@@ -1625,13 +1616,13 @@ public class OrderServiceImpl implements OrderService {
                     buyerResult.getData(),
                     new TypeReference<UserInternalDTO>() {}
                 );
-                User buyer = convertUserDTOToEntity(buyerDTO);
+                // ⚠️ 注意：不再转换为User实体，直接使用DTO数据
                 OrderDTO.BuyerInfo buyerInfo = new OrderDTO.BuyerInfo();
-                buyerInfo.setUserId(buyer.getUserId());
-                buyerInfo.setUsername(buyer.getUsername());
+                buyerInfo.setUserId(buyerDTO.getUserId());
+                buyerInfo.setUsername(buyerDTO.getUsername());
                 
                 // 查询买家档案信息（使用Feign Client批量查询）
-                List<String> buyerIds = Arrays.asList(buyer.getUserId());
+                List<String> buyerIds = Arrays.asList(buyerDTO.getUserId());
                 Result buyerProfilesResult = authClient.getUserProfilesByIds(buyerIds);
                 if (buyerProfilesResult.getSuccess() && buyerProfilesResult.getData() != null) {
                     try {
@@ -1644,22 +1635,22 @@ public class OrderServiceImpl implements OrderService {
                             buyerInfo.setNickname(buyerProfile.getNickname());
                             buyerInfo.setAvatar(buyerProfile.getAvatar());
                         } else {
-                            buyerInfo.setNickname(buyer.getUsername());
+                            buyerInfo.setNickname(buyerDTO.getUsername());
                             buyerInfo.setAvatar(null);
                         }
                     } catch (Exception e) {
                         log.error("转换UserProfileInternalDTO失败: {}", e.getMessage(), e);
-                        buyerInfo.setNickname(buyer.getUsername());
+                        buyerInfo.setNickname(buyerDTO.getUsername());
                         buyerInfo.setAvatar(null);
                     }
                 } else {
-                    buyerInfo.setNickname(buyer.getUsername());
+                    buyerInfo.setNickname(buyerDTO.getUsername());
                     buyerInfo.setAvatar(null);
                 }
                 
-                buyerInfo.setPhone(buyer.getPrimaryPhone());
+                buyerInfo.setPhone(buyerDTO.getPrimaryPhone());
                 buyerInfo.setEmail(null);
-                buyerInfo.setIsDeleted("DELETED".equals(buyer.getAccountStatus()));
+                buyerInfo.setIsDeleted("DELETED".equals(buyerDTO.getAccountStatus()));
                 buyerInfo.setStatus(buyerInfo.getIsDeleted() ? "DELETED" : "ACTIVE");
                 orderDTO.setBuyer(buyerInfo);
             } catch (Exception e) {

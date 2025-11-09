@@ -3,11 +3,12 @@ package com.njumarket.commodity.service.impl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.njumarket.dto.CommodityDTO;
-import com.njumarket.njumarket.vo.*;
+import com.njumarket.commodity.dto.CommodityDTO;
+import com.njumarket.commodity.vo.CommodityPageResultVO;
+import com.njumarket.commodity.vo.CommodityDetailVO;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
-import com.njumarket.njumarket.entity.Commodity;
-import com.njumarket.njumarket.entity.User;
+import com.njumarket.commodity.entity.Commodity;
+import com.njumarket.commodity.entity.User; // User 实体（Commodity Service专用）
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.commodity.repository.CommodityRepository;
 import com.njumarket.commodity.service.CommodityQueryService;
@@ -133,7 +134,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             }
             
             // 检查可见性权限（公开接口，允许未登录用户访问）
-            User currentUser = SecurityUtils.getCurrentUser(); // 使用 getCurrentUser 而不是 requireCurrentUser
+            Object userObj = SecurityUtils.getCurrentUser();
+        User currentUser = userObj instanceof User ? (User) userObj : null; // 使用 getCurrentUser 而不是 requireCurrentUser
             if (!canUserViewCommodity(commodity, currentUser)) {
                 throw new BusinessException("无权限查看此商品");
             }
@@ -461,7 +463,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             log.info("根据ID获取商品详情（支持下架商品） - commodityId: {}", commodityId);
             
             // 获取当前用户
-            User currentUser = SecurityUtils.requireCurrentUser();
+            Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
             
             Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
             if (commodity == null) {
