@@ -25,7 +25,8 @@
 
 ### 版本历史
 - **v2.0.0** (2024年): 从单体到微服务的架构迁移完成（本文档）
-- **v2.0.1** (2025-11-09): DTO验证优化、异常处理完善、关键Bug修复 ✅ **2.0阶段已完成**
+- **v2.0.1** (2025-11-09): DTO验证优化、异常处理完善、关键Bug修复
+- **v2.0.2** (2025-11-10): 反射滥用问题解决、使用Spring Security标准注解、修复UserProfile唯一约束冲突 ✅ **2.0阶段已完成**
 
 ### 主要成就
 
@@ -1472,7 +1473,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 ## 相关资源
 
-- **v2.0.1文档**: [PROJECT_DOCUMENTATION_V2.0.1.md](./PROJECT_DOCUMENTATION_V2.0.1.md) - DTO验证优化、异常处理完善、关键Bug修复，包含2.0阶段完整总结
+- **v2.0.0文档**: [PROJECT_DOCUMENTATION_V2.0.0.md](./PROJECT_DOCUMENTATION_V2.0.0.md) - 从单体到微服务的架构迁移
+- **v2.0.1文档**: [PROJECT_DOCUMENTATION_V2.0.1.md](./PROJECT_DOCUMENTATION_V2.0.1.md) - DTO验证优化、异常处理完善、关键Bug修复
+- **v2.0.2文档**: [PROJECT_DOCUMENTATION_V2.0.2.md](./PROJECT_DOCUMENTATION_V2.0.2.md) - 反射滥用问题解决、使用Spring Security标准注解，包含2.0阶段完整总结 ✅ **2.0阶段已完成**
+- **批量查询分析**: [BATCH_QUERY_ANALYSIS.md](./BATCH_QUERY_ANALYSIS.md) - 批量查询使用情况分析报告
 - **v1.x文档**: [PROJECT_DOCUMENTATION_V1.x_SUMMARY.md](./PROJECT_DOCUMENTATION_V1.x_SUMMARY.md) - 单体架构版本总结
 - **数据库初始化**: 参见 `database/README.md`
 - **测试脚本**: 参见 `scripts/README.md`
@@ -1480,4 +1484,4 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 ---
 
-**注意**：v2.0阶段的完整总结请参考 [PROJECT_DOCUMENTATION_V2.0.1.md](./PROJECT_DOCUMENTATION_V2.0.1.md) 文档。
+**注意**：v2.0阶段的完整总结请参考 [PROJECT_DOCUMENTATION_V2.0.2.md](./PROJECT_DOCUMENTATION_V2.0.2.md) 文档。

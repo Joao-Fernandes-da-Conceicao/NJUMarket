@@ -108,16 +108,33 @@ public class InternalController {
             }
             
             // 更新档案字段
-            UserProfile profile = user.getUserProfile();
+            // ✅ 先通过Repository查询，避免JPA延迟加载导致的null判断错误
+            UserProfile profile = userProfileRepository.findByUserId(user.getUserId())
+                .orElse(null);
+            
             if (profile == null) {
+                // 如果确实不存在，创建新的档案
                 profile = new UserProfile();
                 profile.setProfileId("PROFILE_" + System.currentTimeMillis());
                 profile.setUserId(user.getUserId());
+                // 设置默认值
+                profile.setCreditScore(100);
+                profile.setBuyerRating(5.0);
+                profile.setSellerRating(5.0);
+                profile.setTotalSales(0);
+                profile.setTotalPurchases(0);
+                profile.setVipLevel("NORMAL");
             }
+            
+            // 更新字段（如果payload中有提供）
             Object nickname = payload.get("nickname");
-            if (nickname instanceof String) profile.setNickname(((String) nickname).trim());
+            if (nickname instanceof String && StringUtils.hasText((String) nickname)) {
+                profile.setNickname(((String) nickname).trim());
+            }
             Object avatar = payload.get("avatar");
-            if (avatar instanceof String) profile.setAvatar(((String) avatar).trim());
+            if (avatar instanceof String && StringUtils.hasText((String) avatar)) {
+                profile.setAvatar(((String) avatar).trim());
+            }
             
             userRepository.save(user);
             userProfileRepository.save(profile);

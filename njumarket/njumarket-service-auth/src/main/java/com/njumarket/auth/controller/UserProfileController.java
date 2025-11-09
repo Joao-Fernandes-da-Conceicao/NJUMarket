@@ -1,9 +1,9 @@
 package com.njumarket.auth.controller;
 
-import com.njumarket.njumarket.annotation.CurrentUser;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.auth.dto.UserProfileUpdateDTO;
-import com.njumarket.auth.entity.User;
+import com.njumarket.njumarket.model.IUser;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserProfileService;
 import jakarta.validation.Valid;
@@ -69,7 +69,7 @@ public class UserProfileController {
     })
     @PostMapping(value = "/avatar", consumes = "multipart/form-data")
     public Result uploadAvatar(
-        @CurrentUser User user,
+        @AuthenticationPrincipal IUser user,
         @Parameter(description = "头像文件", required = true)
         @RequestParam("file") MultipartFile file) {
         return userProfileService.uploadAvatar(user.getUserId(), file);
@@ -82,7 +82,7 @@ public class UserProfileController {
         @ApiResponse(responseCode = "404", description = "用户档案不存在")
     })
     @DeleteMapping("/avatar")
-    public Result deleteAvatar(@CurrentUser User user) {
+    public Result deleteAvatar(@AuthenticationPrincipal IUser user) {
         return userProfileService.deleteAvatar(user.getUserId());
     }
 
@@ -130,7 +130,7 @@ public class UserProfileController {
         @ApiResponse(responseCode = "401", description = "用户未登录")
     })
     @GetMapping("/order-reminder/status")
-    public Result getOrderReminderStatus(@CurrentUser User user) {
+    public Result getOrderReminderStatus(@AuthenticationPrincipal IUser user) {
         java.util.Map<String, Boolean> status = userProfileService.getOrderReminderStatus(user.getUserId());
         return Result.ok(status);
     }
@@ -143,7 +143,7 @@ public class UserProfileController {
     })
     @PostMapping("/order-reminder/clear")
     public Result clearOrderReminder(
-        @CurrentUser User user,
+        @AuthenticationPrincipal IUser user,
         @Parameter(description = "角色", required = true, example = "SELLER")
         @RequestParam String role) {
         userProfileService.clearOrderReminderStatus(user.getUserId(), role);

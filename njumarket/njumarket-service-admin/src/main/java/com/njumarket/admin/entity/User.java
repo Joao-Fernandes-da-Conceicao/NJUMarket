@@ -1,5 +1,6 @@
 package com.njumarket.admin.entity;
 
+import com.njumarket.njumarket.model.IUser;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,7 +19,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class User implements IUser {
     
     @Id
     @Column(name = "user_id", length = 50)

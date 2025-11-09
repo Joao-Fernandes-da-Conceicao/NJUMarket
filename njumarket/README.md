@@ -11,6 +11,8 @@ NJUMarket 是一个采用微服务架构的校园二手交易平台，支持商�
 - ✅ **微服务架构**：7个微服务，服务注册与发现、API网关、服务间通信全部完成
 - ✅ **数据一致性**：消息软删除时自动更新会话最新消息（用户端和管理端均已实现）
 - ✅ **管理端功能**：用户管理、商品管理、订单管理、会话管理、消息管理、管理员管理等全部功能
+- ✅ **代码质量**：反射滥用问题已解决，使用Spring Security标准注解，符合开发规范
+- ✅ **性能优化**：广泛使用批量查询，防止N+1查询问题，Feign调用次数为常数次
 
 - **架构**: 微服务架构（Spring Cloud）
 - **后端**: Spring Boot 3.2.0 + Spring Cloud 2023.0.3
@@ -149,7 +151,9 @@ njumarket/
 │   └── README.md                   # 数据库说明
 │
 ├── docs/                          # 项目文档
-│   └── PROJECT_DOCUMENTATION_V2.0.md  # 完整文档
+│   ├── PROJECT_DOCUMENTATION_V2.0.md  # 2.0版本总览
+│   ├── PROJECT_DOCUMENTATION_V2.0.2.md  # v2.0.2详细文档（2.0阶段完成）
+│   └── BATCH_QUERY_ANALYSIS.md    # 批量查询分析报告
 │
 └── scripts/                        # 测试脚本
     ├── batch_create_users_simple.py  # 批量创建用户
@@ -218,9 +222,27 @@ python batch_create_users_simple.py
 
 ## 📚 相关文档
 
-- **完整文档**: `docs/PROJECT_DOCUMENTATION_V2.0.md`
+- **v2.0总览**: `docs/PROJECT_DOCUMENTATION_V2.0.md` - 2.0版本总览和架构设计
+- **v2.0.2文档**: `docs/PROJECT_DOCUMENTATION_V2.0.2.md` - v2.0.2详细文档（反射优化、Spring Security标准注解）
+- **批量查询分析**: `docs/BATCH_QUERY_ANALYSIS.md` - 批量查询使用情况分析报告
 - **数据库说明**: `database/README.md`
 - **测试脚本**: `scripts/README.md`
+
+## 📊 版本信息
+
+**当前版本**: v2.0.2 ✅ **2.0阶段已完成**
+
+**版本历史**：
+- **v2.0.0** (2024年): 从单体到微服务的架构迁移完成
+- **v2.0.1** (2025-11-09): DTO验证优化、异常处理完善、关键Bug修复
+- **v2.0.2** (2025-11-10): 反射滥用问题解决、使用Spring Security标准注解
+
+**2.0阶段核心成就**：
+- ✅ 微服务架构完整实现（7个微服务）
+- ✅ 用户端和管理端功能全部完成
+- ✅ 代码质量提升（DTO验证、异常处理、反射优化）
+- ✅ 符合开发规范（使用Spring Security标准注解）
+- ✅ 性能优化（批量查询，防止N+1问题）
 
 ## ⚠️ 常见问题
 

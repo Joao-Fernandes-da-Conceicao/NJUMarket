@@ -1,5 +1,6 @@
 package com.njumarket.message.entity;
 
+import com.njumarket.njumarket.model.IUser;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -13,7 +14,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class User implements IUser {
     private String userId;
     private String primaryPhone;
     private String username;

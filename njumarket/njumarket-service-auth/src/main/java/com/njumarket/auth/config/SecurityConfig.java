@@ -12,7 +12,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * 重构说明：
  * 1. Gateway层已经完成JWT认证，Auth Service只需要设置用户上下文
  * 2. UserContextFilter会从X-User-Id头获取用户信息并设置SecurityContext
- * 3. 所有请求都允许通过，由UserContextFilter和Controller层的@CurrentUser注解进行权限控制
+ * 3. 所有请求都允许通过，由UserContextFilter和Controller层的@AuthenticationPrincipal注解进行权限控制
  */
 @Configuration
 @EnableWebSecurity

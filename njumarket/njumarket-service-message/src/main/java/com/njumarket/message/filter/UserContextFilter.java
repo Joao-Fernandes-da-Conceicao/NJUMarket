@@ -32,8 +32,8 @@ import java.util.Map;
  * 
  * 重构说明：
  * 1. 参考单体版（1.4.1）的JwtAuthenticationFilter实现
- * 2. 同时设置SecurityContext（用于@CurrentUser注解）和UserHolder（向后兼容）
- * 3. 确保SecurityUtils和@CurrentUser注解正常工作
+ * 2. 同时设置SecurityContext（用于@AuthenticationPrincipal注解）和UserHolder（向后兼容）
+ * 3. 确保SecurityUtils和@AuthenticationPrincipal注解正常工作
  */
 @Slf4j
 @Component
@@ -125,7 +125,7 @@ public class UserContextFilter extends OncePerRequestFilter {
                             return;
                         }
                         
-                        // 1. 设置Spring Security SecurityContext（用于@CurrentUser注解）
+                        // 1. 设置Spring Security SecurityContext（用于@AuthenticationPrincipal注解）
                         UsernamePasswordAuthenticationToken authentication = 
                             new UsernamePasswordAuthenticationToken(
                                 user, null, Collections.emptyList()

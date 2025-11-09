@@ -27,6 +27,7 @@ import com.njumarket.admin.service.AdminService;
 import com.njumarket.admin.service.PasswordService;
 import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.SecurityUtils;
+import com.njumarket.njumarket.model.IAdmin;
 import com.njumarket.njumarket.exception.BusinessException;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -135,14 +136,9 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Result getCurrentAdmin() {
         try {
-            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
-            // 使用反射获取adminId
-            String adminId;
-            try {
-                adminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
-            } catch (Exception e) {
-                throw new BusinessException("无法获取管理员ID");
-            }
+            IAdmin authAdmin = SecurityUtils.requireCurrentAdmin();
+            // 直接调用接口方法获取adminId，无需反射
+            String adminId = authAdmin.getAdminId();
             // 从数据库查询admin-service的Admin实体
             Admin admin = adminRepository.findById(adminId)
                     .orElseThrow(() -> new BusinessException("管理员不存在"));
@@ -176,14 +172,9 @@ public class AdminServiceImpl implements AdminService {
     public Result createAdmin(Admin admin) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能创建管理员
-            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
-            // 使用反射获取adminId
-            String adminId;
-            try {
-                adminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
-            } catch (Exception e) {
-                throw new BusinessException("无法获取管理员ID");
-            }
+            IAdmin authAdmin = SecurityUtils.requireCurrentAdmin();
+            // 直接调用接口方法获取adminId，无需反射
+            String adminId = authAdmin.getAdminId();
             // 从数据库查询admin-service的Admin实体
             Admin currentAdmin = adminRepository.findById(adminId)
                     .orElseThrow(() -> new BusinessException("管理员不存在"));
@@ -322,14 +313,9 @@ public class AdminServiceImpl implements AdminService {
     public Result getAdminList(Integer page, Integer size, String keyword, String accountStatus, String sortProp, String sortOrder) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能查看管理员列表
-            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
-            // 使用反射获取adminId
-            String adminId;
-            try {
-                adminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
-            } catch (Exception e) {
-                throw new BusinessException("无法获取管理员ID");
-            }
+            IAdmin authAdmin = SecurityUtils.requireCurrentAdmin();
+            // 直接调用接口方法获取adminId，无需反射
+            String adminId = authAdmin.getAdminId();
             // 从数据库查询admin-service的Admin实体
             Admin currentAdmin = adminRepository.findById(adminId)
                     .orElseThrow(() -> new BusinessException("管理员不存在"));
@@ -401,14 +387,9 @@ public class AdminServiceImpl implements AdminService {
     public Result getAdminById(String adminId) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能查看其他管理员信息
-            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
-            // 使用反射获取当前管理员ID
-            String currentAdminId;
-            try {
-                currentAdminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
-            } catch (Exception e) {
-                throw new BusinessException("无法获取管理员ID");
-            }
+            IAdmin authAdmin = SecurityUtils.requireCurrentAdmin();
+            // 直接调用接口方法获取当前管理员ID，无需反射
+            String currentAdminId = authAdmin.getAdminId();
             // 从数据库查询admin-service的Admin实体
             Admin currentAdmin = adminRepository.findById(currentAdminId)
                     .orElseThrow(() -> new BusinessException("管理员不存在"));
@@ -579,14 +560,9 @@ public class AdminServiceImpl implements AdminService {
     public Result updateAdminFull(String adminId, java.util.Map<String, Object> payload) {
         try {
             // ✅ 权限检查：只有system权限的管理员才能更新其他管理员信息
-            Object authAdminObj = SecurityUtils.requireCurrentAdmin();
-            // 使用反射获取当前管理员ID
-            String currentAdminId;
-            try {
-                currentAdminId = (String) authAdminObj.getClass().getMethod("getAdminId").invoke(authAdminObj);
-            } catch (Exception e) {
-                throw new BusinessException("无法获取管理员ID");
-            }
+            IAdmin authAdmin = SecurityUtils.requireCurrentAdmin();
+            // 直接调用接口方法获取当前管理员ID，无需反射
+            String currentAdminId = authAdmin.getAdminId();
             // 从数据库查询admin-service的Admin实体
             Admin currentAdmin = adminRepository.findById(currentAdminId)
                     .orElseThrow(() -> new BusinessException("管理员不存在"));
@@ -951,20 +927,32 @@ public class AdminServiceImpl implements AdminService {
             }
 
             // 档案字段
-            UserProfile profile = user.getUserProfile();
+            // ✅ 先通过Repository查询，避免JPA延迟加载导致的null判断错误
+            UserProfile profile = userProfileRepository.findByUserId(user.getUserId())
+                .orElse(null);
+            
             if (profile == null) {
+                // 如果确实不存在，创建新的档案
                 profile = new UserProfile();
                 profile.setProfileId("PROFILE_" + System.currentTimeMillis());
                 profile.setUserId(user.getUserId());
+                // 设置默认值
+                profile.setCreditScore(100);
+                profile.setBuyerRating(5.0);
+                profile.setSellerRating(5.0);
+                profile.setTotalSales(0);
+                profile.setTotalPurchases(0);
+                profile.setVipLevel("NORMAL");
             }
             
+            // 更新字段（如果payload中有提供）
             Object nickname = payload.get("nickname");
-            if (nickname instanceof String) {
+            if (nickname instanceof String && StringUtils.hasText((String) nickname)) {
                 profile.setNickname(((String) nickname).trim());
             }
             
             Object avatar = payload.get("avatar");
-            if (avatar instanceof String) {
+            if (avatar instanceof String && StringUtils.hasText((String) avatar)) {
                 profile.setAvatar(((String) avatar).trim());
             }
             

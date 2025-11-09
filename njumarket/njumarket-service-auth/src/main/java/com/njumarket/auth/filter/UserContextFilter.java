@@ -83,7 +83,7 @@ public class UserContextFilter extends OncePerRequestFilter {
                             return;
                         }
                         
-                        // 1. 设置Spring Security SecurityContext（用于@CurrentUser注解）
+                        // 1. 设置Spring Security SecurityContext（用于@AuthenticationPrincipal注解）
                         UsernamePasswordAuthenticationToken authentication = 
                             new UsernamePasswordAuthenticationToken(
                                 user, null, Collections.emptyList()

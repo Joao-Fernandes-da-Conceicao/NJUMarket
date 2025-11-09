@@ -1,10 +1,10 @@
 package com.njumarket.message.controller;
 
-import com.njumarket.njumarket.annotation.CurrentUser;
 import com.njumarket.message.dto.SendMessageRequest;
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.message.entity.User; // User 实体（Message Service专用）
+import com.njumarket.njumarket.model.IUser;
 import com.njumarket.message.service.ContactService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,7 +29,7 @@ public class ContactController {
         @ApiResponse(responseCode = "404", description = "对话不存在")
     })
     @PostMapping("/send")
-    public Result sendMessage(@CurrentUser User user,
+    public Result sendMessage(@AuthenticationPrincipal IUser user,
                              @Valid @RequestBody SendMessageRequest request) {
         return contactService.sendMessage(user.getUserId(), request);
     }
@@ -41,7 +41,7 @@ public class ContactController {
     })
     @GetMapping("/conversations")
     public Result getConversations(
-            @CurrentUser User user,
+            @AuthenticationPrincipal IUser user,
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页数量", example = "20") @RequestParam(defaultValue = "20") int size) {
         return contactService.getConversations(user.getUserId(), page - 1, size);
@@ -54,7 +54,7 @@ public class ContactController {
     })
     @GetMapping("/conversations/{conversationId}")
     public Result getConversationDetail(
-            @CurrentUser User user,
+            @AuthenticationPrincipal IUser user,
             @Parameter(description = "对话ID", required = true) @PathVariable String conversationId,
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页数量", example = "50") @RequestParam(defaultValue = "50") int size) {
@@ -68,7 +68,7 @@ public class ContactController {
     })
     @GetMapping("/conversations/{conversationId}/messages/before")
     public Result getMessagesBefore(
-            @CurrentUser User user,
+            @AuthenticationPrincipal IUser user,
             @Parameter(description = "对话ID", required = true) @PathVariable String conversationId,
             @Parameter(description = "时间戳（ISO格式）", required = true) @RequestParam String beforeTime,
             @Parameter(description = "每页数量", example = "50") @RequestParam(defaultValue = "50") int size) {
@@ -82,7 +82,7 @@ public class ContactController {
     })
     @PostMapping("/conversations/create")
     public Result createConversation(
-            @CurrentUser User user,
+            @AuthenticationPrincipal IUser user,
             @Parameter(description = "对方用户ID", required = true) @RequestParam String otherUserId) {
         return contactService.getOrCreateConversation(user.getUserId(), otherUserId);
     }
@@ -93,7 +93,7 @@ public class ContactController {
         @ApiResponse(responseCode = "404", description = "对话不存在")
     })
     @PostMapping("/conversations/{conversationId}/read")
-    public Result markAsRead(@CurrentUser User user,
+    public Result markAsRead(@AuthenticationPrincipal IUser user,
                             @Parameter(description = "对话ID", required = true) @PathVariable String conversationId) {
         return contactService.markConversationAsRead(user.getUserId(), conversationId);
     }
@@ -104,7 +104,7 @@ public class ContactController {
         @ApiResponse(responseCode = "401", description = "用户未登录")
     })
     @GetMapping("/unread-count")
-    public Result getUnreadCount(@CurrentUser User user) {
+    public Result getUnreadCount(@AuthenticationPrincipal IUser user) {
         return contactService.getUnreadCount(user.getUserId());
     }
     
@@ -114,7 +114,7 @@ public class ContactController {
         @ApiResponse(responseCode = "404", description = "对话不存在")
     })
     @DeleteMapping("/conversations/{conversationId}")
-    public Result deleteConversation(@CurrentUser User user,
+    public Result deleteConversation(@AuthenticationPrincipal IUser user,
                                     @Parameter(description = "对话ID", required = true) @PathVariable String conversationId) {
         return contactService.deleteConversation(user.getUserId(), conversationId);
     }
@@ -125,7 +125,7 @@ public class ContactController {
         @ApiResponse(responseCode = "404", description = "消息不存在")
     })
     @DeleteMapping("/messages/{messageId}")
-    public Result deleteMessage(@CurrentUser User user,
+    public Result deleteMessage(@AuthenticationPrincipal IUser user,
                                @Parameter(description = "消息ID", required = true) @PathVariable String messageId) {
         return contactService.deleteMessage(user.getUserId(), messageId);
     }
@@ -137,7 +137,7 @@ public class ContactController {
     })
     @GetMapping("/conversations/{conversationId}/search")
     public Result searchMessages(
-            @CurrentUser User user,
+            @AuthenticationPrincipal IUser user,
             @Parameter(description = "对话ID", required = true) @PathVariable String conversationId,
             @Parameter(description = "搜索关键词", required = true) @RequestParam String keyword,
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") int page,
@@ -152,7 +152,7 @@ public class ContactController {
     })
     @GetMapping("/conversations/with/{otherUserId}")
     public Result getConversationWithUser(
-            @CurrentUser User user,
+            @AuthenticationPrincipal IUser user,
             @Parameter(description = "对方用户ID", required = true) @PathVariable String otherUserId) {
         return contactService.getConversationWithUser(user.getUserId(), otherUserId);
     }

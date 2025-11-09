@@ -1,6 +1,13 @@
 package com.njumarket.njumarket.utils;
 
 import com.njumarket.njumarket.exception.BusinessException;
+import com.njumarket.njumarket.model.IUser;
+import com.njumarket.njumarket.model.IAdmin;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -8,7 +15,7 @@ import java.util.Collections;
 /**
  * 安全工具类（Common模块）
  * 提供用户认证、鉴权相关的便捷方法
- * 使用反射避免编译时依赖实体类
+ * 使用接口避免反射调用，提高类型安全性和性能
  */
 public class SecurityUtils {
 
@@ -18,30 +25,24 @@ public class SecurityUtils {
      * 获取当前认证的用户
      * 优先从Spring Security SecurityContext获取，如果没有则从UserHolder获取（向后兼容）
      * 
-     * @return 当前用户对象，如果未登录返回null
+     * @return 当前用户对象（IUser接口），如果未登录返回null
      */
-    public static Object getCurrentUser() {
-        // 优先从Spring Security SecurityContext获取（如果Spring Security可用）
-        try {
-            Object securityContextHolder = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
-            Object context = securityContextHolder.getClass().getMethod("getContext").invoke(null);
-            Object authentication = context.getClass().getMethod("getAuthentication").invoke(context);
-            
-            if (authentication != null) {
-                Boolean isAuthenticated = (Boolean) authentication.getClass().getMethod("isAuthenticated").invoke(authentication);
-                if (Boolean.TRUE.equals(isAuthenticated)) {
-                    Object principal = authentication.getClass().getMethod("getPrincipal").invoke(authentication);
-                    if (principal != null) {
-                        return principal;
-                    }
+    public static IUser getCurrentUser() {
+        // 优先从Spring Security SecurityContext获取
+        SecurityContext context = SecurityContextHolder.getContext();
+        if (context != null) {
+            Authentication authentication = context.getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                Object principal = authentication.getPrincipal();
+                if (principal instanceof IUser) {
+                    return (IUser) principal;
                 }
             }
-        } catch (Exception e) {
-            // Spring Security 不可用，继续使用 UserHolder
         }
 
         // 向后兼容：从UserHolder获取（用于Service层等非Controller场景）
-        return UserHolder.getUser();
+        Object user = UserHolder.getUser();
+        return user instanceof IUser ? (IUser) user : null;
     }
 
     /**
@@ -50,25 +51,18 @@ public class SecurityUtils {
      * @return 用户ID，如果未登录返回null
      */
     public static String getCurrentUserId() {
-        Object user = getCurrentUser();
-        if (user == null) {
-            return null;
-        }
-        try {
-            return (String) user.getClass().getMethod("getUserId").invoke(user);
-        } catch (Exception e) {
-            return null;
-        }
+        IUser user = getCurrentUser();
+        return user != null ? user.getUserId() : null;
     }
 
     /**
      * 要求当前用户必须登录
      * 
-     * @return 当前用户对象
+     * @return 当前用户对象（IUser接口）
      * @throws BusinessException 如果用户未登录
      */
-    public static Object requireCurrentUser() {
-        Object user = getCurrentUser();
+    public static IUser requireCurrentUser() {
+        IUser user = getCurrentUser();
         if (user == null) {
             throw new BusinessException("用户未登录");
         }
@@ -82,12 +76,8 @@ public class SecurityUtils {
      * @throws BusinessException 如果用户未登录
      */
     public static String requireCurrentUserId() {
-        Object user = requireCurrentUser();
-        try {
-            return (String) user.getClass().getMethod("getUserId").invoke(user);
-        } catch (Exception e) {
-            throw new BusinessException("无法获取用户ID");
-        }
+        IUser user = requireCurrentUser();
+        return user.getUserId();
     }
 
     /**
@@ -105,36 +95,25 @@ public class SecurityUtils {
      * @return true表示账户已激活，false表示未激活或未登录
      */
     public static boolean isUserActive() {
-        Object user = getCurrentUser();
+        IUser user = getCurrentUser();
         if (user == null) {
             return false;
         }
-        try {
-            String accountStatus = (String) user.getClass().getMethod("getAccountStatus").invoke(user);
-            return "ACTIVE".equals(accountStatus);
-        } catch (Exception e) {
-            return false;
-        }
+        String accountStatus = user.getAccountStatus();
+        return "ACTIVE".equals(accountStatus);
     }
 
     /**
      * 要求当前用户账户必须为ACTIVE状态
      * 
-     * @return 当前用户对象
+     * @return 当前用户对象（IUser接口）
      * @throws BusinessException 如果用户未登录或账户未激活
      */
-    public static Object requireActiveUser() {
-        Object user = requireCurrentUser();
-        try {
-            String accountStatus = (String) user.getClass().getMethod("getAccountStatus").invoke(user);
-            if (!"ACTIVE".equals(accountStatus)) {
-                throw new BusinessException("账户已被禁用，无法执行此操作");
-            }
-        } catch (java.lang.reflect.InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
-            if (e.getCause() instanceof BusinessException) {
-                throw (BusinessException) e.getCause();
-            }
-            throw new BusinessException("无法检查账户状态");
+    public static IUser requireActiveUser() {
+        IUser user = requireCurrentUser();
+        String accountStatus = user.getAccountStatus();
+        if (!"ACTIVE".equals(accountStatus)) {
+            throw new BusinessException("账户已被禁用，无法执行此操作");
         }
         return user;
     }
@@ -171,49 +150,26 @@ public class SecurityUtils {
      * 获取当前认证的管理员
      * 优先从Spring Security SecurityContext获取，如果没有则从UserHolder获取（向后兼容）
      * 
-     * @return 当前管理员对象，如果未登录返回null
+     * @return 当前管理员对象（IAdmin接口），如果未登录返回null
      */
-    public static Object getCurrentAdmin() {
-        // 优先从Spring Security SecurityContext获取（如果Spring Security可用）
-        try {
-            Object securityContextHolder = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
-            Object context = securityContextHolder.getClass().getMethod("getContext").invoke(null);
-            Object authentication = context.getClass().getMethod("getAuthentication").invoke(context);
-            
+    public static IAdmin getCurrentAdmin() {
+        // 优先从Spring Security SecurityContext获取
+        SecurityContext context = SecurityContextHolder.getContext();
+        if (context != null) {
+            Authentication authentication = context.getAuthentication();
             if (authentication != null) {
-                // ✅ 先获取 Principal（不依赖 isAuthenticated()）
+                // 先获取 Principal（不依赖 isAuthenticated()）
                 // 因为即使 isAuthenticated() 返回 false，Principal 也可能有效
-                try {
-                    Object principal = authentication.getClass().getMethod("getPrincipal").invoke(authentication);
-                    if (principal != null) {
-                        // ✅ Principal 存在，直接返回（不检查 isAuthenticated()）
-                        // 这样可以避免因为 authorities 或其他原因导致 isAuthenticated() 返回 false 的问题
-                        return principal;
-                    }
-                } catch (Exception e2) {
-                    // 获取 Principal 失败，继续检查 isAuthenticated()
-                }
-                
-                // ✅ 如果 Principal 获取失败，检查 isAuthenticated()
-                try {
-                    Boolean isAuthenticated = (Boolean) authentication.getClass().getMethod("isAuthenticated").invoke(authentication);
-                    if (Boolean.TRUE.equals(isAuthenticated)) {
-                        Object principal = authentication.getClass().getMethod("getPrincipal").invoke(authentication);
-                        if (principal != null) {
-                            return principal;
-                        }
-                    }
-                } catch (Exception e3) {
-                    // 忽略异常，继续使用 UserHolder
+                Object principal = authentication.getPrincipal();
+                if (principal instanceof IAdmin) {
+                    return (IAdmin) principal;
                 }
             }
-        } catch (Exception e) {
-            // Spring Security 不可用或反射调用失败，继续使用 UserHolder
-            // 注意：这里不记录日志，因为这是正常的降级行为
         }
 
         // 向后兼容：从UserHolder获取（用于Service层等非Controller场景）
-        return UserHolder.getAdmin();
+        Object admin = UserHolder.getAdmin();
+        return admin instanceof IAdmin ? (IAdmin) admin : null;
     }
 
     /**
@@ -222,25 +178,18 @@ public class SecurityUtils {
      * @return 管理员ID，如果未登录返回null
      */
     public static String getCurrentAdminId() {
-        Object admin = getCurrentAdmin();
-        if (admin == null) {
-            return null;
-        }
-        try {
-            return (String) admin.getClass().getMethod("getAdminId").invoke(admin);
-        } catch (Exception e) {
-            return null;
-        }
+        IAdmin admin = getCurrentAdmin();
+        return admin != null ? admin.getAdminId() : null;
     }
 
     /**
      * 要求当前管理员必须登录
      * 
-     * @return 当前管理员对象
+     * @return 当前管理员对象（IAdmin接口）
      * @throws BusinessException 如果管理员未登录
      */
-    public static Object requireCurrentAdmin() {
-        Object admin = getCurrentAdmin();
+    public static IAdmin requireCurrentAdmin() {
+        IAdmin admin = getCurrentAdmin();
         if (admin == null) {
             throw new BusinessException("管理员未登录");
         }
@@ -254,12 +203,8 @@ public class SecurityUtils {
      * @throws BusinessException 如果管理员未登录
      */
     public static String requireCurrentAdminId() {
-        Object admin = requireCurrentAdmin();
-        try {
-            return (String) admin.getClass().getMethod("getAdminId").invoke(admin);
-        } catch (Exception e) {
-            throw new BusinessException("无法获取管理员ID");
-        }
+        IAdmin admin = requireCurrentAdmin();
+        return admin.getAdminId();
     }
 
     /**
@@ -277,36 +222,25 @@ public class SecurityUtils {
      * @return true表示是SYSTEM管理员，false表示不是或未登录
      */
     public static boolean isSystemAdmin() {
-        Object admin = getCurrentAdmin();
+        IAdmin admin = getCurrentAdmin();
         if (admin == null) {
             return false;
         }
-        try {
-            Boolean result = (Boolean) admin.getClass().getMethod("isSystemAdmin").invoke(admin);
-            return Boolean.TRUE.equals(result);
-        } catch (Exception e) {
-            return false;
-        }
+        Boolean result = admin.isSystemAdmin();
+        return Boolean.TRUE.equals(result);
     }
 
     /**
      * 要求当前管理员必须为SYSTEM角色
      * 
-     * @return 当前管理员对象
+     * @return 当前管理员对象（IAdmin接口）
      * @throws BusinessException 如果管理员未登录或不是SYSTEM角色
      */
-    public static Object requireSystemAdmin() {
-        Object admin = requireCurrentAdmin();
-        try {
-            Boolean isSystem = (Boolean) admin.getClass().getMethod("isSystemAdmin").invoke(admin);
-            if (!Boolean.TRUE.equals(isSystem)) {
-                throw new BusinessException("无权限执行此操作，需要SYSTEM管理员权限");
-            }
-        } catch (java.lang.reflect.InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
-            if (e.getCause() instanceof BusinessException) {
-                throw (BusinessException) e.getCause();
-            }
-            throw new BusinessException("无法检查管理员权限");
+    public static IAdmin requireSystemAdmin() {
+        IAdmin admin = requireCurrentAdmin();
+        Boolean isSystem = admin.isSystemAdmin();
+        if (!Boolean.TRUE.equals(isSystem)) {
+            throw new BusinessException("无权限执行此操作，需要SYSTEM管理员权限");
         }
         return admin;
     }
@@ -318,16 +252,12 @@ public class SecurityUtils {
      * @return true表示拥有权限，false表示没有或未登录
      */
     public static boolean hasPermission(String permission) {
-        Object admin = getCurrentAdmin();
+        IAdmin admin = getCurrentAdmin();
         if (admin == null) {
             return false;
         }
-        try {
-            Boolean result = (Boolean) admin.getClass().getMethod("hasPermission", String.class).invoke(admin, permission);
-            return Boolean.TRUE.equals(result);
-        } catch (Exception e) {
-            return false;
-        }
+        Boolean result = admin.hasPermission(permission);
+        return Boolean.TRUE.equals(result);
     }
 
     /**
@@ -337,17 +267,10 @@ public class SecurityUtils {
      * @throws BusinessException 如果管理员未登录或不拥有权限
      */
     public static void requirePermission(String permission) {
-        Object admin = requireCurrentAdmin();
-        try {
-            Boolean hasPerm = (Boolean) admin.getClass().getMethod("hasPermission", String.class).invoke(admin, permission);
-            if (!Boolean.TRUE.equals(hasPerm)) {
-                throw new BusinessException("无权限执行此操作，需要权限: " + permission);
-            }
-        } catch (java.lang.reflect.InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
-            if (e.getCause() instanceof BusinessException) {
-                throw (BusinessException) e.getCause();
-            }
-            throw new BusinessException("无法检查权限");
+        IAdmin admin = requireCurrentAdmin();
+        Boolean hasPerm = admin.hasPermission(permission);
+        if (!Boolean.TRUE.equals(hasPerm)) {
+            throw new BusinessException("无权限执行此操作，需要权限: " + permission);
         }
     }
 
@@ -372,18 +295,11 @@ public class SecurityUtils {
      * @throws BusinessException 如果当前管理员不是指定管理员且不是SYSTEM管理员
      */
     public static void requireCurrentAdminOrSystem(String adminId) {
-        Object admin = requireCurrentAdmin();
-        try {
-            Boolean isSystem = (Boolean) admin.getClass().getMethod("isSystemAdmin").invoke(admin);
-            boolean isCurrent = isCurrentAdmin(adminId);
-            if (!isSystem && !isCurrent) {
-                throw new BusinessException("无权限操作此资源");
-            }
-        } catch (java.lang.reflect.InvocationTargetException | IllegalAccessException | NoSuchMethodException e) {
-            if (e.getCause() instanceof BusinessException) {
-                throw (BusinessException) e.getCause();
-            }
-            throw new BusinessException("无法检查管理员权限");
+        IAdmin admin = requireCurrentAdmin();
+        Boolean isSystem = admin.isSystemAdmin();
+        boolean isCurrent = isCurrentAdmin(adminId);
+        if (!Boolean.TRUE.equals(isSystem) && !isCurrent) {
+            throw new BusinessException("无权限操作此资源");
         }
     }
 
@@ -394,15 +310,9 @@ public class SecurityUtils {
      * 
      * @return Authentication对象，如果未认证返回null
      */
-    public static Object getAuthentication() {
-        try {
-            Object securityContextHolder = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
-            Object context = securityContextHolder.getClass().getMethod("getContext").invoke(null);
-            return context.getClass().getMethod("getAuthentication").invoke(context);
-        } catch (Exception e) {
-            // Spring Security 不可用
-            return null;
-        }
+    public static Authentication getAuthentication() {
+        SecurityContext context = SecurityContextHolder.getContext();
+        return context != null ? context.getAuthentication() : null;
     }
 
     /**
@@ -411,16 +321,8 @@ public class SecurityUtils {
      * @return true表示已认证，false表示未认证
      */
     public static boolean hasAuthentication() {
-        Object authentication = getAuthentication();
-        if (authentication == null) {
-            return false;
-        }
-        try {
-            Boolean isAuthenticated = (Boolean) authentication.getClass().getMethod("isAuthenticated").invoke(authentication);
-            return Boolean.TRUE.equals(isAuthenticated);
-        } catch (Exception e) {
-            return false;
-        }
+        Authentication authentication = getAuthentication();
+        return authentication != null && authentication.isAuthenticated();
     }
 
     /**
@@ -428,16 +330,12 @@ public class SecurityUtils {
      * 
      * @return 权限集合，如果未认证返回空集合
      */
-    public static Collection<?> getAuthorities() {
-        Object authentication = getAuthentication();
+    public static Collection<? extends GrantedAuthority> getAuthorities() {
+        Authentication authentication = getAuthentication();
         if (authentication == null) {
             return Collections.emptyList();
         }
-        try {
-            return (Collection<?>) authentication.getClass().getMethod("getAuthorities").invoke(authentication);
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
+        return authentication.getAuthorities();
     }
 
     /**
@@ -450,15 +348,10 @@ public class SecurityUtils {
         if (role == null) {
             return false;
         }
-        Collection<?> authorities = getAuthorities();
+        Collection<? extends GrantedAuthority> authorities = getAuthorities();
         String roleWithPrefix = role.startsWith("ROLE_") ? role : "ROLE_" + role;
-        try {
-            Class<?> simpleGrantedAuthorityClass = Class.forName("org.springframework.security.core.authority.SimpleGrantedAuthority");
-            Object roleAuthority = simpleGrantedAuthorityClass.getConstructor(String.class).newInstance(roleWithPrefix);
-            return authorities.contains(roleAuthority);
-        } catch (Exception e) {
-            return false;
-        }
+        GrantedAuthority roleAuthority = new SimpleGrantedAuthority(roleWithPrefix);
+        return authorities.contains(roleAuthority);
     }
 
     /**
@@ -483,14 +376,9 @@ public class SecurityUtils {
         if (authority == null) {
             return false;
         }
-        Collection<?> authorities = getAuthorities();
-        try {
-            Class<?> simpleGrantedAuthorityClass = Class.forName("org.springframework.security.core.authority.SimpleGrantedAuthority");
-            Object authorityObj = simpleGrantedAuthorityClass.getConstructor(String.class).newInstance(authority);
-            return authorities.contains(authorityObj);
-        } catch (Exception e) {
-            return false;
-        }
+        Collection<? extends GrantedAuthority> authorities = getAuthorities();
+        GrantedAuthority authorityObj = new SimpleGrantedAuthority(authority);
+        return authorities.contains(authorityObj);
     }
 
     /**
@@ -512,12 +400,7 @@ public class SecurityUtils {
      * 用于请求结束后清理，避免内存泄漏
      */
     public static void clearContext() {
-        try {
-            Object securityContextHolder = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
-            securityContextHolder.getClass().getMethod("clearContext").invoke(null);
-        } catch (Exception e) {
-            // Spring Security 不可用，忽略
-        }
+        SecurityContextHolder.clearContext();
         UserHolder.clearAll();
     }
 }

@@ -1,5 +1,6 @@
 package com.njumarket.auth.entity;
 
+import com.njumarket.njumarket.model.IAdmin;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,7 +19,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class Admin {
+public class Admin implements IAdmin {
 
     @Id
     @Column(name = "admin_id", length = 50)

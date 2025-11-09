@@ -1,9 +1,15 @@
 package com.njumarket.njumarket.utils;
 
+import com.njumarket.njumarket.model.IUser;
+import com.njumarket.njumarket.model.IAdmin;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 /**
  * 用户上下文工具类（Common模块）
  * 使用ThreadLocal存储用户和管理员信息
- * 使用反射避免编译时依赖实体类
+ * 使用接口避免反射调用，提高类型安全性和性能
  */
 public class UserHolder {
     private static final ThreadLocal<Object> userTl = new ThreadLocal<>();
@@ -17,29 +23,25 @@ public class UserHolder {
     /**
      * 获取当前用户
      * 优先从Spring Security SecurityContext获取，如果没有则从ThreadLocal获取（向后兼容）
+     * 
+     * @return 当前用户对象（IUser接口），如果未登录返回null
      */
-    public static Object getUser() {
-        // 优先从Spring Security SecurityContext获取（如果Spring Security可用）
-        try {
-            Object securityContextHolder = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
-            Object context = securityContextHolder.getClass().getMethod("getContext").invoke(null);
-            Object authentication = context.getClass().getMethod("getAuthentication").invoke(context);
-            
-            if (authentication != null) {
-                Boolean isAuthenticated = (Boolean) authentication.getClass().getMethod("isAuthenticated").invoke(authentication);
-                if (Boolean.TRUE.equals(isAuthenticated)) {
-                    Object principal = authentication.getClass().getMethod("getPrincipal").invoke(authentication);
-                    if (principal != null) {
-                        return principal;
-                    }
+    public static IUser getUser() {
+        // 优先从Spring Security SecurityContext获取
+        SecurityContext context = SecurityContextHolder.getContext();
+        if (context != null) {
+            Authentication authentication = context.getAuthentication();
+            if (authentication != null && authentication.isAuthenticated()) {
+                Object principal = authentication.getPrincipal();
+                if (principal instanceof IUser) {
+                    return (IUser) principal;
                 }
             }
-        } catch (Exception e) {
-            // Spring Security 不可用，继续使用 ThreadLocal
         }
 
         // 向后兼容：从ThreadLocal获取（用于Service层等非Controller场景）
-        return userTl.get();
+        Object user = userTl.get();
+        return user instanceof IUser ? (IUser) user : null;
     }
 
     public static void removeUser() {
@@ -54,46 +56,27 @@ public class UserHolder {
     /**
      * 获取当前管理员
      * 优先从Spring Security SecurityContext获取，如果没有则从ThreadLocal获取（向后兼容）
+     * 
+     * @return 当前管理员对象（IAdmin接口），如果未登录返回null
      */
-    public static Object getAdmin() {
-        // 优先从Spring Security SecurityContext获取（如果Spring Security可用）
-        try {
-            Object securityContextHolder = Class.forName("org.springframework.security.core.context.SecurityContextHolder");
-            Object context = securityContextHolder.getClass().getMethod("getContext").invoke(null);
-            Object authentication = context.getClass().getMethod("getAuthentication").invoke(context);
-            
+    public static IAdmin getAdmin() {
+        // 优先从Spring Security SecurityContext获取
+        SecurityContext context = SecurityContextHolder.getContext();
+        if (context != null) {
+            Authentication authentication = context.getAuthentication();
             if (authentication != null) {
-                // ✅ 先获取 Principal（不依赖 isAuthenticated()）
+                // 先获取 Principal（不依赖 isAuthenticated()）
                 // 因为即使 isAuthenticated() 返回 false，Principal 也可能有效
-                try {
-                    Object principal = authentication.getClass().getMethod("getPrincipal").invoke(authentication);
-                    if (principal != null) {
-                        // ✅ Principal 存在，直接返回（不检查 isAuthenticated()）
-                        return principal;
-                    }
-                } catch (Exception e2) {
-                    // 获取 Principal 失败，继续检查 isAuthenticated()
-                }
-                
-                // ✅ 如果 Principal 获取失败，检查 isAuthenticated()
-                try {
-                    Boolean isAuthenticated = (Boolean) authentication.getClass().getMethod("isAuthenticated").invoke(authentication);
-                    if (Boolean.TRUE.equals(isAuthenticated)) {
-                        Object principal = authentication.getClass().getMethod("getPrincipal").invoke(authentication);
-                        if (principal != null) {
-                            return principal;
-                        }
-                    }
-                } catch (Exception e3) {
-                    // 忽略异常，继续使用 ThreadLocal
+                Object principal = authentication.getPrincipal();
+                if (principal instanceof IAdmin) {
+                    return (IAdmin) principal;
                 }
             }
-        } catch (Exception e) {
-            // Spring Security 不可用，继续使用 ThreadLocal
         }
 
         // 向后兼容：从ThreadLocal获取（用于Service层等非Controller场景）
-        return adminTl.get();
+        Object admin = adminTl.get();
+        return admin instanceof IAdmin ? (IAdmin) admin : null;
     }
 
     public static void removeAdmin() {
