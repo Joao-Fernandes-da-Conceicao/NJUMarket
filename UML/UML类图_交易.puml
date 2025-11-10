@@ -1,0 +1,162 @@
+@startuml UML类图-交易
+!define PLANTUML_LIMIT_SIZE 16384
+top to bottom direction
+
+' 核心业务实体类
+class User {
+  + userId: String
+  + primaryPhone: String
+  + registerTime: Date
+  + accountStatus: String
+  + login(type: String): Boolean
+  + bindThirdParty(accountType: String, accountId: String): Boolean
+  + canPublish(): Boolean
+  --
+  ' 约束：一个手机号只能绑定一个账号，用户既是买家也是卖家
+}
+
+class ContactInfo {
+  + contactId: String
+  + ownerId: String
+  + type: String
+  + valueEncrypted: String
+  + revealTo(userId: String): Boolean
+}
+
+class Commodity {
+  + commodityId: String
+  + sellerId: String
+  + title: String
+  + description: String
+  + price: Double
+  + stock: Int
+  + location: String
+  + publishTime: Date
+  + commodityStatus: String
+  + clickCount: Int
+  + reportCount: Int
+  + checkCompliance(): Boolean
+  + updateStock(num: Int): Boolean
+  + publish(): Boolean
+  + unpublish(): Boolean
+}
+
+class Order {
+  + orderId: String
+  + buyerId: String
+  + sellerId: String
+  + commodityId: String
+  + orderStatus: String
+  + payAmount: Double
+  + createTime: Date
+  + createOrder(): Boolean
+  + modifyOrder(fields: Map): Boolean
+  + cancelOrder(): Boolean
+  + payOrder(): Boolean
+  + shipOrder(): Boolean
+  + completeOrder(): Boolean
+}
+
+class Message {
+  + messageId: String
+  + senderId: String
+  + receiverId: String
+  + content: String
+  + sendTime: Date
+  + messageType: String
+  + sendMessage(): Boolean
+  + getMessageHistory(): List(Message)
+}
+
+class Complaint {
+  + complaintId: String
+  + complainantId: String
+  + defendantId: String
+  + relatedOrderId: String
+  + content: String
+  + evidenceFiles: List(File)
+  + status: String
+  + submitComplaint(): Boolean
+  + updateProgress(status: String): Boolean
+}
+
+class UserProfile {
+  + profileId: String
+  + userId: String
+  + nickname: String
+  + avatar: String
+  + creditScore: Int
+  + buyerRating: Double
+  + sellerRating: Double
+  + updateProfile(fields: Map): Boolean
+  + updateRating(rating: Double, role: String): Boolean
+}
+
+' 服务类
+class UserLoginService {
+  + multiLogin(way: String, info: Map): User
+  + checkPhoneBind(phone: String): Boolean
+  + bindPhoneToUniqueUser(userId: String, phone: String): Boolean
+}
+
+class AISearchService {
+  + semanticSearch(query: String, location: String, filters: Map): List(Commodity)
+  + score(commodity: Commodity, userLocation: String): Double
+  + filterByPrice(commodities: List(Commodity), min: Double, max: Double): List(Commodity)
+  + getRecommendations(userId: String): List(Commodity)
+}
+
+class UserCommunicationService {
+  + sendInMessage(senderId: String, receiverId: String, content: String): Message
+  + revealContact(requesterId: String, ownerId: String): Boolean
+  + getInMessageList(userId: String): List(Message)
+  + getContactInfo(userId: String, targetUserId: String): ContactInfo
+}
+
+class UserOrderService {
+  + payOrder(orderId: String): Boolean
+  + requestReturn(orderId: String): Boolean
+  + calcValidVolume(userId: String): Int
+  + getOrderHistory(userId: String): List(Order)
+}
+
+class UserComplaintService {
+  + submitComplaint(info: Map, evidence: List(File)): Complaint
+  + checkComplaintProgress(complaintId: String): String
+  + getComplaintHistory(userId: String): List(Complaint)
+}
+
+class CommodityManagementService {
+  + publishCommodity(userId: String, commodity: Commodity): Boolean
+  + updateCommodity(commodityId: String, fields: Map): Boolean
+  + batchUpdateCommodities(commodityIds: List(String), operation: String): Boolean
+  + getMyCommodities(userId: String): List(Commodity)
+}
+
+class UIIndicator {
+  + switchSkin(skinType: String): Boolean
+  + autoSwitchMode(ambientLux: Int): Boolean
+}
+
+' 关系定义
+User ||--o{ ContactInfo : owns
+User ||--o{ Commodity : publishes
+User ||--o{ Order : creates_as_buyer
+User ||--o{ Order : receives_as_seller
+User ||--o{ Message : sends
+User ||--o{ Message : receives
+User ||--o{ Complaint : submits
+User ||--o{ Complaint : receives
+User ||--|| UserProfile : has
+
+UserLoginService ..> User : manages
+AISearchService ..> Commodity : searches
+UserCommunicationService ..> Message : handles
+UserCommunicationService ..> ContactInfo : manages
+UserOrderService ..> Order : processes
+UserComplaintService ..> Complaint : handles
+CommodityManagementService ..> Commodity : manages
+UIIndicator ..> User : configures
+
+
+@enduml

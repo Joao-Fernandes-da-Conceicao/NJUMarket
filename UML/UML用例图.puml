@@ -1,0 +1,57 @@
+@startuml UML用例图
+left to right direction
+actor 用户 as User
+actor 管理员 as Admin
+
+' 用户用例（买卖统一身份）
+usecase "多途径注册/登录 (Req001)" as UC1
+usecase "AI 语义搜索 (Req002)" as UC2
+usecase "站内安全沟通 (Req003)" as UC3
+usecase "订单交易/支付/退货 (Req004,Req008)" as UC4
+usecase "投诉提交与进度查询 (Req005)" as UC5
+usecase "UI 皮肤与深浅色自动切换 (Req006)" as UC6
+
+' 用户作为卖家的用例
+usecase "商品发布与管理 (Req009)" as UC7
+usecase "订单全流程管理(含批量/导出) (Req007)" as UC8
+usecase "多维度数据统计/导出 (Req011)" as UC9
+usecase "促销工具(优惠券/满减/限时) (Req012)" as UC10
+
+' 用户权限管理用例
+usecase "权限自定义设置 (Req010)" as UC12
+
+' 管理平台用例 (映射 Req013-Req016)
+usecase "基础数据管理与板块成交分布 (Req013)" as UC13
+usecase "用户活跃度统计与等级划分 (Req014)" as UC14
+usecase "商品智能审核与人工复审 (Req015)" as UC15
+usecase "封禁与限制(实名/设备/手机号) (Req016)" as UC16
+
+' 用户关联关系（买卖统一）
+User -- UC1
+User -- UC2
+User -- UC3
+User -- UC4
+User -- UC5
+User -- UC6
+User -- UC7
+User -- UC8
+User -- UC9
+User -- UC10
+User -- UC12
+
+' 管理员关联关系
+Admin -- UC13
+Admin -- UC14
+Admin -- UC15
+Admin -- UC16
+
+' 用例间关系
+UC7 ..> UC4 : 商品发布后产生订单
+UC8 ..> UC4 : 管理订单流程
+UC9 ..> UC4 : 统计交易数据
+UC10 ..> UC7 : 促销商品
+UC12 ..> UC7 : 设置商品发布权限
+UC12 ..> UC8 : 设置订单管理权限
+
+
+@enduml
