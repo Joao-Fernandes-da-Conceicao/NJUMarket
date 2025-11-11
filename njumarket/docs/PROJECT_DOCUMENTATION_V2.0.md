@@ -27,6 +27,7 @@
 - **v2.0.0** (2024年): 从单体到微服务的架构迁移完成（本文档）
 - **v2.0.1** (2025-11-09): DTO验证优化、异常处理完善、关键Bug修复
 - **v2.0.2** (2025-11-10): 反射滥用问题解决、使用Spring Security标准注解、修复UserProfile唯一约束冲突 ✅ **2.0阶段已完成**
+- **v2.1.0** (2025-11-11): Actuator监控、Docker容器化、Swagger API文档 ✅ **2.1.0阶段已完成** - 详见 [v2.1.0文档](./PROJECT_DOCUMENTATION_V2.1.0.md)
 
 ### 主要成就
 
@@ -1347,35 +1348,71 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 ### 2.1.x版本（近期，高优先级）
 
-#### 主线：微服务完善
+#### 第一阶段：基础监控
 
-1. **服务间认证机制**
-   - 实现服务间Token（Service-to-Service Token）
-   - Gateway生成服务间调用Token
-   - 各服务验证Token的有效性
-   - **目标**：防止未授权服务调用
+1. **Spring Boot Actuator**
+   - 集成 `spring-boot-starter-actuator`
+   - 配置健康检查端点：`/actuator/health`
+   - 配置应用信息端点：`/actuator/info`
+   - 配置指标收集端点：`/actuator/metrics`
+   - **目标**：提供基础的服务健康监控
 
-2. **服务降级和熔断**
-   - 使用Resilience4j或Sentinel实现熔断
-   - 为Feign Client添加Fallback类
-   - 实现优雅降级策略
-   - **目标**：提高系统可用性
+2. **API文档增强**
+   - 集成 SpringDoc OpenAPI（Swagger 3）
+   - 自动生成API文档
+   - 支持在线测试接口
+   - **目标**：提升开发效率和API可维护性
 
-3. **实体类与DTO分离优化**
-   - 完善内部DTO设计
-   - 优化类型转换逻辑
-   - 统一DTO转换工具
-   - **目标**：减少服务间耦合
+#### 第二阶段：稳定性保障
 
-#### 支线：组件增强
+3. **服务熔断与降级**
+   - 集成 Resilience4j
+   - 为Feign Client添加熔断器
+   - 实现Fallback降级策略
+   - 配置超时控制
+   - **目标**：防止服务雪崩，提高系统可用性
 
-4. **分布式锁优化**
+4. **配置中心**
+   - 集成 Spring Cloud Config Server
+   - 统一管理各服务配置
+   - 支持配置动态刷新
+   - 实现环境隔离（dev/test/prod）
+   - **目标**：简化配置管理，支持配置热更新
+
+#### 第三阶段：可观测性
+
+5. **分布式链路追踪**
+   - 集成 Spring Cloud Sleuth + Zipkin
+   - 追踪请求在微服务间的完整调用链
+   - 分析服务调用性能
+   - **目标**：提高问题排查效率，优化服务性能
+
+6. **监控指标与可视化**
+   - 集成 Prometheus（指标收集）
+   - 集成 Grafana（可视化面板）
+   - 监控JVM、HTTP、数据库等指标
+   - 配置告警规则
+   - **目标**：实时监控系统状态，及时发现问题
+
+#### 第四阶段：容器化部署（提前完成）
+
+7. **Docker容器化** ✅ **已完成**
+   - 为各服务创建通用 Dockerfile（多阶段构建）
+   - 使用 Docker Compose 编排所有服务
+   - 配置服务依赖和启动顺序
+   - 实现健康检查和数据持久化
+   - **目标**：简化启动流程，降低调试成本，保证环境一致性
+   - **状态**：✅ 已完成
+
+#### 支线：组件优化
+
+8. **分布式锁优化**
    - 实现锁续期机制
    - 优化锁超时时间
    - 添加锁监控
    - **目标**：提高分布式锁可靠性
 
-5. **WebSocket优化**
+9. **WebSocket优化**
    - 实现消息持久化
    - 优化推送性能
    - 添加连接监控
@@ -1385,36 +1422,34 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 ### 2.2.x版本（中期，中优先级）
 
-#### 主线：微服务治理
+#### 第四阶段：异步处理
 
-1. **API版本控制**
+1. **消息队列集成**
+   - 集成 RabbitMQ（推荐，简单易用）
+   - 实现异步消息处理
+   - 实现事件驱动架构
+   - 解耦服务间通信
+   - **目标**：提高系统解耦和性能，支持削峰填谷
+
+#### 第五阶段：容器编排优化（可选）
+
+2. **Kubernetes 部署**
+   - 使用 Kubernetes 进行容器编排
+   - 实现服务自动扩缩容
+   - 实现滚动更新
+   - **目标**：支持生产环境部署
+
+#### 支线：架构优化
+
+4. **API版本控制**
    - 在路径中添加版本号：`/api/v1/user/**`、`/api/v2/user/**`
    - Gateway路由时保留版本号
    - 支持多版本共存
    - **目标**：支持API平滑升级
 
-2. **分布式链路追踪**
-   - 使用Sleuth + Zipkin
-   - 或使用SkyWalking
-   - 集成到Gateway和各服务中
-   - **目标**：提高问题排查效率
-
-3. **配置中心**
-   - 使用Spring Cloud Config Server
-   - 统一管理配置
-   - 支持动态刷新（可选）
-   - **目标**：简化配置管理
-
-#### 支线：监控与运维
-
-4. **服务监控**
-   - 集成Prometheus + Grafana
-   - 监控服务健康、性能指标、错误率
-   - 配置告警规则
-   - **目标**：提高系统可观测性
-
-5. **日志聚合**
+5. **日志聚合**（可选）
    - 使用ELK Stack (Elasticsearch + Logstash + Kibana)
+   - 或使用Loki + Grafana（更轻量）
    - 统一日志格式
    - 实现日志检索和分析
    - **目标**：提高问题排查效率
@@ -1463,11 +1498,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
 ### 版本规划总结
 
-| 版本 | 主线 | 支线 | 优先级 |
-|------|------|------|--------|
-| 2.1.x | 服务间认证、熔断、DTO优化 | 分布式锁优化、WebSocket优化 | 高 |
-| 2.2.x | API版本控制、链路追踪、配置中心 | 服务监控、日志聚合 | 中 |
-| 2.3.x | 数据库拆分、消息队列、分布式事务 | 容器化部署、服务网格 | 低 |
+| 版本 | 主要内容 | 技术栈 | 优先级 |
+|------|---------|--------|--------|
+| **2.1.x** | **基础监控**：Actuator + OpenAPI<br>**稳定性**：Resilience4j + Config<br>**可观测性**：Sleuth + Zipkin + Prometheus + Grafana<br>**容器化**：Docker + Docker Compose ✅ | Spring Boot Actuator ✅<br>SpringDoc OpenAPI ✅<br>Resilience4j<br>Spring Cloud Config<br>Spring Cloud Sleuth + Zipkin<br>Prometheus + Grafana<br>Docker + Docker Compose ✅ | **高** |
+| **2.2.x** | **异步处理**：RabbitMQ<br>**容器编排**：Kubernetes（可选） | RabbitMQ<br>Kubernetes（可选） | **中** |
+| 2.3.x | 数据库拆分、分布式事务、服务网格 | Seata、Istio等 | 低 |
 
 ---
 
@@ -1476,6 +1511,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 - **v2.0.0文档**: [PROJECT_DOCUMENTATION_V2.0.0.md](./PROJECT_DOCUMENTATION_V2.0.0.md) - 从单体到微服务的架构迁移
 - **v2.0.1文档**: [PROJECT_DOCUMENTATION_V2.0.1.md](./PROJECT_DOCUMENTATION_V2.0.1.md) - DTO验证优化、异常处理完善、关键Bug修复
 - **v2.0.2文档**: [PROJECT_DOCUMENTATION_V2.0.2.md](./PROJECT_DOCUMENTATION_V2.0.2.md) - 反射滥用问题解决、使用Spring Security标准注解，包含2.0阶段完整总结 ✅ **2.0阶段已完成**
+- **v2.1.0文档**: [PROJECT_DOCUMENTATION_V2.1.0.md](./PROJECT_DOCUMENTATION_V2.1.0.md) - Actuator监控、Docker容器化、Swagger API文档 ✅ **2.1.0阶段已完成**
 - **批量查询分析**: [BATCH_QUERY_ANALYSIS.md](./BATCH_QUERY_ANALYSIS.md) - 批量查询使用情况分析报告
 - **v1.x文档**: [PROJECT_DOCUMENTATION_V1.x_SUMMARY.md](./PROJECT_DOCUMENTATION_V1.x_SUMMARY.md) - 单体架构版本总结
 - **数据库初始化**: 参见 `database/README.md`

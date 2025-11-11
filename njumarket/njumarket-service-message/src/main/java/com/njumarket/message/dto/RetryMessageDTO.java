@@ -35,9 +35,9 @@ public class RetryMessageDTO {
     private int retryCount;
 
     /**
-     * 最大重试次数（默认3次）
+     * 最大重试次数（默认5次，针对高负载环境增加重试次数）
      */
-    private int maxRetries = 3;
+    private int maxRetries = 5;
 
     /**
      * 下次重试时间（用于指数退避）
@@ -51,11 +51,12 @@ public class RetryMessageDTO {
 
     /**
      * 计算下次重试时间（指数退避策略）
-     * 重试间隔：5秒, 10秒, 20秒（最多3次）
+     * 重试间隔：10秒, 20秒, 40秒, 80秒, 160秒（最多5次）
+     * 针对高负载环境增加重试间隔，给系统更多时间处理延迟
      */
     public void calculateNextRetryTime() {
-        // 指数退避：5s, 10s, 20s
-        int delaySeconds = 5 * (1 << retryCount); // 5 * 2^retryCount
+        // 指数退避：10s, 20s, 40s, 80s, 160s（针对高延迟环境）
+        int delaySeconds = 10 * (1 << retryCount); // 10 * 2^retryCount
         this.nextRetryTime = LocalDateTime.now().plusSeconds(delaySeconds);
     }
 

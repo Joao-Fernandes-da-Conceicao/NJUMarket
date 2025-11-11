@@ -49,6 +49,6 @@ public class RedisConstants {
 
     // ✅ WebSocket消息推送重试队列
     public static final String WEBSOCKET_RETRY_QUEUE_KEY = "websocket:retry:queue"; // WebSocket重试队列
-    public static final Long WEBSOCKET_RETRY_TTL = 30 * 60L; // 重试消息保留30分钟（秒）
+    public static final Long WEBSOCKET_RETRY_TTL = 90 * 60L; // 重试消息保留90分钟（秒）- 针对高负载环境增加TTL以应对传输延迟
 }
 

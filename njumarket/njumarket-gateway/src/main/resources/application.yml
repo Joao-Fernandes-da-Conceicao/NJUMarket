@@ -151,6 +151,24 @@ spring:
             allowCredentials: true
           # 注意：/api/ws/** 不在此配置中，由服务端处理CORS
 
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
 eureka:
   client:
     service-url:

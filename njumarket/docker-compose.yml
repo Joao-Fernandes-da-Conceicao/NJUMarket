@@ -1,0 +1,356 @@
+version: '3.8'
+
+services:
+  # MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: njumarket-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: Hqz20050316
+      MYSQL_DATABASE: nju_market
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # 暂时注释掉 schema.sql，因为文件编码问题导致初始化失败
+      # 启动后可以手动导入：docker exec -i njumarket-mysql mysql -uroot -pHqz20050316 nju_market < database/schema.sql
+      # - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pHqz20050316"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - njumarket-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: njumarket-redis
+    command: redis-server --requirepass hqz20050316
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - njumarket-network
+
+  # Eureka 服务注册中心
+  discovery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-discovery
+        SERVICE_PORT: 8761
+    container_name: njumarket-discovery
+    ports:
+      - "8761:8761"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # API 网关
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-gateway
+        SERVICE_PORT: 8080
+    container_name: njumarket-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 认证服务
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-auth
+        SERVICE_PORT: 8091
+    container_name: njumarket-service-auth
+    ports:
+      - "8091:8091"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - AUTH_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - AUTH_DATASOURCE_USERNAME=root
+      - AUTH_DATASOURCE_PASSWORD=Hqz20050316
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 商品服务
+  commodity-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-commodity
+        SERVICE_PORT: 8092
+    container_name: njumarket-service-commodity
+    ports:
+      - "8092:8092"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - COMMODITY_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - COMMODITY_DATASOURCE_USERNAME=root
+      - COMMODITY_DATASOURCE_PASSWORD=Hqz20050316
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8092/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 订单服务
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-order
+        SERVICE_PORT: 8093
+    container_name: njumarket-service-order
+    ports:
+      - "8093:8093"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - ORDER_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - ORDER_DATASOURCE_USERNAME=root
+      - ORDER_DATASOURCE_PASSWORD=Hqz20050316
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8093/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 消息服务
+  message-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-message
+        SERVICE_PORT: 8094
+    container_name: njumarket-service-message
+    ports:
+      - "8094:8094"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - MESSAGE_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - MESSAGE_DATASOURCE_USERNAME=root
+      - MESSAGE_DATASOURCE_PASSWORD=Hqz20050316
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8094/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 图片服务
+  image-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-image
+        SERVICE_PORT: 8095
+    container_name: njumarket-service-image
+    ports:
+      - "8095:8095"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - IMAGE_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - IMAGE_DATASOURCE_USERNAME=root
+      - IMAGE_DATASOURCE_PASSWORD=Hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    volumes:
+      # 挂载本地 uploads 目录到容器，实现数据持久化
+      # uploads 目录和后端、前端同级，在 njumarket 的上一级目录
+      # 本地路径：../uploads -> 容器路径：/app/uploads
+      - ../uploads:/app/uploads
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8095/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 管理服务
+  admin-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-admin
+        SERVICE_PORT: 8096
+    container_name: njumarket-service-admin
+    ports:
+      - "8096:8096"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - ADMIN_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - ADMIN_DATASOURCE_USERNAME=root
+      - ADMIN_DATASOURCE_PASSWORD=Hqz20050316
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8096/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # 通知服务
+  notification-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-notification
+        SERVICE_PORT: 8097
+    container_name: njumarket-service-notification
+    ports:
+      - "8097:8097"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+    depends_on:
+      discovery:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8097/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  njumarket-network:
+    driver: bridge
+

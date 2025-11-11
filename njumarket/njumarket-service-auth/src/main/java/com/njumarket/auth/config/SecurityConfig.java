@@ -27,6 +27,8 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             // 配置请求授权
             .authorizeHttpRequests(auth -> auth
+                // Actuator端点允许访问（用于健康检查和监控）
+                .requestMatchers("/actuator/**").permitAll()
                 // 内部API允许服务间调用，无需认证
                 .requestMatchers("/api/internal/**").permitAll()
                 // 公开API允许访问
