@@ -17,6 +17,8 @@ import com.njumarket.commodity.client.NotificationClient;
 import com.njumarket.commodity.client.OrderClient;
 import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
+import com.njumarket.njumarket.utils.CacheUtil;
+import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.commodity.utils.CommodityValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -51,6 +54,18 @@ public class CommodityServiceImpl implements CommodityService {
     private final CommodityQueryService commodityQueryService;
     private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper;
+    private final CacheUtil cacheUtil;
+    
+    // ✅ 统一使用GMT+8时区（中国大陆时区）
+    private static final ZoneId GMT_PLUS_8_ZONE = ZoneId.of("Asia/Shanghai");
+    
+    /**
+     * 获取GMT+8时区的当前时间
+     * 用于记录变更时统一时区，确保时间片key正确
+     */
+    private LocalDateTime nowGMT8() {
+        return LocalDateTime.now(GMT_PLUS_8_ZONE);
+    }
 
     // ========== 商品管理核心功能 ==========
     
@@ -150,18 +165,15 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
         
         // 保存更新
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         Commodity updatedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更并推送通知（使用推送服务）- 只有已上架的商品变更才记录（避免草稿频繁变更）
-        if ("ON_SHELF".equals(updatedCommodity.getCommodityStatus())) {
-            try {
-                notificationClient.recordCommodityChange(commodityId, "UPDATE", now.toString());
-                notificationClient.pushCommodityChange(updatedCommodity.getSellerId(), commodityId, "COMMODITY_UPDATED");
-            } catch (Exception e) {
-                log.warn("记录商品变更或推送失败（不影响商品更新）: commodityId={}, error={}", commodityId, e.getMessage());
-            }
-        }
+        // ✅ 注意：商品更新不发送事件到通知服务
+        // 原因：库存变化通过订单事件体现（库存减少=下单，库存增加=退货/取消订单）
+        // 商品的其他变更（如价格、描述等）不需要通知
+        
+        // ✅ 清除商品相关缓存（最终一致性：写入时删除缓存）
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品更新成功", convertToDTO(updatedCommodity));
     }
@@ -183,6 +195,9 @@ public class CommodityServiceImpl implements CommodityService {
         // 删除商品
         commodityRepository.delete(commodity);
         
+        // ✅ 清除商品相关缓存
+        evictCommodityCache(commodityId);
+        
         return Result.ok("商品删除成功");
     }
     
@@ -198,17 +213,15 @@ public class CommodityServiceImpl implements CommodityService {
         CommodityValidator.requireCommodityStatus(commodity, "PUBLISHED");
         
         commodity.setCommodityStatus("ON_SHELF");
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodity.setPublishTime(now);
         Commodity savedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更并推送通知（使用推送服务）
-        try {
-            notificationClient.recordCommodityChange(commodityId, "SHELF", now.toString());
-            notificationClient.pushCommodityChange(savedCommodity.getSellerId(), commodityId, "COMMODITY_SHELVED");
-        } catch (Exception e) {
-            log.warn("记录商品变更或推送失败（不影响商品上架）: commodityId={}, error={}", commodityId, e.getMessage());
-        }
+        // ✅ 注意：商品上架不发送事件到通知服务
+        // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
+        
+        // ✅ 清除商品相关缓存
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品上架成功");
     }
@@ -222,16 +235,14 @@ public class CommodityServiceImpl implements CommodityService {
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         commodity.setCommodityStatus("OFF_SHELF");
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         Commodity savedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更并推送通知（使用推送服务）- 下架操作影响聊天界面显示
-        try {
-            notificationClient.recordCommodityChange(commodityId, "UNSHELF", now.toString());
-            notificationClient.pushCommodityChange(savedCommodity.getSellerId(), commodityId, "COMMODITY_UNSHELVED");
-        } catch (Exception e) {
-            log.warn("记录商品变更或推送失败（不影响商品下架）: commodityId={}, error={}", commodityId, e.getMessage());
-        }
+        // ✅ 注意：商品下架不发送事件到通知服务
+        // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
+        
+        // ✅ 清除商品相关缓存
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品下架成功");
     }
@@ -248,7 +259,7 @@ public class CommodityServiceImpl implements CommodityService {
         String previousStatus = commodity.getCommodityStatus();
         
         commodity.setCommodityStatus("DRAFT");
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodityRepository.save(commodity);
         
         // ✅ 只有当商品之前是已上架状态（ON_SHELF）时才记录变更
@@ -274,17 +285,15 @@ public class CommodityServiceImpl implements CommodityService {
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         commodity.setCommodityStatus("ON_SHELF");
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodity.setPublishTime(now);
         Commodity savedCommodity = commodityRepository.save(commodity);
         
-        // ✅ 记录商品变更并推送通知（使用推送服务）
-        try {
-            notificationClient.recordCommodityChange(commodityId, "SHELF", now.toString());
-            notificationClient.pushCommodityChange(savedCommodity.getSellerId(), commodityId, "COMMODITY_REPUBLISHED");
-        } catch (Exception e) {
-            log.warn("记录商品变更或推送失败（不影响商品上架）: commodityId={}, error={}", commodityId, e.getMessage());
-        }
+        // ✅ 注意：商品重新上架不发送事件到通知服务
+        // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
+        
+        // ✅ 清除商品相关缓存
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品重新上架成功");
     }
@@ -551,7 +560,7 @@ public class CommodityServiceImpl implements CommodityService {
         Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
         
         commodity.setCommodityStatus("OFF_SHELF");
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodityRepository.save(commodity);
         
         // ✅ 记录商品变更（用于增量轮询）- 管理端强制下架也需要更新聊天界面
@@ -583,10 +592,40 @@ public class CommodityServiceImpl implements CommodityService {
         if (updateResult == 0) {
             throw new BusinessException("商品库存不足，请刷新后重试");
         }
+        
+        // ✅ 清除商品详情缓存（库存变化需要更新缓存）
+        // 注意：下单时的库存更新使用强一致性，这里不处理下单场景的缓存
+        cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
+        
         return Result.ok("库存更新成功");
     }
     
     // ========== 私有辅助方法 ==========
+    
+    /**
+     * 清除商品相关缓存（最终一致性：写入时删除缓存）
+     * 当商品更新、删除、上架、下架等操作时调用
+     * 
+     * @param commodityId 商品ID
+     */
+    private void evictCommodityCache(String commodityId) {
+        try {
+            // 清除商品详情缓存
+            cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
+            
+            // 清除热门商品和最新商品缓存（使用通配符删除所有limit的缓存）
+            cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_HOT_KEY + ":*");
+            cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LATEST_KEY + ":*");
+            
+            // 清除商品列表缓存（使用通配符删除所有列表缓存）
+            cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LIST_KEY + "*");
+            
+            log.debug("商品缓存已清除: commodityId={}", commodityId);
+        } catch (Exception e) {
+            log.error("清除商品缓存失败: commodityId={}, error={}", commodityId, e.getMessage(), e);
+            // 缓存清除失败不影响主流程
+        }
+    }
     
     /**
      * 生成商品ID

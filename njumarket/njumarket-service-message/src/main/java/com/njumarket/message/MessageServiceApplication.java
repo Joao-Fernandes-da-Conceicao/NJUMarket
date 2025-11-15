@@ -1,5 +1,6 @@
 package com.njumarket.message;
 
+import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -17,6 +18,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableDiscoveryClient
 @EnableFeignClients(basePackages = "com.njumarket")
 @EnableScheduling
+@EnableRabbit  // ✅ 启用 RabbitMQ 监听器（@RabbitListener）
 public class MessageServiceApplication {
 
     public static void main(String[] args) {

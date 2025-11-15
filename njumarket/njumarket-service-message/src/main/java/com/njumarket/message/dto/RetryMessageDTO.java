@@ -20,6 +20,13 @@ public class RetryMessageDTO {
     private String receiverId;
 
     /**
+     * 消息ID（用于去重，避免重复推送）
+     * 对于 MESSAGE_NEW 类型，使用真实的消息ID
+     * 对于其他类型（如 UNREAD_COUNT_UPDATE），使用 receiverId + messageType + timestamp 生成唯一ID
+     */
+    private String messageId;
+
+    /**
      * 消息内容（JSON字符串，包含消息类型和数据）
      */
     private String messageData;

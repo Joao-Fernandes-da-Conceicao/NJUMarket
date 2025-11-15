@@ -1,5 +1,6 @@
 package com.njumarket.notification;
 
+import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
@@ -20,6 +21,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 })
 @EnableDiscoveryClient
 @EnableScheduling
+@EnableRabbit  // ✅ 启用 RabbitMQ 监听器（@RabbitListener）
 public class NotificationServiceApplication {
 
     public static void main(String[] args) {

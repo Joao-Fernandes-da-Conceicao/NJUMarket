@@ -236,6 +236,13 @@ class WebSocketClient {
       this.lastHeartbeatTime = Date.now()
       
       // ✅ 记录业务消息到达日志（表示连接活跃）
+      console.log('📨 [消息接收] 收到WebSocket消息:', {
+        timestamp: new Date(this.lastHeartbeatTime).toISOString(),
+        destination: destination,
+        bodyLength: message.body?.length || 0,
+        bodyPreview: message.body?.substring(0, 200) || 'empty'
+      })
+      
       if (previousTime) {
         const timeSinceLastMessage = this.lastHeartbeatTime - previousTime
         console.log('📨 收到业务消息，连接保持活跃', {
@@ -245,11 +252,69 @@ class WebSocketClient {
         })
       }
       
+      let messageData = null
+      let messageId = null
+      let messageType = null
+      
       try {
-        const messageData = JSON.parse(message.body)
-        this.handleMessage(messageData)
+        messageData = JSON.parse(message.body)
+        messageId = messageData.messageId || messageData.id
+        messageType = messageData.type || 'MESSAGE_NEW'
+        
+        console.log('📨 [消息解析] 消息解析成功:', {
+          messageId: messageId,
+          messageType: messageType,
+          hasMessageData: !!messageData
+        })
       } catch (error) {
-        console.error('Failed to parse message:', error, message.body)
+        console.error('❌ [消息解析失败] Failed to parse message:', error, message.body)
+        // ✅ 即使解析失败，也尝试从原始body中提取messageId
+        // 尝试使用正则表达式提取messageId（如果body是JSON字符串）
+        try {
+          const messageIdMatch = message.body.match(/"messageId"\s*:\s*"([^"]+)"/)
+          const typeMatch = message.body.match(/"type"\s*:\s*"([^"]+)"/)
+          if (messageIdMatch) {
+            messageId = messageIdMatch[1]
+          }
+          if (typeMatch) {
+            messageType = typeMatch[1]
+          }
+          console.log('📨 [消息解析] 通过正则提取:', {
+            messageId: messageId,
+            messageType: messageType
+          })
+        } catch (e) {
+          // 无法提取，继续处理
+          console.error('❌ [消息解析] 正则提取也失败:', e)
+        }
+      }
+      
+      // ✅ 关键修复：在收到消息的第一时间发送ACK，而不是在处理完成后
+      // 这样即使后续处理失败，ACK也已经发送，确保后端知道消息已送达
+      // 只有收到消息才发送ACK，这是真正的"接收端确认"
+      if (messageId && messageType) {
+        // 立即发送ACK，不等待业务处理完成
+        console.log('📤 [ACK准备] 准备发送ACK:', {
+          messageId: messageId,
+          messageType: messageType,
+          timestamp: new Date().toISOString()
+        })
+        this.sendAck(messageId, messageType)
+      } else {
+        console.warn('⚠️ [ACK跳过] 收到消息但缺少messageId或type，无法发送ACK:', {
+          hasMessageId: !!messageId,
+          hasMessageType: !!messageType,
+          messageId: messageId,
+          messageType: messageType,
+          messageBody: message.body?.substring(0, 200) // 只显示前200字符
+        })
+      }
+      
+      // 然后进行业务处理（即使处理失败，ACK也已经发送）
+      if (messageData) {
+        this.handleMessage(messageData)
+      } else {
+        console.error('❌ [业务处理] 消息解析失败，无法进行业务处理:', message.body)
       }
     })
     
@@ -673,6 +738,56 @@ class WebSocketClient {
    */
   isConnectedState() {
     return this.isConnected && this.stompClient && this.stompClient.connected
+  }
+  
+  /**
+   * 发送ACK确认消息
+   * 前端收到消息后，通过此方法发送ACK确认，告知后端消息已成功接收
+   * 
+   * @param {string} messageId - 消息ID
+   * @param {string} messageType - 消息类型（MESSAGE_NEW, ORDER_CHANGE, UNREAD_COUNT_UPDATE等）
+   */
+  sendAck(messageId, messageType) {
+    if (!this.isConnectedState()) {
+      console.warn('❌ WebSocket未连接，无法发送ACK: messageId=', messageId, 'messageType=', messageType)
+      return
+    }
+    
+    if (!messageId || !messageType) {
+      console.warn('❌ ACK参数不完整: messageId=', messageId, 'messageType=', messageType)
+      return
+    }
+    
+    try {
+      const ackData = {
+        messageId: messageId,
+        messageType: messageType
+      }
+      
+      const ackJson = JSON.stringify(ackData)
+      
+      // ✅ 使用STOMP的publish方法发送ACK消息
+      // @stomp/stompjs的publish方法签名：publish(destination, headers, body)
+      // 或者：publish({destination, headers, body})
+      if (this.stompClient && this.stompClient.publish) {
+        // 方式1：使用对象参数（推荐）
+        this.stompClient.publish({
+          destination: '/app/ack',
+          body: ackJson
+        })
+        
+        console.log('✅ [ACK发送] 已发送ACK确认到后端:', {
+          messageId: messageId,
+          messageType: messageType,
+          destination: '/app/ack',
+          timestamp: new Date().toISOString()
+        })
+      } else {
+        console.error('❌ STOMP客户端未初始化或publish方法不存在')
+      }
+    } catch (error) {
+      console.error('❌ 发送ACK失败: messageId=', messageId, 'messageType=', messageType, 'error=', error, error.stack)
+    }
   }
 }
 

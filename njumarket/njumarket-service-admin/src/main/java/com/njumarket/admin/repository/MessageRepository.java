@@ -1,6 +1,7 @@
 package com.njumarket.admin.repository;
 
 import com.njumarket.admin.entity.Message;
+import com.njumarket.admin.repository.projection.MessageContentProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -36,5 +37,19 @@ public interface MessageRepository extends JpaRepository<Message, String>, JpaSp
     List<Message> findLastMessageForUser(@Param("conversationId") String conversationId, 
                                          @Param("userId") String userId, 
                                          Pageable pageable);
+    
+    /**
+     * ✅ 优化：只查询content和createdAt字段，避免回表
+     * 用于更新对话的最后消息时，只需要这两个字段
+     */
+    @Query("SELECT m.content as content, m.createdAt as createdAt FROM Message m WHERE m.conversationId = :conversationId " +
+           "AND NOT (" +
+           "  (m.senderId = :userId AND m.deletedBySender = true) OR " +
+           "  (m.receiverId = :userId AND m.deletedByReceiver = true)" +
+           ") " +
+           "ORDER BY m.createdAt DESC")
+    List<MessageContentProjection> findLastMessageContentForUser(@Param("conversationId") String conversationId, 
+                                                                 @Param("userId") String userId, 
+                                                                 Pageable pageable);
 }
 

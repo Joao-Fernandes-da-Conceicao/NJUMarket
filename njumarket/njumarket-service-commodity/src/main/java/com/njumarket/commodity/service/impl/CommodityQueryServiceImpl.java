@@ -14,6 +14,8 @@ import com.njumarket.commodity.repository.CommodityRepository;
 import com.njumarket.commodity.service.CommodityQueryService;
 import com.njumarket.commodity.client.AuthClient;
 import com.njumarket.njumarket.utils.SecurityUtils;
+import com.njumarket.njumarket.utils.CacheUtil;
+import com.njumarket.njumarket.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -43,6 +45,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     private final CommodityRepository commodityRepository;
     private final AuthClient authClient;
     private final ObjectMapper objectMapper;
+    private final CacheUtil cacheUtil;
     
     // ========== 公开商品查询实现 ==========
     
@@ -128,26 +131,36 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         try {
             log.info("获取商品详情 - commodityId: {}", commodityId);
             
-            Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
-            if (commodity == null) {
-                throw new BusinessException("商品不存在");
-            }
+            // ✅ 使用缓存（最终一致性）
+            String cacheKey = RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId;
+            CommodityDTO commodityDTO = cacheUtil.getWithFallback(
+                cacheKey,
+                RedisConstants.CACHE_COMMODITY_DETAIL_TTL * 60, // 转换为秒
+                CommodityDTO.class,
+                () -> {
+                    // 缓存未命中，从数据库加载
+                    Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
+                    if (commodity == null) {
+                        throw new BusinessException("商品不存在");
+                    }
+                    
+                    // 检查可见性权限（公开接口，允许未登录用户访问）
+                    Object userObj = SecurityUtils.getCurrentUser();
+                    User currentUser = userObj instanceof User ? (User) userObj : null;
+                    if (!canUserViewCommodity(commodity, currentUser)) {
+                        throw new BusinessException("无权限查看此商品");
+                    }
+                    
+                    // ✅ 优化：批量查询卖家 Profile（虽然只有一条，但保持一致性）
+                    List<Commodity> singleCommodityList = Collections.singletonList(commodity);
+                    List<CommodityDTO> dtos = convertCommoditiesToDTOWithBatchProfile(singleCommodityList);
+                    return dtos.isEmpty() ? convertToDTO(commodity) : dtos.get(0);
+                }
+            );
             
-            // 检查可见性权限（公开接口，允许未登录用户访问）
-            Object userObj = SecurityUtils.getCurrentUser();
-        User currentUser = userObj instanceof User ? (User) userObj : null; // 使用 getCurrentUser 而不是 requireCurrentUser
-            if (!canUserViewCommodity(commodity, currentUser)) {
-                throw new BusinessException("无权限查看此商品");
-            }
+            // 异步更新点击量（不影响缓存读取）
+            updateClickCountAsync(commodityId);
             
-            // 增加点击量
-            commodity.setClickCount(commodity.getClickCount() + 1);
-            commodityRepository.save(commodity);
-            
-            // ✅ 优化：批量查询卖家 Profile（虽然只有一条，但保持一致性）
-            List<Commodity> singleCommodityList = Collections.singletonList(commodity);
-            List<CommodityDTO> dtos = convertCommoditiesToDTOWithBatchProfile(singleCommodityList);
-            CommodityDTO commodityDTO = dtos.isEmpty() ? convertToDTO(commodity) : dtos.get(0);
             return Result.ok("获取商品详情成功", commodityDTO);
             
         } catch (Exception e) {
@@ -156,16 +169,49 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         }
     }
     
+    /**
+     * 异步更新点击量（不影响主流程）
+     */
+    private void updateClickCountAsync(String commodityId) {
+        try {
+            // 使用新线程异步更新点击量
+            new Thread(() -> {
+                try {
+                    Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
+                    if (commodity != null) {
+                        commodity.setClickCount(commodity.getClickCount() + 1);
+                        commodityRepository.save(commodity);
+                        // 删除缓存，下次读取时重新加载
+                        cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
+                    }
+                } catch (Exception e) {
+                    log.error("异步更新点击量失败: commodityId={}, error={}", commodityId, e.getMessage());
+                }
+            }).start();
+        } catch (Exception e) {
+            log.error("启动异步更新点击量线程失败: commodityId={}, error={}", commodityId, e.getMessage());
+        }
+    }
+    
     @Override
     public Result getHotCommodities(Integer limit) {
         try {
             log.info("获取热门商品 - limit: {}", limit);
             
-            Pageable pageable = PageRequest.of(0, limit);
-            List<Commodity> commodities = commodityRepository.findHotCommodities(pageable);
-            
-            // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
-            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
+            // ✅ 使用缓存（最终一致性）
+            String cacheKey = RedisConstants.CACHE_COMMODITY_HOT_KEY + ":" + limit;
+            List<CommodityDTO> commodityDTOs = cacheUtil.getWithFallback(
+                cacheKey,
+                RedisConstants.CACHE_COMMODITY_HOT_TTL * 60, // 转换为秒
+                new TypeReference<List<CommodityDTO>>() {},
+                () -> {
+                    // 缓存未命中，从数据库加载
+                    Pageable pageable = PageRequest.of(0, limit);
+                    List<Commodity> commodities = commodityRepository.findHotCommodities(pageable);
+                    // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+                    return convertCommoditiesToDTOWithBatchProfile(commodities);
+                }
+            );
             
             return Result.ok("获取热门商品成功", commodityDTOs);
             
@@ -180,11 +226,20 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         try {
             log.info("获取最新商品 - limit: {}", limit);
             
-            Pageable pageable = PageRequest.of(0, limit);
-            List<Commodity> commodities = commodityRepository.findLatestCommodities(pageable);
-            
-            // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
-            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
+            // ✅ 使用缓存（最终一致性）
+            String cacheKey = RedisConstants.CACHE_COMMODITY_LATEST_KEY + ":" + limit;
+            List<CommodityDTO> commodityDTOs = cacheUtil.getWithFallback(
+                cacheKey,
+                RedisConstants.CACHE_COMMODITY_LATEST_TTL * 60, // 转换为秒
+                new TypeReference<List<CommodityDTO>>() {},
+                () -> {
+                    // 缓存未命中，从数据库加载
+                    Pageable pageable = PageRequest.of(0, limit);
+                    List<Commodity> commodities = commodityRepository.findLatestCommodities(pageable);
+                    // ✅ 优化：批量查询所有商品的卖家 Profile（避免 N+1 查询）
+                    return convertCommoditiesToDTOWithBatchProfile(commodities);
+                }
+            );
             
             return Result.ok("获取最新商品成功", commodityDTOs);
             
@@ -199,10 +254,19 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         try {
             log.info("获取商品分类");
             
-            // 这里可以从数据库获取分类，或者返回预定义的分类
-            List<String> categories = List.of(
-                "电子产品", "服装配饰", "图书文具", "生活用品", 
-                "运动户外", "美妆护肤", "食品饮料", "其他"
+            // ✅ 使用缓存（最终一致性，分类变化较少，TTL较长）
+            String cacheKey = RedisConstants.CACHE_COMMODITY_CATEGORIES_KEY;
+            List<String> categories = cacheUtil.getWithFallback(
+                cacheKey,
+                RedisConstants.CACHE_COMMODITY_CATEGORIES_TTL * 60, // 转换为秒
+                new TypeReference<List<String>>() {},
+                () -> {
+                    // 这里可以从数据库获取分类，或者返回预定义的分类
+                    return List.of(
+                        "电子产品", "服装配饰", "图书文具", "生活用品", 
+                        "运动户外", "美妆护肤", "食品饮料", "其他"
+                    );
+                }
             );
             
             return Result.ok("获取分类成功", categories);

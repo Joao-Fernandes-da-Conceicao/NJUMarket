@@ -150,6 +150,9 @@ export const useOrderStore = defineStore('order', {
       // ✅ 提取完整订单DTO（如果存在）- 必须在创建notificationItem之前定义
       const orderDTO = notification.order || null
       
+      // ✅ 注意：ACK已在websocket.js的subscribe回调中第一时间发送
+      // 这里不再发送ACK，避免重复发送
+      
       console.log('收到订单变化通知:', { changeType, orderId, orderStatus, targetRole, timestamp, hasOrderDTO: !!orderDTO })
       
       // ✅ 预留：保存通知到列表（用于弹出式卡片显示）

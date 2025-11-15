@@ -417,8 +417,24 @@ export const useMessageStore = defineStore('message', {
         this.handleWebSocketMessage(messageData)
       })
       
+      // ✅ 注册订单变更处理函数（忽略，不触发消息列表更新）
+      wsClient.on('ORDER_CHANGE', (messageData) => {
+        // ORDER_CHANGE 消息不应该触发消息列表更新，只用于通知
+        // 订单变更通知应该通过增量轮询获取，而不是直接添加到消息列表
+        console.debug('收到订单变更通知（忽略，不触发消息列表更新）:', messageData)
+      })
+      
+      // ✅ 注册商品变更处理函数（忽略，不触发消息列表更新）
+      wsClient.on('COMMODITY_CHANGE', (messageData) => {
+        // COMMODITY_CHANGE 消息不应该触发消息列表更新，只用于通知
+        // 商品变更通知应该通过增量轮询获取，而不是直接添加到消息列表
+        console.debug('收到商品变更通知（忽略，不触发消息列表更新）:', messageData)
+      })
+      
       // ✅ 注册未读数更新处理函数（支持全局角标更新）
       wsClient.on('UNREAD_COUNT_UPDATE', (updateData) => {
+        // ✅ 注意：ACK已在websocket.js的subscribe回调中第一时间发送
+        // 这里不再发送ACK，避免重复发送
         this.handleUnreadCountUpdate(updateData)
       })
       
@@ -456,8 +472,25 @@ export const useMessageStore = defineStore('message', {
     /**
      * 处理 WebSocket 接收到的消息
      * 实时更新对话列表、消息列表和未读数
+     * ✅ 只处理 MESSAGE_NEW 类型的消息，忽略 ORDER_CHANGE 和 COMMODITY_CHANGE
      */
     async handleWebSocketMessage(messageData) {
+      // ✅ 安全检查：只处理 MESSAGE_NEW 类型的消息
+      // 防止 ORDER_CHANGE 或 COMMODITY_CHANGE 消息被误处理
+      if (messageData.type && messageData.type !== 'MESSAGE_NEW') {
+        console.warn('收到非 MESSAGE_NEW 类型的消息，忽略处理:', messageData.type, messageData)
+        return
+      }
+      
+      // ✅ 注意：ACK已在websocket.js的subscribe回调中第一时间发送
+      // 这里不再发送ACK，避免重复发送
+      
+      // ✅ 安全检查：确保消息有必要的字段（conversationId, messageId）
+      if (!messageData.conversationId || !messageData.messageId) {
+        console.warn('收到消息但缺少必要字段（conversationId 或 messageId），忽略处理:', messageData)
+        return
+      }
+      
       // 获取当前用户ID（使用动态导入避免循环依赖）
       let currentUserId = null
       try {
@@ -766,6 +799,8 @@ export const useMessageStore = defineStore('message', {
     disconnectWebSocket() {
       // 移除所有消息处理函数
       wsClient.off('MESSAGE_NEW')
+      wsClient.off('ORDER_CHANGE')
+      wsClient.off('COMMODITY_CHANGE')
       wsClient.off('UNREAD_COUNT_UPDATE')
       wsClient.off('MESSAGE_READ')
       wsClient.off('CONVERSATION_VISIBILITY_RESTORED')

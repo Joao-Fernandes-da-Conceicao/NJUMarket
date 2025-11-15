@@ -12,8 +12,13 @@ import java.util.List;
 /**
  * Order Service Feign Client
  * 用于Message Service调用Order Service
+ * 启用 Resilience4j 熔断器保护
  */
-@FeignClient(name = "njumarket-service-order", path = "/api/internal")
+@FeignClient(
+    name = "njumarket-service-order", 
+    path = "/api/internal",
+    fallback = com.njumarket.message.client.fallback.OrderClientFallback.class
+)
 public interface OrderClient {
     
     /**

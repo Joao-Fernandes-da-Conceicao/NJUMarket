@@ -3,6 +3,8 @@ package com.njumarket.commodity.config;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -26,7 +28,13 @@ public class RedisConfig {
         // ✅ 使用新版本的构造函数，直接传入ObjectMapper，避免使用已过时的setObjectMapper方法
         ObjectMapper mapper = new ObjectMapper();
         mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        mapper.activateDefaultTyping(mapper.getPolymorphicTypeValidator(), ObjectMapper.DefaultTyping.NON_FINAL);
+        // ✅ 禁用默认类型信息，避免反序列化时类型ID冲突
+        // 原因：activateDefaultTyping会在序列化时添加类型信息，导致与旧数据格式不兼容
+        // 如果Redis中存在旧格式数据（如纯字符串数组），反序列化会失败
+        // mapper.activateDefaultTyping(mapper.getPolymorphicTypeValidator(), ObjectMapper.DefaultTyping.NON_FINAL);
+        // ✅ 注册JSR310模块以支持Java 8时间类型（LocalDateTime等）
+        mapper.registerModule(new JavaTimeModule());
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
         Jackson2JsonRedisSerializer<Object> serializer = new Jackson2JsonRedisSerializer<>(mapper, Object.class);
         
         // 使用StringRedisSerializer来序列化和反序列化redis的key值

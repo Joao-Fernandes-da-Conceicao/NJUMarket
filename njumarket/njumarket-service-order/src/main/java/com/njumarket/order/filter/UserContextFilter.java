@@ -51,6 +51,13 @@ public class UserContextFilter extends OncePerRequestFilter {
         try {
             String requestURI = request.getRequestURI();
             
+            // ✅ 排除 Actuator 端点（这些端点不需要用户认证，也不需要设置用户上下文）
+            // Prometheus 等监控工具会直接访问这些端点，不会经过 Gateway，因此没有 X-User-Id
+            if (requestURI.startsWith("/actuator/")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            
             // ⚠️ 重要：WebSocket 握手请求由 WebSocketHandshakeInterceptor 处理
             // UserContextFilter 不应该阻止 WebSocket 握手，即使获取用户信息失败也要允许通过
             // WebSocket 握手时，X-User-Id 会由 Gateway 传递，WebSocketHandshakeInterceptor 会提取

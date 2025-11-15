@@ -1,0 +1,117 @@
+# Prometheus 配置文件
+global:
+  scrape_interval: 15s  # 抓取间隔
+  evaluation_interval: 15s  # 评估间隔
+  external_labels:
+    cluster: 'njumarket'
+    environment: 'dev'
+
+# Alertmanager 配置（可选）
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
+# 规则文件（可选）
+# rule_files:
+#   - "alert_rules.yml"
+
+# 抓取配置
+scrape_configs:
+  # Prometheus 自身监控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Gateway 服务
+  - job_name: 'njumarket-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['gateway:8080']
+        labels:
+          service: 'gateway'
+          application: 'njumarket-gateway'
+
+  # Discovery 服务
+  - job_name: 'njumarket-discovery'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['discovery:8761']
+        labels:
+          service: 'discovery'
+          application: 'njumarket-discovery'
+
+  # Config Server 服务
+  - job_name: 'njumarket-config'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['config-server:8888']
+        labels:
+          service: 'config'
+          application: 'njumarket-config'
+
+  # Auth 服务
+  - job_name: 'njumarket-service-auth'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['auth-service:8091']
+        labels:
+          service: 'auth'
+          application: 'njumarket-service-auth'
+
+  # Commodity 服务
+  - job_name: 'njumarket-service-commodity'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['commodity-service:8092']
+        labels:
+          service: 'commodity'
+          application: 'njumarket-service-commodity'
+
+  # Order 服务
+  - job_name: 'njumarket-service-order'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['order-service:8093']
+        labels:
+          service: 'order'
+          application: 'njumarket-service-order'
+
+  # Message 服务
+  - job_name: 'njumarket-service-message'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['message-service:8094']
+        labels:
+          service: 'message'
+          application: 'njumarket-service-message'
+
+  # Image 服务
+  - job_name: 'njumarket-service-image'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['image-service:8095']
+        labels:
+          service: 'image'
+          application: 'njumarket-service-image'
+
+  # Admin 服务
+  - job_name: 'njumarket-service-admin'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['admin-service:8096']
+        labels:
+          service: 'admin'
+          application: 'njumarket-service-admin'
+
+  # Notification 服务
+  - job_name: 'njumarket-service-notification'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['notification-service:8097']
+        labels:
+          service: 'notification'
+          application: 'njumarket-service-notification'
+

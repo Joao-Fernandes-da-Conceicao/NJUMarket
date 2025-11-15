@@ -22,7 +22,6 @@ import com.njumarket.message.client.OrderClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -57,9 +56,8 @@ public class ContactServiceImpl implements ContactService {
     private final OrderClient orderClient;
     private final ObjectMapper objectMapper;
     
-    private final SimpMessagingTemplate messagingTemplate;
-    
-    private final com.njumarket.message.service.WebSocketRetryService webSocketRetryService;
+    // ✅ MQ 消息生产者（用于发送推送任务到Notification服务）
+    private final com.njumarket.message.mq.MessagePushEventProducer messagePushEventProducer;
     
     @Override
     public Result sendMessage(String userId, SendMessageRequest request) {
@@ -205,9 +203,22 @@ public class ContactServiceImpl implements ContactService {
                     conversationRestore.put("conversationId", conversation.getConversationId());
                     conversationRestore.put("timestamp", LocalDateTime.now().toString());
                     
-                    webSocketRetryService.pushWithRetry(request.getReceiverId(), conversationRestore, "CONVERSATION_RESTORED");
-                    log.debug("推送会话恢复通知: receiverId={}, conversationId={}", 
-                            request.getReceiverId(), conversation.getConversationId());
+                    try {
+                        // ✅ 架构重构：通过MQ发送会话恢复通知推送任务到Notification服务
+                        String conversationRestoredMessageId = "conversation_restored_" + conversation.getConversationId() + "_" + System.currentTimeMillis();
+                        conversationRestore.put("messageId", conversationRestoredMessageId);
+                        messagePushEventProducer.sendMessagePushEvent(
+                                request.getReceiverId(), 
+                                conversationRestoredMessageId,
+                                conversationRestore, 
+                                "CONVERSATION_RESTORED"
+                        );
+                        log.debug("会话恢复通知推送任务已发送到MQ: receiverId={}, conversationId={}", 
+                                request.getReceiverId(), conversation.getConversationId());
+                    } catch (Exception e) {
+                        log.warn("发送会话恢复通知推送任务到MQ失败: receiverId={}, conversationId={}, error={}", 
+                                request.getReceiverId(), conversation.getConversationId(), e.getMessage());
+                    }
                 }
             } else {
                 // 创建新对话（基于用户对，确保唯一性）
@@ -287,9 +298,19 @@ public class ContactServiceImpl implements ContactService {
                         conversationRestore.put("conversationId", conversation.getConversationId());
                         conversationRestore.put("timestamp", LocalDateTime.now().toString());
                         
-                        webSocketRetryService.pushWithRetry(request.getReceiverId(), conversationRestore, "CONVERSATION_RESTORED");
-                        log.debug("推送会话恢复通知: receiverId={}, conversationId={}", 
-                                request.getReceiverId(), conversation.getConversationId());
+                        try {
+                            messagePushEventProducer.sendMessagePushEvent(
+                                    request.getReceiverId(), 
+                                    "conversation_restored_" + conversation.getConversationId() + "_" + System.currentTimeMillis(), 
+                                    conversationRestore, 
+                                    "CONVERSATION_RESTORED"
+                            );
+                            log.debug("会话恢复通知事件已发送: receiverId={}, conversationId={}", 
+                                    request.getReceiverId(), conversation.getConversationId());
+                        } catch (Exception e) {
+                            log.warn("发送会话恢复通知事件失败: receiverId={}, conversationId={}, error={}", 
+                                    request.getReceiverId(), conversation.getConversationId(), e.getMessage());
+                        }
                     }
                 } else {
                     conversation = new Conversation();
@@ -422,24 +443,50 @@ public class ContactServiceImpl implements ContactService {
             // 转换为DTO返回
             MessageDTO messageDTO = convertMessageToDTO(message, userId);
             
-            // ✅ WebSocket 推送：实时推送新消息给接收方（带重试机制）
+            // ✅ 架构重构：通过MQ发送推送任务到Notification服务
+            // Message服务只负责消息和聊天的相关操作，推送功能完全移交给Notification服务
+            // Notification服务统一负责所有推送（订单、消息等），使用一个WebSocket实例
             String receiverId = request.getReceiverId();
-            
-            // 使用重试服务推送消息（自动处理离线用户和重试逻辑）
-            webSocketRetryService.pushWithRetry(receiverId, messageDTO, "MESSAGE_NEW");
-            log.debug("WebSocket push attempted (with retry): receiverId={}, messageId={}", 
+            try {
+                // 将MessageDTO转换为Map，确保包含messageId和type
+                @SuppressWarnings("unchecked")
+                Map<String, Object> messageDataMap = objectMapper.convertValue(messageDTO, Map.class);
+                // 确保messageId存在
+                if (!messageDataMap.containsKey("messageId") || messageDataMap.get("messageId") == null) {
+                    messageDataMap.put("messageId", messageDTO.getMessageId());
+                }
+                // 确保type存在
+                if (!messageDataMap.containsKey("type") || messageDataMap.get("type") == null) {
+                    messageDataMap.put("type", "MESSAGE_NEW");
+                }
+                
+                // 通过MQ发送推送任务到Notification服务
+                messagePushEventProducer.sendMessagePushEvent(
+                        receiverId, 
+                        messageDTO.getMessageId(), 
+                        messageDataMap, 
+                        "MESSAGE_NEW"
+                );
+                log.debug("消息推送任务已发送到MQ: receiverId={}, messageId={}", 
                         receiverId, messageDTO.getMessageId());
-            
-            // ✅ 统一推送未读数更新事件（新消息 = 增加未读）
-            Integer totalUnreadCount = conversationRepository.getTotalUnreadCount(receiverId);
-            if (totalUnreadCount == null) {
-                totalUnreadCount = 0;
+            } catch (Exception e) {
+                log.warn("发送消息推送任务到MQ失败: receiverId={}, messageId={}, error={}", 
+                        receiverId, messageDTO.getMessageId(), e.getMessage());
             }
             
-            // ✅ 获取该对话的未读数（用于侧边栏显示单个对话未读数）
+            // ✅ 优化：使用已保存的conversation对象获取未读数，避免额外的数据库查询
+            // 获取该对话的未读数（用于侧边栏显示单个对话未读数）
             Integer conversationUnreadCount = conversation.getUnreadCountForUser(receiverId);
             if (conversationUnreadCount == null) {
                 conversationUnreadCount = 0;
+            }
+            
+            // ✅ 优化：总未读数查询移到推送之后，使用异步或延迟查询
+            // 先推送消息，未读数更新可以稍后推送（前端可以容忍短暂延迟）
+            // 如果必须立即推送总未读数，可以考虑使用缓存或异步查询
+            Integer totalUnreadCount = conversationRepository.getTotalUnreadCount(receiverId);
+            if (totalUnreadCount == null) {
+                totalUnreadCount = 0;
             }
             
             Map<String, Object> unreadCountUpdate = new java.util.HashMap<>();
@@ -449,8 +496,19 @@ public class ContactServiceImpl implements ContactService {
             unreadCountUpdate.put("conversationUnreadCount", conversationUnreadCount); // 单个对话未读数（用于侧边栏）
             unreadCountUpdate.put("timestamp", LocalDateTime.now().toString());
             
-            // 使用重试服务推送未读数更新
-            webSocketRetryService.pushWithRetry(receiverId, unreadCountUpdate, "UNREAD_COUNT_UPDATE");
+            // ✅ 架构重构：通过MQ发送未读数更新推送任务到Notification服务
+            try {
+                messagePushEventProducer.sendMessagePushEvent(
+                        receiverId, 
+                        "unread_count_" + receiverId + "_" + System.currentTimeMillis(), 
+                        unreadCountUpdate, 
+                        "UNREAD_COUNT_UPDATE"
+                );
+                log.debug("未读数更新推送任务已发送到MQ: receiverId={}, unreadCount={}", 
+                        receiverId, totalUnreadCount);
+            } catch (Exception e) {
+                log.warn("发送未读数更新推送任务到MQ失败: receiverId={}, error={}", receiverId, e.getMessage());
+            }
             
             return Result.ok("消息发送成功", messageDTO);
         } catch (BusinessException e) {
@@ -873,16 +931,16 @@ public class ContactServiceImpl implements ContactService {
                     ? conversation.getUserId2() 
                     : conversation.getUserId1();
             
-            // 查询该对话中由对方发送给当前用户的未读消息
-            List<Message> unreadMessages = messageRepository.findUnreadMessagesByConversationAndReceiver(
-                    conversationId, userId);
+            // ✅ 优化：只查询messageId字段，避免回表
+            List<com.njumarket.message.repository.projection.MessageIdProjection> unreadMessageIds = 
+                    messageRepository.findUnreadMessageIdsByConversationAndReceiver(conversationId, userId);
             
             // 标记所有消息为已读
             LocalDateTime readTime = LocalDateTime.now();
             messageRepository.markMessagesAsRead(conversationId, userId, readTime);
             
             // ✅ 如果有未读消息，向发送者推送已读通知
-            if (unreadMessages != null && !unreadMessages.isEmpty()) {
+            if (unreadMessageIds != null && !unreadMessageIds.isEmpty()) {
                 try {
                     // 构建已读通知消息
                     Map<String, Object> readNotification = new java.util.HashMap<>();
@@ -890,14 +948,28 @@ public class ContactServiceImpl implements ContactService {
                     readNotification.put("conversationId", conversationId);
                     readNotification.put("readTime", readTime.toString());
                     
-                    // 构建已读消息ID列表
-                    List<String> readMessageIds = unreadMessages.stream()
-                            .map(Message::getMessageId)
+                    // 构建已读消息ID列表（直接从Projection获取）
+                    List<String> readMessageIds = unreadMessageIds.stream()
+                            .map(com.njumarket.message.repository.projection.MessageIdProjection::getMessageId)
                             .collect(java.util.stream.Collectors.toList());
                     readNotification.put("messageIds", readMessageIds);
                     
-                    // 向发送者推送已读通知（使用重试机制）
-                    webSocketRetryService.pushWithRetry(otherUserId, readNotification, "MESSAGE_READ");
+                    // ✅ 架构重构：通过MQ发送已读通知推送任务到Notification服务
+                    try {
+                        String messageReadMessageId = "message_read_" + conversationId + "_" + System.currentTimeMillis();
+                        readNotification.put("messageId", messageReadMessageId);
+                        messagePushEventProducer.sendMessagePushEvent(
+                                otherUserId, 
+                                messageReadMessageId,
+                                readNotification, 
+                                "MESSAGE_READ"
+                        );
+                        log.debug("已读通知推送任务已发送到MQ: otherUserId={}, conversationId={}", 
+                                otherUserId, conversationId);
+                    } catch (Exception e) {
+                        log.warn("发送已读通知推送任务到MQ失败: otherUserId={}, conversationId={}, error={}", 
+                                otherUserId, conversationId, e.getMessage());
+                    }
                 } catch (Exception e) {
                     log.warn("推送已读通知失败: senderId={}, conversationId={}, error={}", 
                             otherUserId, conversationId, e.getMessage());
@@ -927,8 +999,19 @@ public class ContactServiceImpl implements ContactService {
                 unreadCountUpdate.put("conversationUnreadCount", conversationUnreadCount); // 单个对话未读数（用于侧边栏）
                 unreadCountUpdate.put("timestamp", LocalDateTime.now().toString());
                 
-                // 使用重试服务推送未读数更新（带重试机制）
-                webSocketRetryService.pushWithRetry(userId, unreadCountUpdate, "UNREAD_COUNT_UPDATE");
+                // ✅ 架构重构：通过MQ发送未读数更新推送任务到Notification服务
+                try {
+                    messagePushEventProducer.sendMessagePushEvent(
+                            userId, 
+                            "unread_count_" + userId + "_" + System.currentTimeMillis(), 
+                            unreadCountUpdate, 
+                            "UNREAD_COUNT_UPDATE"
+                    );
+                    log.debug("未读数更新推送任务已发送到MQ: userId={}, unreadCount={}", 
+                            userId, totalUnreadCount);
+                } catch (Exception e) {
+                    log.warn("发送未读数更新推送任务到MQ失败: userId={}, error={}", userId, e.getMessage());
+                }
             } catch (Exception e) {
                 log.warn("推送未读数更新失败: userId={}, error={}", userId, e.getMessage());
                 // WebSocket 推送失败不影响标记已读的成功返回
@@ -1048,15 +1131,16 @@ public class ContactServiceImpl implements ContactService {
                          Math.abs(java.time.Duration.between(message.getCreatedAt(), senderLastTime).getSeconds()) <= 1);
                     
                     if (isSenderLastMessage) {
-                        // 查询发送方可见的最后一条消息（因为当前消息已被标记删除，查询时会自动过滤）
+                        // ✅ 优化：只查询content和createdAt字段，避免回表
                         try {
                             Pageable pageable = PageRequest.of(0, 1);
-                            List<Message> lastMessages = messageRepository.findLastMessageForUser(
-                                    message.getConversationId(), senderId, pageable);
+                            List<com.njumarket.message.repository.projection.MessageContentProjection> lastMessages = 
+                                    messageRepository.findLastMessageContentForUser(
+                                            message.getConversationId(), senderId, pageable);
                             
                             if (!lastMessages.isEmpty()) {
                                 // 有可见消息，使用作为新的最后消息
-                                Message newLastMessage = lastMessages.get(0);
+                                com.njumarket.message.repository.projection.MessageContentProjection newLastMessage = lastMessages.get(0);
                                 conversation.setLastMessageForUser(senderId, 
                                         newLastMessage.getContent(), 
                                         newLastMessage.getCreatedAt());
@@ -1090,15 +1174,16 @@ public class ContactServiceImpl implements ContactService {
                          Math.abs(java.time.Duration.between(message.getCreatedAt(), receiverLastTime).getSeconds()) <= 1);
                     
                     if (isReceiverLastMessage) {
-                        // 查询接收方可见的最后一条消息（因为当前消息已被标记删除，查询时会自动过滤）
+                        // ✅ 优化：只查询content和createdAt字段，避免回表
                         try {
                             Pageable pageable = PageRequest.of(0, 1);
-                            List<Message> lastMessages = messageRepository.findLastMessageForUser(
-                                    message.getConversationId(), receiverId, pageable);
+                            List<com.njumarket.message.repository.projection.MessageContentProjection> lastMessages = 
+                                    messageRepository.findLastMessageContentForUser(
+                                            message.getConversationId(), receiverId, pageable);
                             
                             if (!lastMessages.isEmpty()) {
                                 // 有可见消息，使用作为新的最后消息
-                                Message newLastMessage = lastMessages.get(0);
+                                com.njumarket.message.repository.projection.MessageContentProjection newLastMessage = lastMessages.get(0);
                                 conversation.setLastMessageForUser(receiverId, 
                                         newLastMessage.getContent(), 
                                         newLastMessage.getCreatedAt());

@@ -20,9 +20,27 @@ public class RedisConstants {
     public static final String USER_INFO_KEY = "user:info:";
     public static final Long USER_INFO_TTL = 30L; // 用户信息缓存30分钟
 
-    // 商品相关缓存
+    // 商品相关缓存（最终一致性）
     public static final String CACHE_COMMODITY_KEY = "cache:commodity:";
-    public static final Long CACHE_COMMODITY_TTL = 30L;
+    public static final String CACHE_COMMODITY_DETAIL_KEY = "cache:commodity:detail:";
+    public static final String CACHE_COMMODITY_LIST_KEY = "cache:commodity:list:";
+    public static final String CACHE_COMMODITY_HOT_KEY = "cache:commodity:hot";
+    public static final String CACHE_COMMODITY_LATEST_KEY = "cache:commodity:latest";
+    public static final String CACHE_COMMODITY_CATEGORIES_KEY = "cache:commodity:categories";
+    public static final Long CACHE_COMMODITY_TTL = 30L; // 30分钟
+    public static final Long CACHE_COMMODITY_DETAIL_TTL = 10L; // 10分钟
+    public static final Long CACHE_COMMODITY_LIST_TTL = 5L; // 5分钟
+    public static final Long CACHE_COMMODITY_HOT_TTL = 15L; // 15分钟
+    public static final Long CACHE_COMMODITY_LATEST_TTL = 5L; // 5分钟
+    public static final Long CACHE_COMMODITY_CATEGORIES_TTL = 60L; // 60分钟（分类变化较少）
+    
+    // 用户信息缓存（最终一致性）
+    public static final String CACHE_USER_PROFILE_KEY = "cache:user:profile:";
+    public static final Long CACHE_USER_PROFILE_TTL = 30L; // 30分钟
+    
+    // 用户基本信息缓存（包含accountStatus，用于getUserById）
+    public static final String CACHE_USER_INFO_KEY = "cache:user:info:";
+    public static final Long CACHE_USER_INFO_TTL = 30L; // 30分钟
 
     // 分布式锁
     public static final String LOCK_COMMODITY_KEY = "lock:commodity:";

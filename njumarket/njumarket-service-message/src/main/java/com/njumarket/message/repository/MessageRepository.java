@@ -1,6 +1,8 @@
 package com.njumarket.message.repository;
 
 import com.njumarket.message.entity.Message;
+import com.njumarket.message.repository.projection.MessageContentProjection;
+import com.njumarket.message.repository.projection.MessageIdProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -114,6 +116,18 @@ public interface MessageRepository extends JpaRepository<Message, String>, org.s
                                          @Param("userId") String userId, 
                                          Pageable pageable);
     
+    // ✅ 优化：只查询content和createdAt字段，避免回表
+    // 用于更新对话的最后消息时，只需要这两个字段
+    @Query("SELECT m.content as content, m.createdAt as createdAt FROM Message m WHERE m.conversationId = :conversationId " +
+           "AND NOT (" +
+           "  (m.senderId = :userId AND m.deletedBySender = true) OR " +
+           "  (m.receiverId = :userId AND m.deletedByReceiver = true)" +
+           ") " +
+           "ORDER BY m.createdAt DESC")
+    List<MessageContentProjection> findLastMessageContentForUser(@Param("conversationId") String conversationId, 
+                                                                  @Param("userId") String userId, 
+                                                                  Pageable pageable);
+    
     // ✅ 查询对话中接收方的未读消息（用于已读回执）
     // 查询条件：指定对话、指定接收方、未读、未被双方都删除
     @Query("SELECT m FROM Message m WHERE m.conversationId = :conversationId " +
@@ -122,6 +136,17 @@ public interface MessageRepository extends JpaRepository<Message, String>, org.s
            "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
            "ORDER BY m.createdAt ASC")
     List<Message> findUnreadMessagesByConversationAndReceiver(
+            @Param("conversationId") String conversationId,
+            @Param("receiverId") String receiverId);
+    
+    // ✅ 优化：只查询messageId字段，避免回表
+    // 用于已读回执时，只需要messageId列表
+    @Query("SELECT m.messageId as messageId FROM Message m WHERE m.conversationId = :conversationId " +
+           "AND m.receiverId = :receiverId " +
+           "AND m.isRead = false " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true) " +
+           "ORDER BY m.createdAt ASC")
+    List<MessageIdProjection> findUnreadMessageIdsByConversationAndReceiver(
             @Param("conversationId") String conversationId,
             @Param("receiverId") String receiverId);
 }

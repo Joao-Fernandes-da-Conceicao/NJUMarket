@@ -1,6 +1,7 @@
 package com.njumarket.order.client;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.order.client.fallback.CommodityClientFallback;
 // Commodity 实体不再直接引用，通过 Feign Client 返回 DTO
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,8 +12,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * Commodity Service Feign Client
  * 用于Order Service调用Commodity Service的内部接口
+ * 启用 Resilience4j 熔断器保护
  */
-@FeignClient(name = "njumarket-service-commodity", contextId = "commodityInternalClient", path = "/api/internal")
+@FeignClient(name = "njumarket-service-commodity", 
+             contextId = "commodityInternalClient", 
+             path = "/api/internal",
+             fallback = CommodityClientFallback.class)
 public interface CommodityClient {
     
     /**

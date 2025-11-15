@@ -10,8 +10,14 @@ import java.util.List;
 /**
  * Commodity Query Service Feign Client
  * 用于推送服务调用商品服务的查询功能
+ * 启用 Resilience4j 熔断器保护
+ * 注意：查询失败时返回空列表，不影响增量轮询
  */
-@FeignClient(name = "njumarket-service-commodity", contextId = "notificationCommodityQueryClient")
+@FeignClient(
+    name = "njumarket-service-commodity", 
+    contextId = "notificationCommodityQueryClient",
+    fallback = com.njumarket.notification.client.fallback.CommodityQueryClientFallback.class
+)
 public interface CommodityQueryClient {
     
     /**

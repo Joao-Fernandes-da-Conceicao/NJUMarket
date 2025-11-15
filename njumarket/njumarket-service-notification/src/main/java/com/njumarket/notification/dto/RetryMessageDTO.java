@@ -18,6 +18,11 @@ public class RetryMessageDTO {
      * 接收方用户ID
      */
     private String receiverId;
+    
+    /**
+     * 消息ID（用于ACK确认和去重）
+     */
+    private String messageId;
 
     /**
      * 消息内容（JSON字符串，包含消息类型和数据）

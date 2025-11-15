@@ -15,6 +15,8 @@ NJUMarket 是一个采用微服务架构的校园二手交易平台，支持商�
 - ✅ **性能优化**：广泛使用批量查询，防止N+1查询问题，Feign调用次数为常数次
 - ✅ **Docker容器化**：一键启动所有服务，简化部署和调试流程（v2.1.0）
 - ✅ **监控与文档**：Spring Boot Actuator监控、Swagger API文档（v2.1.0）
+- ✅ **熔断降级**：Resilience4j熔断降级，防止服务雪崩（v2.1.1）
+- ✅ **配置中心**：Spring Cloud Config Server集中管理配置，支持环境隔离（v2.1.1）
 
 - **架构**: 微服务架构（Spring Cloud）
 - **后端**: Spring Boot 3.2.0 + Spring Cloud 2023.0.3

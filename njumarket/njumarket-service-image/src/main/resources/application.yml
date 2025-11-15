@@ -1,52 +1,16 @@
+# Image Service 本地配置（简化版）
+# 详细配置已迁移到 Config Server: config-repo/njumarket-service-image.yml
+# 本地仅保留必要的服务标识和 Config Server 连接配置
+
 server:
   port: 8095
 
 spring:
   application:
     name: njumarket-service-image
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: ${IMAGE_DATASOURCE_URL:jdbc:mysql://localhost:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai}
-    username: ${IMAGE_DATASOURCE_USERNAME:root}
-    password: ${IMAGE_DATASOURCE_PASSWORD:Hqz20050316}
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQL8Dialect
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka
-
-# Actuator 配置
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: when-authorized
-  health:
-    redis:
-      enabled: false  # image-service 不使用 Redis，禁用 Redis 健康检查
-  info:
-    env:
-      enabled: true
-    java:
-      enabled: true
-    os:
-      enabled: true
-
-app:
-  upload:
-    avatar-path: ${AVATAR_UPLOAD_PATH:uploads/avatars}
-    commodity-path: ${COMMODITY_UPLOAD_PATH:uploads/commodities}
-  image:
-    base-url: ${IMAGE_BASE_URL:http://localhost:8080}
+  # ✅ Spring Cloud Config Client 配置
+  # Docker 环境通过环境变量 SPRING_CONFIG_IMPORT 覆盖，本地开发使用 localhost
+  config:
+    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
+    fail-fast: false  # Config Server 不可用时，使用本地配置（需要时可在本地添加完整配置）
 

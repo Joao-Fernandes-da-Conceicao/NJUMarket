@@ -10,6 +10,7 @@ WORKDIR /app
 COPY pom.xml .
 COPY njumarket-common/pom.xml ./njumarket-common/
 COPY njumarket-discovery/pom.xml ./njumarket-discovery/
+COPY njumarket-config/pom.xml ./njumarket-config/
 COPY njumarket-gateway/pom.xml ./njumarket-gateway/
 COPY njumarket-service-auth/pom.xml ./njumarket-service-auth/
 COPY njumarket-service-commodity/pom.xml ./njumarket-service-commodity/
@@ -37,8 +38,14 @@ FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 
-# 安装 curl 用于健康检查
-RUN apk add --no-cache curl
+# ✅ 安装必要工具和时区数据
+RUN apk add --no-cache curl tzdata
+
+# ✅ 设置环境变量（确保中文日志正常显示）
+# Alpine Linux默认支持C.UTF-8，无需额外安装locale包
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
 
 # 创建非 root 用户
 RUN addgroup -S spring && adduser -S spring -G spring
@@ -60,5 +67,5 @@ EXPOSE ${SERVICE_PORT}
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:${SERVICE_PORT}/actuator/health || exit 1
 
-# 启动应用
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# ✅ 启动应用（显式指定UTF-8编码）
+ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-Duser.timezone=Asia/Shanghai", "-jar", "app.jar"]

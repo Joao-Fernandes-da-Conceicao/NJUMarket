@@ -588,11 +588,21 @@ export default {
         const pollStartTime = new Date().toISOString()
         
         // ✅ 详细日志：轮询开始信息
+        // 辅助函数：将UTC时间转换为GMT+8时间字符串
+        const toGMT8String = (utcIsoString) => {
+          const date = new Date(utcIsoString)
+          // GMT+8 = UTC+8小时
+          const gmt8Date = new Date(date.getTime() + 8 * 60 * 60 * 1000)
+          return gmt8Date.toISOString().replace('Z', '+08:00').replace(/\.\d{3}/, '')
+        }
+        
         console.group(`🔄 ${force ? '强制' : '定期'}增量轮询开始`)
         console.log('📅 轮询时间戳信息:', {
           lastPollTimestamp: lastTimestamp,
-          lastPollTimestampDate: new Date(lastTimestamp).toISOString(),
-          currentTime: pollStartTime,
+          lastPollTimestampUTC: new Date(lastTimestamp).toISOString(),
+          lastPollTimestampGMT8: toGMT8String(lastTimestamp),
+          currentTimeUTC: pollStartTime,
+          currentTimeGMT8: toGMT8String(pollStartTime),
           timeDifference: Math.round((new Date(pollStartTime) - new Date(lastTimestamp)) / 1000) + '秒',
         })
         console.log('📊 当前消息状态:', {
@@ -620,16 +630,34 @@ export default {
             // 增量更新前端数据（await异步函数）
             const updatedCount = await updateCommoditiesAndOrders(commodities, orders)
             
+            // ✅ 检查返回的订单/商品ID，如果前端消息中没有对应的订单/商品对象，就批量查询获取完整数据
+            const orderIdsFromPoll = orders.map(o => o.orderId)
+            const commodityIdsFromPoll = commodities.map(c => c.commodityId)
+            
+            // 查找消息中包含这些订单/商品ID，但没有对应的订单/商品对象的消息
+            const messagesNeedingOrderData = messages.value.filter(msg => 
+              msg.orderId && orderIdsFromPoll.includes(msg.orderId) && !msg.order
+            )
+            const messagesNeedingCommodityData = messages.value.filter(msg => 
+              msg.commodityId && commodityIdsFromPoll.includes(msg.commodityId) && !msg.commodity
+            )
+            
+            if (messagesNeedingOrderData.length > 0 || messagesNeedingCommodityData.length > 0) {
+              console.group('📥 增量轮询返回的订单/商品在前端消息中未存储，批量查询获取完整数据')
+              console.log('需要订单数据的消息数:', messagesNeedingOrderData.length)
+              console.log('需要商品数据的消息数:', messagesNeedingCommodityData.length)
+              console.log('订单ID:', orderIdsFromPoll)
+              console.log('商品ID:', commodityIdsFromPoll)
+              console.groupEnd()
+              
+              // 批量查询获取完整数据
+              await enrichMessages([...messagesNeedingOrderData, ...messagesNeedingCommodityData])
+            }
+            
             // ✅ 通知子组件（对话框）增量更新结果
             incrementalUpdateResult.commodities = commodities
             incrementalUpdateResult.orders = orders
             incrementalUpdateResult.timestamp = Date.now()
-            
-            // ✅ 如果强制轮询且找不到新数据，可能是时间戳问题
-            if (force && updatedCount === 0) {
-              console.warn('⚠️ 强制轮询未找到新数据，可能需要全量查询')
-              // 可以选择全量查询或提示用户
-            }
             
             // ✅ 详细日志：更新前的时间戳状态
             const beforeUpdateTimestamp = localStorage.getItem(LAST_POLL_TIMESTAMP_KEY)
@@ -846,60 +874,14 @@ export default {
       }
     }
     
-    // ✅ 强制立即增量轮询（用于新消息检测）
-    const forceIncrementalPoll = async () => {
-      if (isPolling) {
-        console.warn('⚠️ 正在轮询中，跳过强制轮询', {
-          currentTime: new Date().toISOString(),
-          isPolling,
-        })
-        return
-      }
-      
-      try {
-        isPolling = true
-        console.group('🚀 强制增量轮询：立即查询最新变更')
-        console.log('触发时间:', new Date().toISOString())
-        console.log('触发原因: 检测到新消息包含未加载的商品/订单')
-        console.groupEnd()
-        
-        const result = await incrementalPoll(true) // 强制轮询
-        
-        if (result.updatedCount === 0) {
-          console.warn('⚠️ 强制轮询未找到新数据，可能需要等待定期轮询', {
-            receivedCommodities: result.commodities?.length || 0,
-            receivedOrders: result.orders?.length || 0,
-            updatedCount: result.updatedCount,
-          })
-        } else {
-          console.log('✅ 强制轮询成功更新数据', {
-            updatedCount: result.updatedCount,
-            commoditiesReceived: result.commodities?.length || 0,
-            ordersReceived: result.orders?.length || 0,
-          })
-        }
-        
-        return result
-      } catch (error) {
-        console.error('❌ 强制增量轮询失败:', {
-          error,
-          errorMessage: error.message,
-          errorStack: error.stack,
-          timestamp: new Date().toISOString(),
-        })
-        throw error
-      } finally {
-        isPolling = false
-      }
-    }
-    
     // ✅ 保存上一次的消息长度（用于检测新消息）
     const previousMessagesLength = ref(0)
     
     // 监听消息变化，自动获取详细信息
     watch(() => messages.value, async (newMessages, oldMessages) => {
       if (newMessages && newMessages.length > 0) {
-        // ✅ 检测新消息中是否有商品/订单ID（优先使用强制增量轮询获取最新变更）
+        // ✅ 简化逻辑：直接使用批量查询填充新消息中的订单/商品数据
+        // 增量轮询本身已经会处理未存储的数据（在incrementalPoll函数中）
         // 使用 ref 保存的长度，而不是依赖 oldMessages（因为响应式更新时可能不准确）
         const oldLength = previousMessagesLength.value
         const newLength = newMessages.length
@@ -907,67 +889,12 @@ export default {
         // ✅ 添加调试日志
         console.log(`🔍 Messages.vue watch触发: oldLength=${oldLength}, newLength=${newLength}, oldMessagesLength=${oldMessages?.length || 'undefined'}`)
         
-        // 如果消息数量增加（新消息到达），检查是否包含订单/商品
+        // 如果消息数量增加（新消息到达），使用批量查询填充未加载的数据
         if (newLength > oldLength) {
-          const newMessagesOnly = newMessages.slice(oldLength)
-          const newMessageOrderIds = [...new Set(newMessagesOnly
-          .filter(msg => msg.orderId && !msg.order)
-            .map(msg => msg.orderId)
-          )]
-          const newMessageCommodityIds = [...new Set(newMessagesOnly
-            .filter(msg => msg.commodityId && !msg.commodity)
-            .map(msg => msg.commodityId)
-          )]
-        
-          const hasNewCommodityOrOrder = newMessageOrderIds.length > 0 || newMessageCommodityIds.length > 0
-        
-        if (hasNewCommodityOrOrder) {
-            console.group('🔍 检测到新消息包含订单/商品，优先使用强制增量轮询获取最新变更')
-            console.log('新消息中的订单ID:', newMessageOrderIds)
-            console.log('新消息中的商品ID:', newMessageCommodityIds)
-          console.log('延迟500ms后执行强制轮询，确保后端变更记录已写入Redis')
-          console.groupEnd()
-          
-            // ✅ 优先使用强制增量轮询（能获取到最新变更，如订单状态变化）
-          // 延迟一点时间，确保后端变更记录已写入Redis
-            setTimeout(async () => {
-              try {
-                const pollResult = await forceIncrementalPoll()
-                
-                // 检查强制轮询是否获取到了新消息中的订单/商品数据
-                const polledOrderIds = new Set(pollResult?.orders?.map(o => o.orderId) || [])
-                const polledCommodityIds = new Set(pollResult?.commodities?.map(c => c.commodityId) || [])
-                
-                const ordersNotInPoll = newMessageOrderIds.filter(id => !polledOrderIds.has(id))
-                const commoditiesNotInPoll = newMessageCommodityIds.filter(id => !polledCommodityIds.has(id))
-                
-                // 如果强制轮询未获取到部分订单/商品，使用批量查询作为后备
-                if (ordersNotInPoll.length > 0 || commoditiesNotInPoll.length > 0) {
-                  console.group('⚠️ 强制轮询未获取到部分订单/商品，使用批量查询作为后备')
-                  console.log('未在轮询中获取的订单ID:', ordersNotInPoll)
-                  console.log('未在轮询中获取的商品ID:', commoditiesNotInPoll)
-                  console.groupEnd()
-                  
-                  // 对未获取到的订单/商品使用批量查询
-                  await enrichMessages(newMessages.filter(msg => 
-                    (msg.orderId && ordersNotInPoll.includes(msg.orderId) && !msg.order) ||
-                    (msg.commodityId && commoditiesNotInPoll.includes(msg.commodityId) && !msg.commodity)
-                  ))
-                } else {
-                  console.log('✅ 强制轮询成功获取到所有新消息中的订单/商品数据')
-                }
-              } catch (err) {
-                console.error('❌ 强制轮询失败，回退到批量查询:', err)
-                // 强制轮询失败，回退到批量查询
+          // 直接使用批量查询填充新消息中的订单/商品数据
                 await enrichMessages(newMessages)
-              }
-          }, 500) // 延迟500ms后强制轮询
           } else {
-            // 没有新的订单/商品，使用批量查询填充其他未加载的数据
-            await enrichMessages(newMessages)
-          }
-        } else {
-          // 消息数量未增加（可能是更新现有消息），使用批量查询
+          // 消息数量未增加（可能是更新现有消息），使用批量查询填充未加载的数据
           await enrichMessages(newMessages)
         }
         

@@ -11,6 +11,8 @@ import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.repository.UserProfileRepository;
 import com.njumarket.auth.service.UserProfileService;
+import com.njumarket.njumarket.utils.CacheUtil;
+import com.njumarket.njumarket.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,27 +38,50 @@ public class InternalController {
     private final UserProfileService userProfileService;
     private final UserInternalDTOConverter userInternalDTOConverter;
     private final UserProfileInternalDTOConverter userProfileInternalDTOConverter;
+    private final CacheUtil cacheUtil;
     
     /**
      * 根据ID查询用户（内部接口）
      * 返回内部 DTO，不包含关联对象
+     * ✅ 使用缓存（最终一致性）
      */
     @GetMapping("/user/{userId}")
     public Result getUserById(@PathVariable String userId) {
-            User user = userRepository.findById(userId)
-            .orElseThrow(() -> new BusinessException("用户不存在"));
-            
-            // 调试：打印用户状态信息
-            log.info("auth-service查询用户: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
-                user.getUserId(), user.getAccountStatus(), user.getAccountStatus() == null);
-            
-            UserInternalDTO dto = userInternalDTOConverter.toInternalDTO(user);
-            
-            // 调试：打印DTO状态信息
-            log.info("auth-service返回UserInternalDTO: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
-                dto.getUserId(), dto.getAccountStatus(), dto.getAccountStatus() == null);
-            
-            return Result.ok("查询成功", dto);
+        // ✅ 使用缓存（最终一致性）
+        // ⚠️ 修复：使用独立的缓存key，避免与getUserProfilesByIds的缓存key冲突
+        String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+        UserInternalDTO dto = cacheUtil.getWithFallback(
+            cacheKey,
+            RedisConstants.CACHE_USER_INFO_TTL * 60, // 转换为秒
+            UserInternalDTO.class,
+            () -> {
+                // 缓存未命中，从数据库加载
+                User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new BusinessException("用户不存在"));
+                
+                // 调试：打印用户状态信息
+                log.info("auth-service查询用户: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
+                    user.getUserId(), user.getAccountStatus(), user.getAccountStatus() == null);
+                
+                UserInternalDTO result = userInternalDTOConverter.toInternalDTO(user);
+                
+                // 调试：打印DTO状态信息
+                log.info("auth-service返回UserInternalDTO: userId={}, accountStatus=[{}], accountStatus是否为null={}", 
+                    result.getUserId(), result.getAccountStatus(), result.getAccountStatus() == null);
+                
+                return result;
+            }
+        );
+        
+        // ✅ 后处理：确保accountStatus不为null（处理缓存中可能存在的旧数据）
+        if (dto != null && (dto.getAccountStatus() == null || dto.getAccountStatus().trim().isEmpty())) {
+            log.warn("检测到缓存中的accountStatus为null，修复为ACTIVE: userId={}", userId);
+            dto.setAccountStatus("ACTIVE");
+            // 重新写入缓存，修复旧数据
+            cacheUtil.set(cacheKey, dto, RedisConstants.CACHE_USER_INFO_TTL * 60);
+        }
+        
+        return Result.ok("查询成功", dto);
     }
     
     /**
@@ -73,12 +98,39 @@ public class InternalController {
     /**
      * 批量查询用户档案（内部接口）
      * 返回内部 DTO 列表，不包含关联对象
+     * ✅ 使用缓存（最终一致性）- 批量查询时优先从缓存获取，缺失的再从数据库加载
      */
     @GetMapping("/user/profile/batch")
     public Result getUserProfilesByIds(@RequestParam List<String> userIds) {
-            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(new ArrayList<>(userIds));
-            List<UserProfileInternalDTO> dtos = userProfileInternalDTOConverter.toUserProfileInternalDTOList(profiles);
-            return Result.ok("批量查询成功", dtos);
+        List<UserProfileInternalDTO> dtos = new ArrayList<>();
+        List<String> missingUserIds = new ArrayList<>();
+        
+        // 1. 先从缓存获取已有的用户档案
+        for (String userId : userIds) {
+            String cacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+            UserProfileInternalDTO cached = cacheUtil.get(cacheKey, UserProfileInternalDTO.class);
+            if (cached != null) {
+                dtos.add(cached);
+            } else {
+                missingUserIds.add(userId);
+            }
+        }
+        
+        // 2. 批量查询缺失的用户档案
+        if (!missingUserIds.isEmpty()) {
+            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(missingUserIds);
+            List<UserProfileInternalDTO> newDtos = userProfileInternalDTOConverter.toUserProfileInternalDTOList(profiles);
+            
+            // 3. 将新查询的档案写入缓存
+            for (UserProfileInternalDTO dto : newDtos) {
+                String cacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + dto.getUserId();
+                cacheUtil.set(cacheKey, dto, RedisConstants.CACHE_USER_PROFILE_TTL * 60);
+            }
+            
+            dtos.addAll(newDtos);
+        }
+        
+        return Result.ok("批量查询成功", dtos);
     }
     
     /**

@@ -13,8 +13,13 @@ import java.util.List;
 /**
  * Commodity Service Feign Client
  * 用于Message Service调用Commodity Service
+ * 启用 Resilience4j 熔断器保护
  */
-@FeignClient(name = "njumarket-service-commodity", path = "/api/public")
+@FeignClient(
+    name = "njumarket-service-commodity", 
+    path = "/api/public",
+    fallback = com.njumarket.message.client.fallback.CommodityClientFallback.class
+)
 public interface CommodityClient {
     
     /**

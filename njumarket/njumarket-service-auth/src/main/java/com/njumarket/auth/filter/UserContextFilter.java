@@ -38,9 +38,17 @@ public class UserContextFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
+            String requestURI = request.getRequestURI();
+            
+            // ✅ 排除 Actuator 端点（这些端点不需要用户认证，也不需要设置用户上下文）
+            // Prometheus 等监控工具会直接访问这些端点，不会经过 Gateway，因此没有 X-User-Id
+            if (requestURI.startsWith("/actuator/")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
+            
             // 从请求头获取用户ID（Gateway已添加）
             String userId = request.getHeader("X-User-Id");
-            String requestURI = request.getRequestURI();
             
             log.info("UserContextFilter处理请求: uri={}, X-User-Id={}, X-User-Id是否为null={}", 
                 requestURI, userId, userId == null);

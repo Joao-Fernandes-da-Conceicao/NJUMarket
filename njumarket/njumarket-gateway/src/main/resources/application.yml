@@ -1,178 +1,19 @@
+# Gateway 本地配置（简化版）
+# 详细配置已迁移到 Config Server: config-repo/njumarket-gateway.yml
+# 本地仅保留必要的服务标识和 Config Server 连接配置
+
 server:
   port: 8080
 
 spring:
   application:
     name: njumarket-gateway
+  # ✅ Spring Cloud Config Client 配置
+  # Docker 环境通过环境变量 SPRING_CONFIG_IMPORT 覆盖，本地开发使用 localhost
+  config:
+    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
+    fail-fast: false  # Config Server 不可用时，使用本地配置（需要时可在本地添加完整配置）
+  # Gateway 必须使用响应式模式
   main:
-    web-application-type: reactive  # 强制使用响应式模式，避免与Spring MVC冲突
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:hqz20050316}
-      database: ${GATEWAY_REDIS_DATABASE:2}  # 使用与auth-service相同的Redis database，以便读取Token
-      timeout: 3000ms  # 连接超时时间
-      lettuce:
-        pool:
-          max-active: 8   # 最大连接数
-          max-idle: 8     # 最大空闲连接数
-          min-idle: 0     # 最小空闲连接数
-          max-wait: -1ms  # 最大等待时间（-1表示无限等待）
-        shutdown-timeout: 100ms  # 关闭超时时间
-  cloud:
-    gateway:
-      discovery:
-        locator:
-          enabled: true
-          lower-case-service-id: true
-      routes:
-        # ⚠️ 重要：更具体的路由必须放在更通用的路由之前，否则会被通用路由先匹配
-        # 商品服务路由（公开API）
-        - id: commodity-service-public
-          uri: lb://njumarket-service-commodity
-          predicates:
-            - Path=/api/public/commodity/**
-          # 不StripPrefix，直接转发
-        # 商品服务路由（用户API）- 必须在 /api/user/** 之前
-        - id: commodity-service-user
-          uri: lb://njumarket-service-commodity
-          predicates:
-            - Path=/api/user/commodity/**
-          # 不StripPrefix，直接转发
-        # 推送服务路由（聊天数据API，增量轮询）- 必须在 /api/user/** 之前
-        - id: notification-service-chat
-          uri: lb://njumarket-service-notification
-          predicates:
-            - Path=/api/user/chat/**
-          # 不StripPrefix，直接转发
-        # 订单服务路由 - 必须在 /api/user/** 之前
-        - id: order-service
-          uri: lb://njumarket-service-order
-          predicates:
-            - Path=/api/user/order/**,/api/user/complaint/**
-          # 不StripPrefix，直接转发
-        # 消息服务路由（用户消息API）- 必须在 /api/user/** 之前
-        - id: message-service-user
-          uri: lb://njumarket-service-message
-          predicates:
-            - Path=/api/user/message/**
-          # 不StripPrefix，直接转发
-        # 消息服务路由（联系相关API）- 必须在 /api/contact/** 之前
-        - id: message-service-contact
-          uri: lb://njumarket-service-message
-          predicates:
-            - Path=/api/contact/**
-          # 不StripPrefix，直接转发
-        # 认证服务路由（用户相关API）- 放在最后，作为通用路由
-        # 注意：/api/user/commodity/**、/api/user/order/**、/api/user/message/** 等已被上面的路由处理
-        - id: auth-service-user
-          uri: lb://njumarket-service-auth
-          predicates:
-            - Path=/api/user/**
-          # 不StripPrefix，直接转发到服务（服务内部路径就是/api/user/**）
-        # ⚠️ 重要：WebSocket路由顺序 - 更具体的路径必须在更通用的路径之前
-        # WebSocket路由（推送服务 - 统一管理所有WebSocket连接）
-        # 注意：WebSocket的CORS由服务端处理，Gateway不处理，避免重复添加CORS头
-        - id: websocket-notification-service
-          uri: lb://njumarket-service-notification
-          predicates:
-            - Path=/api/ws/**
-          filters:
-            - StripPrefix=1  # 将/api/ws转换为/ws，因为notification-service的WebSocket端点是/ws
-            # 不添加CORS过滤器，由notification-service的WebSocketConfig处理CORS
-        # 图片服务路由
-        - id: image-service
-          uri: lb://njumarket-service-image
-          predicates:
-            - Path=/api/images/**
-          # 不StripPrefix，直接转发（服务内部路径就是/api/images/**）
-        # 管理服务路由
-        - id: admin-service
-          uri: lb://njumarket-service-admin
-          predicates:
-            - Path=/api/admin/**
-          # 不StripPrefix，直接转发
-      # 全局CORS配置
-      # 注意：WebSocket路径(/api/ws/**)的CORS由服务端处理，不在此配置中
-      # 排除WebSocket路径，避免与服务端CORS配置冲突
-      globalcors:
-        cors-configurations:
-          # 排除WebSocket路径，只配置其他API路径的CORS
-          '[/api/user/**]':
-            allowedOriginPatterns: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-          '[/api/contact/**]':
-            allowedOriginPatterns: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-          '[/api/admin/**]':
-            allowedOriginPatterns: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-          '[/api/public/**]':
-            allowedOriginPatterns: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-          '[/api/images/**]':
-            allowedOriginPatterns: "*"
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-          # 注意：/api/ws/** 不在此配置中，由服务端处理CORS
-
-# Actuator 配置
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-      base-path: /actuator
-  endpoint:
-    health:
-      show-details: when-authorized
-  info:
-    env:
-      enabled: true
-    java:
-      enabled: true
-    os:
-      enabled: true
-
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-  instance:
-    prefer-ip-address: true
+    web-application-type: reactive
 

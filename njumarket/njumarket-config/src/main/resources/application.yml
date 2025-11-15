@@ -1,0 +1,44 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: njumarket-config-server
+  # ✅ Config Server 配置：使用本地文件系统存储配置
+  cloud:
+    config:
+      server:
+        # 使用本地文件系统（native profile）
+        native:
+          search-locations: classpath:/config-repo
+        # 或者使用 Git 仓库（git profile）
+        # git:
+        #   uri: file://${user.home}/config-repo
+        #   default-label: main
+        #   clone-on-start: true
+        #   force-pull: true
+  # ✅ 配置文件存储路径（本地文件系统）
+  # 注意：profile 通过环境变量 SPRING_PROFILES_ACTIVE 设置（Docker 环境设置为 docker，本地开发可设置为 native）
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:native}
+
+# Eureka 配置
+# ✅ 使用环境变量 EUREKA_CLIENT_SERVICEURL_DEFAULTZONE 覆盖（Docker 环境使用 discovery 服务名）
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,refresh
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+

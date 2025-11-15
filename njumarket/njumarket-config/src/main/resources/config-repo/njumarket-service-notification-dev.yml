@@ -1,0 +1,16 @@
+# Notification Service - Dev 环境配置
+# 包含 Redis 等环境相关配置
+
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${NOTIFICATION_REDIS_DATABASE:2}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+

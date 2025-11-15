@@ -1,0 +1,49 @@
+# Image Service 配置（从 Config Server 加载）
+# 注意：MySQL 配置已移至 dev 环境配置文件（{application}-dev.yml）
+
+server:
+  port: 8095
+
+spring:
+  application:
+    name: njumarket-service-image
+  # ✅ 显式启用 Feign Client 的 Micrometer 支持（确保追踪上下文正确传播）
+  cloud:
+    openfeign:
+      micrometer:
+        enabled: true
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,configprops,conditions
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    redis:
+      enabled: false
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+  os:
+    enabled: true
+  tracing:
+    enabled: true  # ✅ 启用追踪功能
+    sampling:
+      probability: 1.0  # 100% 采样率（生产环境建议降低到 0.1）
+    propagation:
+      type: B3  # ✅ 使用 B3 传播格式（Zipkin 标准格式，确保追踪上下文正确传播）
+  # ✅ 正确的配置路径：management.zipkin.tracing.endpoint（不是 management.tracing.export.zipkin.endpoint）
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+      connect-timeout: 10000  # 连接超时配置（毫秒）
+      read-timeout: 10000  # 读取超时配置（毫秒）
+
+

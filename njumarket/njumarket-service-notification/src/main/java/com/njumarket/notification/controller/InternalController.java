@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,10 @@ public class InternalController {
     
     private final ChangeRecordService changeRecordService;
     private final NotificationService notificationService;
+    
+    // ✅ 统一使用GMT+8时区（中国大陆时区）
+    private static final ZoneId GMT_PLUS_8_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final ZoneOffset GMT_PLUS_8_OFFSET = ZoneOffset.ofHours(8);
     
     // ========== 变更记录接口 ==========
     
@@ -48,18 +54,31 @@ public class InternalController {
     
     /**
      * 记录商品变更
+     * ✅ 时间戳解析：假设传入的时间戳是系统默认时区的LocalDateTime字符串（无时区信息）
+     * 为了统一，我们将其视为GMT+8时区的时间戳
      */
     @PostMapping("/change-record/commodity")
     public Result recordCommodityChange(@RequestParam String commodityId,
                                        @RequestParam String operation,
                                        @RequestParam String timestamp) {
-        LocalDateTime changeTime = LocalDateTime.parse(timestamp);
-        changeRecordService.recordCommodityChange(commodityId, operation, changeTime);
-        return Result.ok("记录成功");
+        try {
+            // ✅ 解析时间戳（假设为GMT+8时区，与查询时保持一致）
+            LocalDateTime changeTime = LocalDateTime.parse(timestamp);
+            log.debug("记录商品变更: commodityId={}, operation={}, timestamp={} (解析为GMT+8)", 
+                commodityId, operation, changeTime);
+            changeRecordService.recordCommodityChange(commodityId, operation, changeTime);
+            return Result.ok("记录成功");
+        } catch (Exception e) {
+            log.error("记录商品变更失败: commodityId={}, operation={}, timestamp={}, error={}", 
+                commodityId, operation, timestamp, e.getMessage(), e);
+            return Result.fail("记录失败: " + e.getMessage());
+        }
     }
     
     /**
      * 记录订单变更
+     * ✅ 时间戳解析：假设传入的时间戳是系统默认时区的LocalDateTime字符串（无时区信息）
+     * 为了统一，我们将其视为GMT+8时区的时间戳
      */
     @PostMapping("/change-record/order")
     public Result recordOrderChange(@RequestParam String orderId,
@@ -68,7 +87,7 @@ public class InternalController {
         try {
             log.info("收到订单变更记录请求: orderId={}, operation={}, timestamp={}", orderId, operation, timestamp);
             
-            // ✅ 解析时间戳（支持多种格式）
+            // ✅ 解析时间戳（支持多种格式，假设为GMT+8时区）
             LocalDateTime changeTime;
             try {
                 changeTime = LocalDateTime.parse(timestamp);
@@ -88,7 +107,7 @@ public class InternalController {
                 }
             }
             
-            log.info("时间戳解析成功: timestamp={} -> changeTime={}", timestamp, changeTime);
+            log.info("时间戳解析成功: timestamp={} -> changeTime={} (解析为GMT+8)", timestamp, changeTime);
             
             // ✅ 记录变更
             changeRecordService.recordOrderChange(orderId, operation, changeTime);
@@ -134,6 +153,52 @@ public class InternalController {
     public Result pushMessage(@RequestParam String userId,
                              @RequestBody Object messageData) {
         notificationService.pushMessage(userId, messageData);
+        return Result.ok("推送成功");
+    }
+    
+    /**
+     * 通用推送接口（支持所有消息类型）
+     * 用于Message服务推送各种类型的消息（MESSAGE_NEW、CONVERSATION_RESTORED、MESSAGE_READ等）
+     */
+    @PostMapping("/notification/push")
+    public Result push(@RequestParam String userId,
+                      @RequestParam(required = false) String messageType,
+                      @RequestBody Object messageData) {
+        // 如果messageType为空，尝试从messageData中提取
+        if (messageType == null || messageType.trim().isEmpty()) {
+            if (messageData instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dataMap = (Map<String, Object>) messageData;
+                messageType = (String) dataMap.get("type");
+            }
+        }
+        
+        // 根据messageType选择不同的推送方法
+        if (messageType == null || messageType.trim().isEmpty()) {
+            messageType = "MESSAGE_NEW"; // 默认类型
+        }
+        
+        if ("MESSAGE_NEW".equals(messageType)) {
+            notificationService.pushMessage(userId, messageData);
+        } else if ("UNREAD_COUNT_UPDATE".equals(messageType)) {
+            // 从messageData中提取unreadCount
+            if (messageData instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dataMap = (Map<String, Object>) messageData;
+                Object unreadCountObj = dataMap.get("unreadCount");
+                if (unreadCountObj instanceof Number) {
+                    notificationService.pushUnreadCountUpdate(userId, ((Number) unreadCountObj).intValue());
+                } else {
+                    return Result.fail("unreadCount格式错误");
+                }
+            } else {
+                return Result.fail("messageData格式错误");
+            }
+        } else {
+            // 其他类型（CONVERSATION_RESTORED、MESSAGE_READ等）使用通用推送
+            notificationService.pushGenericMessage(userId, messageData, messageType);
+        }
+        
         return Result.ok("推送成功");
     }
     

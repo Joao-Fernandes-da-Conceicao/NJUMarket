@@ -10,8 +10,14 @@ import java.util.List;
 /**
  * Order Query Service Feign Client
  * 用于推送服务调用订单服务的查询功能
+ * 启用 Resilience4j 熔断器保护
+ * 注意：查询失败时返回空列表，不影响增量轮询
  */
-@FeignClient(name = "njumarket-service-order", contextId = "notificationOrderQueryClient")
+@FeignClient(
+    name = "njumarket-service-order", 
+    contextId = "notificationOrderQueryClient",
+    fallback = com.njumarket.notification.client.fallback.OrderQueryClientFallback.class
+)
 public interface OrderQueryClient {
     
     /**

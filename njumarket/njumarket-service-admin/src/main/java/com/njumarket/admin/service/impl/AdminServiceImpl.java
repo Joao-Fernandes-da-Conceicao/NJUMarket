@@ -1664,13 +1664,13 @@ public class AdminServiceImpl implements AdminService {
             // 用户1恢复可见性
             if (newUser1Visibility != null && Boolean.FALSE.equals(oldUser1Visibility) && Boolean.TRUE.equals(newUser1Visibility)) {
                 try {
-                    // 查询用户1可见的最后一条消息
+                    // ✅ 优化：只查询content和createdAt字段，避免回表
                     Pageable pageable = PageRequest.of(0, 1);
-                    List<Message> lastMessages = 
-                            messageRepository.findLastMessageForUser(conversationId, conversation.getUserId1(), pageable);
+                    List<com.njumarket.admin.repository.projection.MessageContentProjection> lastMessages = 
+                            messageRepository.findLastMessageContentForUser(conversationId, conversation.getUserId1(), pageable);
                     
                     if (!lastMessages.isEmpty()) {
-                        Message lastMessage = lastMessages.get(0);
+                        com.njumarket.admin.repository.projection.MessageContentProjection lastMessage = lastMessages.get(0);
                         conversation.setUser1LastMessageContent(lastMessage.getContent());
                         conversation.setUser1LastMessageTime(lastMessage.getCreatedAt());
                     } else {
@@ -1687,13 +1687,13 @@ public class AdminServiceImpl implements AdminService {
             // 用户2恢复可见性
             if (newUser2Visibility != null && Boolean.FALSE.equals(oldUser2Visibility) && Boolean.TRUE.equals(newUser2Visibility)) {
                 try {
-                    // 查询用户2可见的最后一条消息
+                    // ✅ 优化：只查询content和createdAt字段，避免回表
                     Pageable pageable = PageRequest.of(0, 1);
-                    List<Message> lastMessages = 
-                            messageRepository.findLastMessageForUser(conversationId, conversation.getUserId2(), pageable);
+                    List<com.njumarket.admin.repository.projection.MessageContentProjection> lastMessages = 
+                            messageRepository.findLastMessageContentForUser(conversationId, conversation.getUserId2(), pageable);
                     
                     if (!lastMessages.isEmpty()) {
-                        Message lastMessage = lastMessages.get(0);
+                        com.njumarket.admin.repository.projection.MessageContentProjection lastMessage = lastMessages.get(0);
                         conversation.setUser2LastMessageContent(lastMessage.getContent());
                         conversation.setUser2LastMessageTime(lastMessage.getCreatedAt());
                     } else {
@@ -2380,17 +2380,17 @@ public class AdminServiceImpl implements AdminService {
                                 senderLastContent, senderLastTime, message.getContent(), message.getCreatedAt(), isSenderLastMessage);
                         
                         if (isSenderLastMessage) {
-                            // 查询发送方可见的最后一条消息（因为当前消息已被标记删除，查询时会自动过滤）
+                            // ✅ 优化：只查询content和createdAt字段，避免回表
                             try {
                                 Pageable pageable = PageRequest.of(0, 1);
-                                List<Message> lastMessages = 
-                                        messageRepository.findLastMessageForUser(conversationId, senderId, pageable);
+                                List<com.njumarket.admin.repository.projection.MessageContentProjection> lastMessages = 
+                                        messageRepository.findLastMessageContentForUser(conversationId, senderId, pageable);
                                 
                                 log.debug("查询发送方可见消息结果: conversationId={}, senderId={}, foundCount={}", 
                                         conversationId, senderId, lastMessages.size());
                                 
                                 if (!lastMessages.isEmpty()) {
-                                    Message newLastMessage = lastMessages.get(0);
+                                    com.njumarket.admin.repository.projection.MessageContentProjection newLastMessage = lastMessages.get(0);
                                     conversation.setLastMessageForUser(senderId, 
                                             newLastMessage.getContent(), 
                                             newLastMessage.getCreatedAt());
@@ -2448,17 +2448,17 @@ public class AdminServiceImpl implements AdminService {
                                 receiverLastContent, receiverLastTime, message.getContent(), message.getCreatedAt(), isReceiverLastMessage);
                         
                         if (isReceiverLastMessage) {
-                            // 查询接收方可见的最后一条消息（因为当前消息已被标记删除，查询时会自动过滤）
+                            // ✅ 优化：只查询content和createdAt字段，避免回表
                             try {
                                 Pageable pageable = PageRequest.of(0, 1);
-                                List<Message> lastMessages = 
-                                        messageRepository.findLastMessageForUser(conversationId, receiverId, pageable);
+                                List<com.njumarket.admin.repository.projection.MessageContentProjection> lastMessages = 
+                                        messageRepository.findLastMessageContentForUser(conversationId, receiverId, pageable);
                                 
                                 log.debug("查询接收方可见消息结果: conversationId={}, receiverId={}, foundCount={}", 
                                         conversationId, receiverId, lastMessages.size());
                                 
                                 if (!lastMessages.isEmpty()) {
-                                    Message newLastMessage = lastMessages.get(0);
+                                    com.njumarket.admin.repository.projection.MessageContentProjection newLastMessage = lastMessages.get(0);
                                     conversation.setLastMessageForUser(receiverId, 
                                             newLastMessage.getContent(), 
                                             newLastMessage.getCreatedAt());
@@ -2564,15 +2564,16 @@ public class AdminServiceImpl implements AdminService {
                 // 注意：删除前查询会包含这条消息，所以需要查询2条，跳过第一条
                 if (isUser1LastMessage) {
                     try {
+                        // ✅ 优化：只查询content和createdAt字段，避免回表
                         // 查询用户1可见的前2条消息，第一条是要删除的，取第二条
                         Pageable pageable = PageRequest.of(0, 2);
-                        List<Message> lastMessages = 
-                                messageRepository.findLastMessageForUser(
+                        List<com.njumarket.admin.repository.projection.MessageContentProjection> lastMessages = 
+                                messageRepository.findLastMessageContentForUser(
                                         conversationId, conversation.getUserId1(), pageable);
                         
                         if (lastMessages.size() > 1) {
                             // 有第二条消息，使用第二条作为新的最后消息
-                            Message newLastMessage = lastMessages.get(1);
+                            com.njumarket.admin.repository.projection.MessageContentProjection newLastMessage = lastMessages.get(1);
                             conversation.setUser1LastMessageContent(newLastMessage.getContent());
                             conversation.setUser1LastMessageTime(newLastMessage.getCreatedAt());
                         } else {
@@ -2588,15 +2589,16 @@ public class AdminServiceImpl implements AdminService {
                 
                 if (isUser2LastMessage) {
                     try {
+                        // ✅ 优化：只查询content和createdAt字段，避免回表
                         // 查询用户2可见的前2条消息，第一条是要删除的，取第二条
                         Pageable pageable = PageRequest.of(0, 2);
-                        List<Message> lastMessages = 
-                                messageRepository.findLastMessageForUser(
+                        List<com.njumarket.admin.repository.projection.MessageContentProjection> lastMessages = 
+                                messageRepository.findLastMessageContentForUser(
                                         conversationId, conversation.getUserId2(), pageable);
                         
                         if (lastMessages.size() > 1) {
                             // 有第二条消息，使用第二条作为新的最后消息
-                            Message newLastMessage = lastMessages.get(1);
+                            com.njumarket.admin.repository.projection.MessageContentProjection newLastMessage = lastMessages.get(1);
                             conversation.setUser2LastMessageContent(newLastMessage.getContent());
                             conversation.setUser2LastMessageTime(newLastMessage.getCreatedAt());
                         } else {

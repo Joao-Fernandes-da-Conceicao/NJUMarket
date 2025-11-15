@@ -35,5 +35,13 @@ public interface NotificationService {
      * @param unreadCount 未读消息数
      */
     void pushUnreadCountUpdate(String userId, Integer unreadCount);
+    
+    /**
+     * 通用推送方法（支持所有消息类型）
+     * @param userId 用户ID
+     * @param messageData 消息数据
+     * @param messageType 消息类型（CONVERSATION_RESTORED、MESSAGE_READ等）
+     */
+    void pushGenericMessage(String userId, Object messageData, String messageType);
 }
 

@@ -6,7 +6,6 @@ import com.njumarket.message.entity.Message; // Message 实体从 message-servic
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.message.repository.ConversationRepository;
 import com.njumarket.message.repository.MessageRepository;
-import com.njumarket.message.service.WebSocketRetryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -23,20 +22,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class InternalController {
     
-    private final WebSocketRetryService webSocketRetryService;
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
-    
-    /**
-     * WebSocket推送消息（内部接口，供其他服务调用）
-     */
-    @PostMapping("/websocket/push")
-    public Result pushMessage(@RequestParam String receiverId,
-                             @RequestParam String messageType,
-                             @RequestBody Map<String, Object> messageData) {
-        webSocketRetryService.pushWithRetry(receiverId, messageData, messageType);
-        return Result.ok("推送成功");
-    }
 
     /**
      * 获取会话详情（管理端内部接口）

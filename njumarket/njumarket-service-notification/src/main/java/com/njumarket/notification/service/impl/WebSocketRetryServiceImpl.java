@@ -7,11 +7,13 @@ import com.njumarket.notification.websocket.WebSocketEventListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -36,6 +38,7 @@ public class WebSocketRetryServiceImpl implements WebSocketRetryService {
     private final SimpMessagingTemplate messagingTemplate;
     private final WebSocketEventListener webSocketEventListener;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     
     // Redis重试队列key
@@ -44,33 +47,64 @@ public class WebSocketRetryServiceImpl implements WebSocketRetryService {
     // 消息过期时间（30分钟）
     private static final long MESSAGE_EXPIRE_SECONDS = com.njumarket.njumarket.utils.RedisConstants.WEBSOCKET_RETRY_TTL;
     
+    /**
+     * Redis Key 前缀：用于存储已推送的消息ID（去重）
+     */
+    private static final String PUSHED_MESSAGE_KEY_PREFIX = "message:pushed:";
+    
+    /**
+     * 消息去重过期时间（24小时）
+     */
+    private static final java.time.Duration PUSHED_MESSAGE_TTL = java.time.Duration.ofHours(24);
+    
     @Override
-    public void pushWithRetry(String receiverId, Object messageData, String messageType) {
+    public void pushWithRetry(String receiverId, Object messageData, String messageType, String messageId) {
         try {
-            // 检查用户是否在线
-            boolean isOnline = webSocketEventListener.isUserOnline(receiverId);
+            // ✅ 优化：先尝试推送，再检查在线状态
+            // 原因：SimpUserRegistry可能更新延迟，导致误判用户不在线
+            // convertAndSendToUser是异步的，即使推送失败也不会抛出异常
+            // 所以即使在线检查返回false，也尝试推送一次（Spring会自动处理离线用户）
             
-            if (!isOnline) {
-                // 用户不在线，记录到重试队列
-                log.debug("用户不在线，加入重试队列: receiverId={}, messageType={}", 
-                    receiverId, messageType);
-                addToRetryQueue(receiverId, messageData, messageType);
-                return;
-            }
-            
-            // 用户在线，尝试推送
             // 根据消息类型选择不同的队列
             String destination = getDestinationByMessageType(messageType);
             
-            messagingTemplate.convertAndSendToUser(receiverId, destination, messageData);
+            // ✅ 确保messageData中包含messageId（如果messageId不为null）
+            // 这样前端才能提取messageId并发送ACK
+            if (messageId != null && !messageId.trim().isEmpty()) {
+                if (messageData instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dataMap = (Map<String, Object>) messageData;
+                    // 如果messageData中没有messageId，则添加
+                    if (!dataMap.containsKey("messageId")) {
+                        dataMap.put("messageId", messageId);
+                    }
+                }
+            }
             
-            log.debug("WebSocket推送成功: receiverId={}, messageType={}", receiverId, messageType);
+            // ✅ 先尝试推送（不阻塞）
+            // 注意：推送后不设置"已推送"标记，只有收到ACK才设置
+            messagingTemplate.convertAndSendToUser(receiverId, destination, messageData);
+            log.debug("WebSocket推送尝试: receiverId={}, messageType={}, messageId={}", receiverId, messageType, messageId);
+            
+            // ✅ 为了确保消息不丢失，总是加入重试队列
+            // 重试机制基于ACK确认：只有收到ACK才认为消息真正送达
+            // 如果用户在线，第一次推送会成功，前端会发送ACK，ACK处理时会从队列移除
+            // 如果用户离线，第一次推送会被丢弃，重试时会继续等待用户上线
+            // 如果推送成功但前端未收到（网络问题），重试时会继续推送直到收到ACK
+            log.debug("消息已加入重试队列（等待ACK确认）: receiverId={}, messageType={}, messageId={}", 
+                receiverId, messageType, messageId);
+            addToRetryQueue(receiverId, messageData, messageType, messageId);
+            
+            // 注意：Spring的convertAndSendToUser是异步的，不会抛出异常
+            // 如果推送失败（内部错误），我们无法直接检测到
+            // 但通常情况下，如果用户在线且订阅正常，推送会成功
+            // 如果用户不在线，Spring会自动丢弃消息，不会报错
             
         } catch (Exception e) {
             // 推送过程中出现异常（如序列化失败），记录到重试队列
-            log.error("❌ WebSocket推送失败，加入重试队列: receiverId={}, messageType={}, error={}, errorType={}", 
-                receiverId, messageType, e.getMessage(), e.getClass().getName(), e);
-            addToRetryQueue(receiverId, messageData, messageType);
+            log.error("❌ WebSocket推送失败（异常），加入重试队列: receiverId={}, messageType={}, messageId={}, error={}, errorType={}", 
+                receiverId, messageType, messageId, e.getMessage(), e.getClass().getName(), e);
+            addToRetryQueue(receiverId, messageData, messageType, messageId);
         }
     }
     
@@ -87,10 +121,17 @@ public class WebSocketRetryServiceImpl implements WebSocketRetryService {
     /**
      * 添加消息到重试队列
      */
-    private void addToRetryQueue(String receiverId, Object messageData, String messageType) {
+    private void addToRetryQueue(String receiverId, Object messageData, String messageType, String messageId) {
         try {
+            // ✅ 如果没有 messageId，生成一个唯一ID
+            String finalMessageId = messageId;
+            if (finalMessageId == null || finalMessageId.trim().isEmpty()) {
+                finalMessageId = receiverId + "_" + messageType + "_" + System.currentTimeMillis();
+            }
+            
             RetryMessageDTO retryMsg = new RetryMessageDTO();
             retryMsg.setReceiverId(receiverId);
+            retryMsg.setMessageId(finalMessageId);
             retryMsg.setMessageData(objectMapper.writeValueAsString(messageData));
             retryMsg.setMessageType(messageType);
             retryMsg.setRetryCount(0);
@@ -179,20 +220,57 @@ public class WebSocketRetryServiceImpl implements WebSocketRetryService {
                         continue;
                     }
                     
+                    // ✅ ACK检查：如果消息已收到ACK确认，则跳过重试
+                    // 只有收到ACK才认为消息真正送达，推送成功不代表前端收到
+                    if (retryMsg.getMessageId() != null && !retryMsg.getMessageId().trim().isEmpty()) {
+                        String pushedKey = PUSHED_MESSAGE_KEY_PREFIX + retryMsg.getMessageId();
+                        Boolean alreadyAcked = stringRedisTemplate.hasKey(pushedKey);
+                        
+                        if (Boolean.TRUE.equals(alreadyAcked)) {
+                            // 消息已收到ACK确认，从队列中移除，不再重试
+                            redisTemplate.opsForZSet().remove(RETRY_QUEUE_KEY, retryJson);
+                            log.info("✅ 重试时发现消息已收到ACK确认，跳过: receiverId={}, messageType={}, messageId={}, retryCount={}", 
+                                retryMsg.getReceiverId(), retryMsg.getMessageType(), retryMsg.getMessageId(), retryMsg.getRetryCount());
+                            continue;
+                        }
+                    }
+                    
                     // 用户在线，尝试推送
                     Object messageData = objectMapper.readValue(retryMsg.getMessageData(), Object.class);
                     String destination = getDestinationByMessageType(retryMsg.getMessageType());
                     
+                    // ✅ 推送消息（注意：推送后不设置"已推送"标记，只有收到ACK才设置）
                     messagingTemplate.convertAndSendToUser(
                         retryMsg.getReceiverId(),
                         destination,
                         messageData
                     );
                     
-                    // 推送成功，从队列中移除
-                    redisTemplate.opsForZSet().remove(RETRY_QUEUE_KEY, retryJson);
-                    log.debug("重试推送成功: receiverId={}, messageType={}, retryCount={}/{}", 
-                        retryMsg.getReceiverId(), retryMsg.getMessageType(), retryMsg.getRetryCount(), retryMsg.getMaxRetries());
+                    // ✅ 增加重试次数，更新下次重试时间
+                    int oldRetryCount = retryMsg.getRetryCount();
+                    retryMsg.incrementRetry();
+                    int newRetryCount = retryMsg.getRetryCount();
+                    
+                    log.info("🔄 重试推送: receiverId={}, messageType={}, messageId={}, retryCount={} -> {}, nextRetryTime={}", 
+                        retryMsg.getReceiverId(), retryMsg.getMessageType(), retryMsg.getMessageId(), oldRetryCount, newRetryCount, retryMsg.getNextRetryTime());
+                    
+                    // ✅ 检查是否还有重试次数
+                    if (retryMsg.hasRetryAttempts()) {
+                        // 还有重试次数，更新队列中的消息（更新重试次数和下次重试时间）
+                        // 注意：消息继续留在队列中，等待ACK确认或下次重试
+                        redisTemplate.opsForZSet().remove(RETRY_QUEUE_KEY, retryJson);
+                        String updatedJson = objectMapper.writeValueAsString(retryMsg);
+                        long newScore = retryMsg.getNextRetryTime()
+                            .atZone(java.time.ZoneId.systemDefault()).toEpochSecond();
+                        redisTemplate.opsForZSet().add(RETRY_QUEUE_KEY, updatedJson, newScore);
+                        log.info("📝 消息已更新，等待ACK确认或下次重试: receiverId={}, retryCount={}/{}, nextRetryTime={}", 
+                            retryMsg.getReceiverId(), newRetryCount, retryMsg.getMaxRetries(), retryMsg.getNextRetryTime());
+                    } else {
+                        // 达到最大重试次数，从队列中移除
+                        redisTemplate.opsForZSet().remove(RETRY_QUEUE_KEY, retryJson);
+                        log.warn("⚠️ 消息达到最大重试次数，已从队列移除: receiverId={}, messageType={}, messageId={}, finalRetryCount={}/{}", 
+                            retryMsg.getReceiverId(), retryMsg.getMessageType(), retryMsg.getMessageId(), newRetryCount, retryMsg.getMaxRetries());
+                    }
                     
                 } catch (Exception e) {
                     log.error("❌ 重试推送失败: receiverId={}, messageType={}, retryCount={}/{}, error={}, errorType={}", 
@@ -228,6 +306,63 @@ public class WebSocketRetryServiceImpl implements WebSocketRetryService {
             
         } catch (Exception e) {
             log.error("Error processing retry queue: error={}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 处理ACK确认
+     * 收到前端ACK后，从重试队列中移除对应的消息
+     */
+    @Override
+    public void handleAck(String userId, String messageId, String messageType) {
+        try {
+            log.info("处理ACK确认: userId={}, messageId={}, messageType={}", userId, messageId, messageType);
+            
+            // ✅ 标记消息已确认（用于去重，避免重复推送）
+            String pushedKey = PUSHED_MESSAGE_KEY_PREFIX + messageId;
+            stringRedisTemplate.opsForValue().set(pushedKey, "1", PUSHED_MESSAGE_TTL);
+            
+            // ✅ 从重试队列中查找并移除对应的消息
+            Set<Object> allMessages = redisTemplate.opsForZSet().range(RETRY_QUEUE_KEY, 0, -1);
+            
+            if (allMessages == null || allMessages.isEmpty()) {
+                log.debug("重试队列为空，无需处理ACK: userId={}, messageId={}", userId, messageId);
+                return;
+            }
+            
+            boolean found = false;
+            for (Object msgObj : allMessages) {
+                try {
+                    String retryJson = msgObj.toString();
+                    RetryMessageDTO retryMsg = objectMapper.readValue(retryJson, RetryMessageDTO.class);
+                    
+                    // 匹配消息：userId、messageId、messageType都匹配
+                    if (userId.equals(retryMsg.getReceiverId()) && 
+                        messageId.equals(retryMsg.getMessageId()) &&
+                        (messageType == null || messageType.equals(retryMsg.getMessageType()))) {
+                        
+                        // 从重试队列中移除
+                        redisTemplate.opsForZSet().remove(RETRY_QUEUE_KEY, retryJson);
+                        found = true;
+                        
+                        log.info("✅ ACK确认成功，已从重试队列移除: userId={}, messageId={}, messageType={}, retryCount={}", 
+                            userId, messageId, messageType, retryMsg.getRetryCount());
+                        break;
+                    }
+                } catch (Exception e) {
+                    log.warn("解析重试队列消息失败，跳过: error={}", e.getMessage());
+                    continue;
+                }
+            }
+            
+            if (!found) {
+                log.debug("ACK确认：未在重试队列中找到对应消息（可能已处理或未加入队列）: userId={}, messageId={}, messageType={}", 
+                    userId, messageId, messageType);
+            }
+            
+        } catch (Exception e) {
+            log.error("处理ACK确认失败: userId={}, messageId={}, messageType={}, error={}", 
+                userId, messageId, messageType, e.getMessage(), e);
         }
     }
 }

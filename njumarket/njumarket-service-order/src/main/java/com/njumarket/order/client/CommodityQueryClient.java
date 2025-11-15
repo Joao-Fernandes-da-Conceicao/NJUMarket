@@ -1,6 +1,7 @@
 package com.njumarket.order.client;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.order.client.fallback.CommodityQueryClientFallback;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,8 +13,11 @@ import java.util.List;
 /**
  * Commodity Query Service Feign Client
  * 用于Order Service调用Commodity Service的查询功能（公开接口和用户接口）
+ * 启用 Resilience4j 熔断器保护
  */
-@FeignClient(name = "njumarket-service-commodity", contextId = "commodityQueryClient")
+@FeignClient(name = "njumarket-service-commodity", 
+             contextId = "commodityQueryClient",
+             fallback = CommodityQueryClientFallback.class)
 public interface CommodityQueryClient {
     
     /**

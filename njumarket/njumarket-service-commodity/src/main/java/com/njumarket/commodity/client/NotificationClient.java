@@ -8,8 +8,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * Notification Service Feign Client
  * 用于商品服务调用推送服务的推送功能
+ * 启用 Resilience4j 熔断器保护
+ * 注意：通知失败不应影响商品操作主流程
  */
-@FeignClient(name = "njumarket-service-notification", contextId = "commodityNotificationClient", path = "/api/internal")
+@FeignClient(
+    name = "njumarket-service-notification", 
+    contextId = "commodityNotificationClient", 
+    path = "/api/internal",
+    fallback = com.njumarket.commodity.client.fallback.NotificationClientFallback.class
+)
 public interface NotificationClient {
     
     /**

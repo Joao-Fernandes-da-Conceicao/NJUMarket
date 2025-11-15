@@ -55,7 +55,11 @@ services:
     ports:
       - "8761:8761"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       mysql:
         condition: service_healthy
@@ -63,6 +67,37 @@ services:
       - njumarket-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Spring Cloud Config Server
+  config-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-config
+        SERVICE_PORT: 8888
+    container_name: njumarket-config-server
+    ports:
+      - "8888:8888"
+    environment:
+      # ✅ Config Server 必须使用 native profile 才能使用本地文件系统存储配置
+      - SPRING_PROFILES_ACTIVE=native
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
+    depends_on:
+      discovery:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -80,15 +115,24 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - njumarket-network
@@ -111,7 +155,8 @@ services:
     ports:
       - "8091:8091"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - AUTH_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - AUTH_DATASOURCE_USERNAME=root
       - AUTH_DATASOURCE_PASSWORD=Hqz20050316
@@ -119,12 +164,20 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - njumarket-network
@@ -147,7 +200,8 @@ services:
     ports:
       - "8092:8092"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - COMMODITY_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - COMMODITY_DATASOURCE_USERNAME=root
       - COMMODITY_DATASOURCE_PASSWORD=Hqz20050316
@@ -155,12 +209,20 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - njumarket-network
@@ -183,7 +245,8 @@ services:
     ports:
       - "8093:8093"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - ORDER_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - ORDER_DATASOURCE_USERNAME=root
       - ORDER_DATASOURCE_PASSWORD=Hqz20050316
@@ -191,12 +254,20 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - njumarket-network
@@ -219,7 +290,8 @@ services:
     ports:
       - "8094:8094"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - MESSAGE_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - MESSAGE_DATASOURCE_USERNAME=root
       - MESSAGE_DATASOURCE_PASSWORD=Hqz20050316
@@ -227,12 +299,20 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - njumarket-network
@@ -255,15 +335,24 @@ services:
     ports:
       - "8095:8095"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - IMAGE_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - IMAGE_DATASOURCE_USERNAME=root
       - IMAGE_DATASOURCE_PASSWORD=Hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
       mysql:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     volumes:
       # 挂载本地 uploads 目录到容器，实现数据持久化
@@ -291,7 +380,8 @@ services:
     ports:
       - "8096:8096"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - ADMIN_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       - ADMIN_DATASOURCE_USERNAME=root
       - ADMIN_DATASOURCE_PASSWORD=Hqz20050316
@@ -299,12 +389,20 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - njumarket-network
@@ -327,15 +425,24 @@ services:
     ports:
       - "8097:8097"
     environment:
-      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
     depends_on:
       discovery:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      zipkin:
         condition: service_healthy
     networks:
       - njumarket-network
@@ -346,9 +453,108 @@ services:
       retries: 5
       start_period: 60s
 
+  # Zipkin 分布式链路追踪服务
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: njumarket-zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      - STORAGE_TYPE=mem  # 使用内存存储（生产环境建议使用 Elasticsearch 或 MySQL）
+    networks:
+      - njumarket-network
+    # Zipkin 健康检查：检查 HTTP 端点
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:9411/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # Prometheus 监控服务
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: njumarket-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      - gateway
+      - discovery
+      - config-server
+
+  # Grafana 可视化服务
+  grafana:
+    image: grafana/grafana:latest
+    container_name: njumarket-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      - prometheus
+
+  # RabbitMQ 消息队列服务
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: njumarket-rabbitmq
+    ports:
+      - "5672:5672"      # AMQP 端口
+      - "15672:15672"    # 管理界面端口
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+      - RABBITMQ_DEFAULT_VHOST=/
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   mysql_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
+  rabbitmq_data:
 
 networks:
   njumarket-network:

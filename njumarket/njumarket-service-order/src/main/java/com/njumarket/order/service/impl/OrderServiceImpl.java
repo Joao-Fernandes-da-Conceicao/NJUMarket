@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -54,6 +55,20 @@ public class OrderServiceImpl implements OrderService {
     private final ObjectMapper objectMapper;
     
     private final RedisLockUtil redisLockUtil;
+    
+    // ✅ MQ 消息生产者
+    private final com.njumarket.order.mq.OrderEventProducer orderEventProducer;
+    
+    // ✅ 统一使用GMT+8时区（中国大陆时区）
+    private static final ZoneId GMT_PLUS_8_ZONE = ZoneId.of("Asia/Shanghai");
+    
+    /**
+     * 获取GMT+8时区的当前时间
+     * 用于记录变更时统一时区，确保时间片key正确
+     */
+    private LocalDateTime nowGMT8() {
+        return LocalDateTime.now(GMT_PLUS_8_ZONE);
+    }
 
     // ========== 买家功能 ==========
     @Override
@@ -181,13 +196,11 @@ public class OrderServiceImpl implements OrderService {
             // 保存订单
             orderRepository.save(order);
             
-            // ✅ 记录订单变更并推送通知（使用推送服务）
-            LocalDateTime now = LocalDateTime.now();
+            // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
             try {
-                notificationClient.recordOrderChange(order.getOrderId(), "CREATE", now.toString());
-                notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_CREATED");
+                orderEventProducer.sendOrderEvent(order.getSellerId(), order.getOrderId(), "ORDER_CREATED");
             } catch (Exception e) {
-                log.warn("记录订单变更或推送失败（不影响订单创建）: orderId={}, error={}", 
+                log.warn("发送订单事件失败（不影响订单创建）: orderId={}, error={}", 
                     order.getOrderId(), e.getMessage());
             }
             
@@ -249,13 +262,11 @@ public class OrderServiceImpl implements OrderService {
             if (order.payOrder()) {
                 orderRepository.save(order);
                 
-                // ✅ 记录订单变更并推送通知（使用推送服务）
-                LocalDateTime now = LocalDateTime.now();
+                // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
                 try {
-                    notificationClient.recordOrderChange(order.getOrderId(), "PAY", now.toString());
-                    notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_PAID");
+                    orderEventProducer.sendOrderEvent(order.getSellerId(), order.getOrderId(), "ORDER_PAID");
                 } catch (Exception e) {
-                    log.warn("记录订单变更或推送失败（不影响订单支付）: orderId={}, error={}", 
+                    log.warn("发送订单事件失败（不影响订单支付）: orderId={}, error={}", 
                         order.getOrderId(), e.getMessage());
                 }
                 
@@ -309,17 +320,13 @@ public class OrderServiceImpl implements OrderService {
                 orderRepository.save(order);
                 
                 // ✅ 记录订单变更（用于增量轮询）
-                LocalDateTime now = LocalDateTime.now();
+                // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
                 try {
-                    notificationClient.recordOrderChange(order.getOrderId(), "COMPLETE", now.toString());
+                    orderEventProducer.sendOrderEvent(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED");
                 } catch (Exception e) {
-                    log.warn("记录订单变更失败（不影响订单完成）: orderId={}, error={}", 
+                    log.warn("发送订单事件失败（不影响订单完成）: orderId={}, error={}", 
                         order.getOrderId(), e.getMessage());
                 }
-                
-                // ✅ WebSocket 推送：订单完成通知给卖家（包含profile信息）
-                OrderDTO orderDTOForComplete = convertToDTOWithProfile(order);
-                notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_COMPLETED");
                 authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
                 
                 return Result.ok("订单确认收货成功");
@@ -380,23 +387,16 @@ public class OrderServiceImpl implements OrderService {
                 orderRepository.save(order);
                 
                 // ✅ 记录订单变更（用于增量轮询）
-                LocalDateTime now = LocalDateTime.now();
+                // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
                 try {
-                    notificationClient.recordOrderChange(order.getOrderId(), "CANCEL", now.toString());
+                    if (order.getBuyerId().equals(currentUser.getUserId())) {
+                        orderEventProducer.sendOrderEvent(order.getSellerId(), order.getOrderId(), "ORDER_CANCELLED");
+                    } else {
+                        orderEventProducer.sendOrderEvent(order.getBuyerId(), order.getOrderId(), "ORDER_CANCELLED");
+                    }
                 } catch (Exception e) {
-                    log.warn("记录订单变更失败（不影响订单取消）: orderId={}, error={}", 
+                    log.warn("发送订单事件失败（不影响订单取消）: orderId={}, error={}", 
                         order.getOrderId(), e.getMessage());
-                }
-                
-                // ✅ WebSocket 推送：订单取消通知（包含profile信息）
-                // 如果是买家取消，通知卖家；如果是卖家取消，通知买家
-                OrderDTO orderDTOForCancel = convertToDTOWithProfile(order);
-                if (order.getBuyerId().equals(currentUser.getUserId())) {
-                    notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_CANCELLED");
-                    authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
-                } else {
-                    notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), "ORDER_CANCELLED");
-                    authClient.setOrderReminderStatus(order.getBuyerId(), "BUYER", true);
                 }
                 
                 return Result.ok("订单取消成功");
@@ -433,33 +433,21 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
         
         // ✅ 记录订单变更（用于增量轮询）
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         try {
-            log.info("开始记录订单变更: orderId={}, operation=REFUND_REQUEST, timestamp={}", 
-                order.getOrderId(), now.toString());
-            Result result = notificationClient.recordOrderChange(order.getOrderId(), "REFUND_REQUEST", now.toString());
-            if (result != null && Boolean.TRUE.equals(result.getSuccess())) {
-                log.info("✅ 订单变更记录成功: orderId={}, operation=REFUND_REQUEST", order.getOrderId());
-            } else {
-                log.error("❌ 订单变更记录失败: orderId={}, operation=REFUND_REQUEST, result={}", 
-                    order.getOrderId(), result != null ? result.getErrorMsg() : "result is null");
+            // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
+            try {
+                orderEventProducer.sendOrderEvent(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED");
+                if (sellerVisibilityRestored) {
+                    orderEventProducer.sendOrderEvent(order.getSellerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED");
             }
         } catch (Exception e) {
-            log.error("❌ 记录订单变更异常（不影响退款申请）: orderId={}, operation=REFUND_REQUEST, timestamp={}, error={}, errorType={}", 
-                order.getOrderId(), now.toString(), e.getMessage(), e.getClass().getName(), e);
-        }
-        
-        // ✅ WebSocket 推送：退款申请通知给卖家（包含profile信息）
-        OrderDTO orderDTOForRefundRequest = convertToDTOWithProfile(order);
-        notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "REFUND_REQUESTED");
-        authClient.setOrderReminderStatus(order.getSellerId(), "SELLER", true);
-        
-        // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
-        // 这种情况可能发生在：
-        // 1. 从COMPLETED状态申请退款（卖家之前软删除了订单）
-        // 2. 从REFUND_REJECTED状态重新申请退款（卖家之前软删除了订单）
-        if (sellerVisibilityRestored) {
-            notificationClient.pushOrderChange(order.getSellerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED");
+                log.warn("发送订单事件失败（不影响退款申请）: orderId={}, error={}", 
+                    order.getOrderId(), e.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("❌ 处理退款申请异常（不影响退款申请）: orderId={}, error={}, errorType={}", 
+                order.getOrderId(), e.getMessage(), e.getClass().getName(), e);
         }
         
         return Result.ok("退款/退货申请成功");
@@ -543,17 +531,13 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
         
         // ✅ 记录订单变更（用于增量轮询）
-        LocalDateTime now = LocalDateTime.now();
+        // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
         try {
-            notificationClient.recordOrderChange(order.getOrderId(), "SHIP", now.toString());
+            orderEventProducer.sendOrderEvent(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED");
         } catch (Exception e) {
-            log.warn("记录订单变更失败（不影响订单发货）: orderId={}, error={}", 
+            log.warn("发送订单事件失败（不影响订单发货）: orderId={}, error={}", 
                 order.getOrderId(), e.getMessage());
         }
-        
-        // ✅ WebSocket 推送：订单发货通知给买家（包含profile信息）
-        OrderDTO orderDTOForShip = convertToDTOWithProfile(order);
-        notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), "ORDER_SHIPPED");
         authClient.setOrderReminderStatus(order.getBuyerId(), "BUYER", true);
         
         return Result.ok("订单发货成功");
@@ -604,24 +588,16 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
         
         // ✅ 记录订单变更（用于增量轮询，使用Feign Client）
-        LocalDateTime now = LocalDateTime.now();
-        String operation = "APPROVE".equals(decision) ? "REFUND_APPROVE" : "REFUND_REJECT";
-        try {
-            notificationClient.recordOrderChange(order.getOrderId(), operation, now.toString());
-        } catch (Exception e) {
-            log.warn("记录订单变更失败（不影响退款处理）: orderId={}, error={}", 
-                order.getOrderId(), e.getMessage());
-        }
-        
-        // ✅ WebSocket 推送：退款处理结果通知给买家（包含profile信息）
+        // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
         String notificationType = "APPROVE".equals(decision) ? "REFUND_APPROVED" : "REFUND_REJECTED";
-        OrderDTO orderDTOForRefundHandle = convertToDTOWithProfile(order);
-        notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), notificationType);
-        authClient.setOrderReminderStatus(order.getBuyerId(), "BUYER", true);
-        
-        // ✅ 如果是恢复可见性（极端情况），推送完整的OrderDTO（直接更新，无需刷新）
-        if (buyerVisibilityRestored) {
-            notificationClient.pushOrderChange(order.getBuyerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED");
+        try {
+            orderEventProducer.sendOrderEvent(order.getBuyerId(), order.getOrderId(), notificationType);
+            if (buyerVisibilityRestored) {
+                orderEventProducer.sendOrderEvent(order.getBuyerId(), order.getOrderId(), "ORDER_VISIBILITY_RESTORED");
+            }
+        } catch (Exception e) {
+            log.warn("发送订单事件失败（不影响退款处理）: orderId={}, error={}", 
+                order.getOrderId(), e.getMessage());
         }
         
         return Result.ok("退款/退货申请处理成功");
@@ -1446,6 +1422,14 @@ public class OrderServiceImpl implements OrderService {
             // 保存订单
             orderRepository.save(newOrder);
             
+            // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
+            try {
+                orderEventProducer.sendOrderEvent(newOrder.getSellerId(), newOrder.getOrderId(), "ORDER_CREATED");
+            } catch (Exception e) {
+                log.warn("发送订单事件失败（不影响订单创建）: orderId={}, error={}", 
+                    newOrder.getOrderId(), e.getMessage());
+            }
+            
             return Result.ok("创建新订单成功", convertToDTOWithProfile(newOrder));
             
         } finally {
@@ -1576,8 +1560,13 @@ public class OrderServiceImpl implements OrderService {
      * @param targetRole 目标角色（"SELLER" 或 "BUYER"），用于前端判断显示哪个角标
      */
     private void pushOrderChangeNotification(String userId, String orderId, String changeType, String orderStatus, String targetRole) {
-        notificationClient.pushOrderChange(userId, orderId, changeType);
-        authClient.setOrderReminderStatus(userId, targetRole, true);
+        // ✅ 发送订单事件到 MQ（异步处理，不阻塞事务）
+        try {
+            orderEventProducer.sendOrderEvent(userId, orderId, changeType);
+        } catch (Exception e) {
+            log.warn("发送订单事件失败: userId={}, orderId={}, changeType={}, error={}", 
+                userId, orderId, changeType, e.getMessage());
+        }
     }
     
     

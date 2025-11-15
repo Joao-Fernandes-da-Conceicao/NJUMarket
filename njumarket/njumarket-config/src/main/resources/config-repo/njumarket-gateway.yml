@@ -1,0 +1,144 @@
+# Gateway 配置（从 Config Server 加载）
+# 注意：Redis 和 Eureka 配置已移至 dev 环境配置文件（{application}-dev.yml）
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: njumarket-gateway
+  main:
+    web-application-type: reactive
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: commodity-service-public
+          uri: lb://njumarket-service-commodity
+          predicates:
+            - Path=/api/public/commodity/**
+        - id: commodity-service-user
+          uri: lb://njumarket-service-commodity
+          predicates:
+            - Path=/api/user/commodity/**
+        - id: notification-service-chat
+          uri: lb://njumarket-service-notification
+          predicates:
+            - Path=/api/user/chat/**
+        - id: order-service
+          uri: lb://njumarket-service-order
+          predicates:
+            - Path=/api/user/order/**,/api/user/complaint/**
+        - id: message-service-user
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/user/message/**
+        - id: message-service-contact
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/contact/**
+        - id: auth-service-user
+          uri: lb://njumarket-service-auth
+          predicates:
+            - Path=/api/user/**
+        - id: websocket-notification-service
+          uri: lb://njumarket-service-notification
+          predicates:
+            - Path=/api/ws/**
+          filters:
+            - StripPrefix=1
+        - id: image-service
+          uri: lb://njumarket-service-image
+          predicates:
+            - Path=/api/images/**
+        - id: admin-service
+          uri: lb://njumarket-service-admin
+          predicates:
+            - Path=/api/admin/**
+      globalcors:
+        cors-configurations:
+          '[/api/user/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/contact/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/admin/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/public/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/images/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+
+# Actuator 配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,httptrace,configprops,conditions
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+  tracing:
+    enabled: true  # ✅ 启用追踪功能
+    sampling:
+      probability: 1.0  # 100% 采样率（生产环境建议降低到 0.1）
+    propagation:
+      type: B3  # ✅ 使用 B3 传播格式（Zipkin 标准格式，确保追踪上下文正确传播）
+  # ✅ 正确的配置路径：management.zipkin.tracing.endpoint（不是 management.tracing.export.zipkin.endpoint）
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+      connect-timeout: 10000  # 连接超时配置（毫秒）
+      read-timeout: 10000  # 读取超时配置（毫秒）
+
+

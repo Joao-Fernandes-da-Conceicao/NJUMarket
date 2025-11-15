@@ -40,17 +40,25 @@ public class AdminContextFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         try {
-            // 从请求头获取管理员ID（Gateway已添加）
-            String adminId = request.getHeader("X-Admin-Id");
             String requestURI = request.getRequestURI();
             
-            log.info("AdminContextFilter处理请求: uri={}, X-Admin-Id={}", requestURI, adminId);
+            // ✅ 排除 Actuator 端点（这些端点不需要管理员认证，也不需要设置管理员上下文）
+            // Prometheus 等监控工具会直接访问这些端点，不会经过 Gateway，因此没有 X-Admin-Id
+            if (requestURI.startsWith("/actuator/")) {
+                filterChain.doFilter(request, response);
+                return;
+            }
             
             // 登录接口不需要处理管理员上下文
             if (requestURI.equals("/api/admin/login")) {
                 filterChain.doFilter(request, response);
                 return;
             }
+            
+            // 从请求头获取管理员ID（Gateway已添加）
+            String adminId = request.getHeader("X-Admin-Id");
+            
+            log.info("AdminContextFilter处理请求: uri={}, X-Admin-Id={}", requestURI, adminId);
             
             if (StringUtils.hasText(adminId)) {
                 // 直接从数据库查询管理员（Admin Service不需要通过Feign Client）

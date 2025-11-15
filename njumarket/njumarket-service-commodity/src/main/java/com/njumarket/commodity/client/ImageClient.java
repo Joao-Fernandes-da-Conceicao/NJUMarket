@@ -9,8 +9,13 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * Image Service Feign Client
  * 用于Commodity Service调用Image Service
+ * 启用 Resilience4j 熔断器保护
  */
-@FeignClient(name = "njumarket-service-image", path = "/api/internal")
+@FeignClient(
+    name = "njumarket-service-image", 
+    path = "/api/internal",
+    fallback = com.njumarket.commodity.client.fallback.ImageClientFallback.class
+)
 public interface ImageClient {
     
     /**

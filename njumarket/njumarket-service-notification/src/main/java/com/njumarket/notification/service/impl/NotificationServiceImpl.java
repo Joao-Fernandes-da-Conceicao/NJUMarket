@@ -43,7 +43,11 @@ public class NotificationServiceImpl implements NotificationService {
             messageData.put("targetRole", targetRole);
         }
         
-        webSocketRetryService.pushWithRetry(userId, messageData, "ORDER_CHANGE");
+        // ✅ 生成messageId用于ACK确认（格式：ORDER_CHANGE_{orderId}_{operation}_{timestamp}）
+        String messageId = "ORDER_CHANGE_" + orderId + "_" + operation + "_" + System.currentTimeMillis();
+        messageData.put("messageId", messageId);
+        
+        webSocketRetryService.pushWithRetry(userId, messageData, "ORDER_CHANGE", messageId);
     }
     
     /**
@@ -134,7 +138,14 @@ public class NotificationServiceImpl implements NotificationService {
     
     @Override
     public void pushMessage(String userId, Object messageData) {
-        webSocketRetryService.pushWithRetry(userId, messageData, "MESSAGE_NEW");
+        // ✅ 从messageData中提取messageId（如果存在）
+        String messageId = null;
+        if (messageData instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> dataMap = (Map<String, Object>) messageData;
+            messageId = (String) dataMap.get("messageId");
+        }
+        webSocketRetryService.pushWithRetry(userId, messageData, "MESSAGE_NEW", messageId);
     }
     
     @Override
@@ -144,7 +155,27 @@ public class NotificationServiceImpl implements NotificationService {
         messageData.put("unreadCount", unreadCount);
         messageData.put("timestamp", java.time.LocalDateTime.now().toString());
         
-        webSocketRetryService.pushWithRetry(userId, messageData, "UNREAD_COUNT_UPDATE");
+        // ✅ 生成messageId用于ACK确认（格式：UNREAD_COUNT_{userId}_{timestamp}）
+        String messageId = "UNREAD_COUNT_" + userId + "_" + System.currentTimeMillis();
+        messageData.put("messageId", messageId);
+        
+        webSocketRetryService.pushWithRetry(userId, messageData, "UNREAD_COUNT_UPDATE", messageId);
+    }
+    
+    @Override
+    public void pushGenericMessage(String userId, Object messageData, String messageType) {
+        // ✅ 从messageData中提取messageId（如果存在）
+        String messageId = null;
+        if (messageData instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> dataMap = (Map<String, Object>) messageData;
+            messageId = (String) dataMap.get("messageId");
+            // 确保type字段存在
+            if (!dataMap.containsKey("type") || dataMap.get("type") == null) {
+                dataMap.put("type", messageType);
+            }
+        }
+        webSocketRetryService.pushWithRetry(userId, messageData, messageType, messageId);
     }
 }
 
