@@ -27,7 +27,20 @@ public class CommodityInternalDTO implements Serializable {
     private String status;
     private String sellerVisibility;
     private String buyerVisibility;
-    private String location;
+    private String location; // 保留原有字段，用于兼容
+    
+    // 地址相关字段
+    private String addressId; // 引用用户地址表
+    // 地址快照字段（保存发布时的地址信息）
+    private String addressSnapshotProvince; // 地址快照-省份
+    private String addressSnapshotCity; // 地址快照-城市
+    private String addressSnapshotDistrict; // 地址快照-区/县
+    private String addressSnapshotStreet; // 地址快照-街道
+    private String addressSnapshotDetail; // 地址快照-详细地址
+    private String addressSnapshotFull; // 地址快照-完整地址
+    private Double longitude; // 经度
+    private Double latitude; // 纬度
+    
     private String images; // ✅ 添加图片字段（JSON格式的图片URL列表）
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

@@ -6,6 +6,15 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <link rel="icon" href="<%= BASE_URL %>favicon.ico">
     <title><%= htmlWebpackPlugin.options.title %></title>
+    <!-- 高德地图API配置 -->
+    <!-- key: API Key -->
+    <!-- securityJsCode: 安全密钥（用于Web端JS API安全验证） -->
+    <script type="text/javascript">
+      window._AMapSecurityConfig = {
+        securityJsCode: 'df8912c36b0fd4c0c36799352a57fc98'  // 请替换为你的安全密钥
+      }
+    </script>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=706f3120f814ab639f1d31f39acacc78&plugin=AMap.Geocoder,AMap.PlaceSearch"></script>
   </head>
   <body>
     <noscript>

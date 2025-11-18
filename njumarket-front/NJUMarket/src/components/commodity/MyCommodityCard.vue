@@ -28,7 +28,7 @@
     <div class="commodity-stats">
       <span class="stat-item">
         <el-icon><Location /></el-icon>
-        {{ commodity.location || '未设置位置' }}
+        {{ getLocationDisplay(commodity) }}
         <span class="stat-divider">|</span>
         <el-icon><View /></el-icon>
         {{ commodity.clickCount || 0 }}
@@ -182,6 +182,23 @@ const formatPriceValue = (price) => {
   if (price == null) return '0.00'
   const numPrice = typeof price === 'number' ? price : parseFloat(price)
   return formatPrice(numPrice || 0)
+}
+
+// 获取位置显示文本（省+市）
+const getLocationDisplay = (commodity) => {
+  // 优先使用地址快照的省+市
+  if (commodity.addressSnapshotProvince && commodity.addressSnapshotCity) {
+    return `${commodity.addressSnapshotProvince}${commodity.addressSnapshotCity}`
+  }
+  // 如果只有省或只有市，也显示
+  if (commodity.addressSnapshotProvince) {
+    return commodity.addressSnapshotProvince
+  }
+  if (commodity.addressSnapshotCity) {
+    return commodity.addressSnapshotCity
+  }
+  // 最后回退到旧字段 location（兼容旧数据）
+  return commodity.location || '未设置位置'
 }
 
 // 商品点击处理

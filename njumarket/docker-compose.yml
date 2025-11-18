@@ -1,31 +1,4 @@
-version: '3.8'
-
 services:
-  # MySQL 数据库
-  mysql:
-    image: mysql:8.0
-    container_name: njumarket-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: Hqz20050316
-      MYSQL_DATABASE: nju_market
-      MYSQL_CHARACTER_SET_SERVER: utf8mb4
-      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      # 暂时注释掉 schema.sql，因为文件编码问题导致初始化失败
-      # 启动后可以手动导入：docker exec -i njumarket-mysql mysql -uroot -pHqz20050316 nju_market < database/schema.sql
-      # - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pHqz20050316"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - njumarket-network
-
   # Redis 缓存
   redis:
     image: redis:7-alpine
@@ -60,9 +33,6 @@ services:
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
       - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
-    depends_on:
-      mysql:
-        condition: service_healthy
     networks:
       - njumarket-network
     healthcheck:
@@ -157,8 +127,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - AUTH_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - AUTH_DATASOURCE_USERNAME=root
+      - AUTH_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - AUTH_DATASOURCE_USERNAME=postgres
       - AUTH_DATASOURCE_PASSWORD=Hqz20050316
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -173,7 +143,7 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -202,8 +172,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - COMMODITY_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - COMMODITY_DATASOURCE_USERNAME=root
+      - COMMODITY_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - COMMODITY_DATASOURCE_USERNAME=postgres
       - COMMODITY_DATASOURCE_PASSWORD=Hqz20050316
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -218,7 +188,7 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -247,8 +217,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - ORDER_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - ORDER_DATASOURCE_USERNAME=root
+      - ORDER_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - ORDER_DATASOURCE_USERNAME=postgres
       - ORDER_DATASOURCE_PASSWORD=Hqz20050316
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -263,7 +233,7 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -292,8 +262,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - MESSAGE_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - MESSAGE_DATASOURCE_USERNAME=root
+      - MESSAGE_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - MESSAGE_DATASOURCE_USERNAME=postgres
       - MESSAGE_DATASOURCE_PASSWORD=Hqz20050316
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -308,7 +278,7 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -337,8 +307,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - IMAGE_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - IMAGE_DATASOURCE_USERNAME=root
+      - IMAGE_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - IMAGE_DATASOURCE_USERNAME=postgres
       - IMAGE_DATASOURCE_PASSWORD=Hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
       # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
@@ -350,7 +320,7 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      mysql:
+      postgres:
         condition: service_healthy
       zipkin:
         condition: service_healthy
@@ -382,8 +352,8 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - ADMIN_DATASOURCE_URL=jdbc:mysql://mysql:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-      - ADMIN_DATASOURCE_USERNAME=root
+      - ADMIN_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - ADMIN_DATASOURCE_USERNAME=postgres
       - ADMIN_DATASOURCE_PASSWORD=Hqz20050316
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -398,7 +368,7 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      mysql:
+      postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -549,12 +519,79 @@ services:
       retries: 5
       start_period: 30s
 
+  # PostgreSQL 数据库
+  # 注意：PostgreSQL 18 的 PostGIS 镜像尚未发布，暂时使用 PostgreSQL 16
+  # 如需使用 PostgreSQL 18，可以使用 postgres:18 镜像，但需要手动安装 PostGIS
+  postgres:
+    # 使用 postgis/postgis 镜像（包含 PostGIS 扩展）
+    # PostgreSQL 16-3.4 已验证可用，功能完全满足需求
+    image: postgis/postgis:16-3.4
+    container_name: njumarket-postgres
+    environment:
+      POSTGRES_DB: njumarket
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Hqz20050316
+      # PostgreSQL 数据目录路径
+      # PostgreSQL 16 使用标准路径，18 需要使用 /var/lib/postgresql/data/pgdata
+      PGDATA: /var/lib/postgresql/data
+      # 启用 pg_stat_statements
+      # 注意：Docker 镜像可能不支持 zh_CN.UTF-8，使用 C.UTF-8 或 en_US.UTF-8
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 初始化脚本：自动启用扩展（已注释，数据已导入，避免重复执行）
+      # - ./database/postgres-init.sql:/docker-entrypoint-initdb.d/01-init-extensions.sql:ro
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_preload_libraries=pg_stat_statements"
+      - "-c"
+      - "pg_stat_statements.track=all"
+      - "-c"
+      - "pg_stat_statements.max=10000"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "effective_cache_size=1GB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "default_statistics_target=100"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "min_wal_size=1GB"
+      - "-c"
+      - "max_wal_size=4GB"
+      - "-c"
+      - "timezone=Asia/Shanghai"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d njumarket"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - njumarket-network
+
 volumes:
-  mysql_data:
   redis_data:
   prometheus_data:
   grafana_data:
   rabbitmq_data:
+  postgres_data:
 
 networks:
   njumarket-network:

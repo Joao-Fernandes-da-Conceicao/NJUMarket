@@ -39,7 +39,46 @@ public class Commodity {
     private Integer stock;
     
     @Column(name = "location", length = 200)
-    private String location;
+    private String location; // 保留原有字段，用于兼容
+    
+    // ========== 地址相关字段 ==========
+    @Column(name = "address_id", length = 50)
+    private String addressId; // 引用用户地址表，表示商品所在位置
+    
+    // 地址快照字段（保存发布时的地址信息）
+    @Column(name = "address_snapshot_province", length = 50)
+    private String addressSnapshotProvince;
+    
+    @Column(name = "address_snapshot_city", length = 50)
+    private String addressSnapshotCity;
+    
+    @Column(name = "address_snapshot_district", length = 50)
+    private String addressSnapshotDistrict;
+    
+    @Column(name = "address_snapshot_street", length = 200)
+    private String addressSnapshotStreet;
+    
+    @Column(name = "address_snapshot_detail", length = 500)
+    private String addressSnapshotDetail;
+    
+    @Column(name = "address_snapshot_full", columnDefinition = "TEXT")
+    private String addressSnapshotFull;
+    
+    // 地理位置字段（用于地理搜索和距离计算）
+    // 注意：使用 @ColumnTransformer 在写入时将 WKT 字符串转换为 PostGIS geography 类型
+    // 在读取时将 geography 类型转换回 WKT 字符串
+    @Column(name = "location_geography", columnDefinition = "geography(Point,4326)")
+    @org.hibernate.annotations.ColumnTransformer(
+        write = "public.ST_SetSRID(public.ST_GeomFromText(CAST(? AS text)), 4326)::public.geography",  // 写入时：将 WKT 字符串转换为 geometry，设置 SRID，再转换为 geography
+        read = "public.ST_AsText(location_geography)" // 读取时：直接使用 PostGIS 的 ST_AsText 处理 geography 类型，明确指定 public schema（注意：Hibernate 会自动添加表别名）
+    )
+    private String locationGeography; // PostGIS Geography类型，存储为WKT格式
+    
+    @Column(name = "longitude")
+    private Double longitude;
+    
+    @Column(name = "latitude")
+    private Double latitude;
     
     @CreationTimestamp
     @Column(name = "publish_time", nullable = false)

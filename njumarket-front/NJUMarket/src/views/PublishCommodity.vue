@@ -88,11 +88,21 @@
                 />
               </el-form-item>
 
-              <el-form-item label="所在位置" prop="location">
+              <el-form-item label="所在位置" prop="addressId">
+                <AddressSelector
+                  v-model="publishForm.addressId"
+                  label=""
+                  prop="addressId"
+                  placeholder="请选择商品所在位置"
+                  :show-contact="false"
+                  @change="handleAddressChange"
+                />
+                <!-- 保留原有字段用于兼容（隐藏） -->
                 <UnifiedInput
                   v-model="publishForm.location"
-                  placeholder="请输入所在位置"
+                  placeholder="请输入所在位置（如果未选择地址）"
                   class="pill-input"
+                  style="display: none;"
                 />
               </el-form-item>
 
@@ -170,13 +180,15 @@ import { ElMessage } from 'element-plus'
 import UnifiedButton from '../components/common/UnifiedButton.vue'
 import UnifiedSelect from '../components/common/UnifiedSelect.vue'
 import UnifiedInput from '../components/common/UnifiedInput.vue'
+import AddressSelector from '../components/address/AddressSelector.vue'
 
 export default {
   name: 'PublishCommodity',
   components: {
     UnifiedButton,
     UnifiedSelect,
-    UnifiedInput
+    UnifiedInput,
+    AddressSelector
   },
   setup() {
     const route = useRoute()
@@ -196,7 +208,8 @@ export default {
       conditionLevel: '',
       price: null,
       stock: 1,
-      location: '',
+      addressId: '', // 地址ID
+      location: '', // 保留用于兼容
       images: []
     })
     
@@ -263,8 +276,11 @@ export default {
           trigger: 'blur' 
         }
       ],
+      addressId: [
+        { required: false, message: '请选择所在位置', trigger: 'change' }
+      ],
       location: [
-        { required: true, message: '请输入所在位置', trigger: 'blur' }
+        { required: false, message: '请输入所在位置', trigger: 'blur' }
       ]
     }
     
@@ -339,6 +355,7 @@ export default {
           publishForm.price = commodity.price || 0
           publishForm.stock = commodity.stock || 1
           publishForm.location = commodity.location || ''
+          publishForm.addressId = commodity.addressId || ''
           
           // 处理图片数据
           if (commodity.images && commodity.images.length > 0) {
@@ -488,6 +505,14 @@ export default {
       }
     }
     
+    // 地址选择变化
+    const handleAddressChange = (addressId, address) => {
+      if (address) {
+        // 如果选择了地址，自动填充location字段（用于兼容）
+        publishForm.location = address.fullAddress || ''
+      }
+    }
+    
     // 取消
     const handleCancel = async () => {
       // 编辑模式下直接返回，不询问是否保存草稿
@@ -549,6 +574,7 @@ export default {
       handlePublishAndActivate,
       handleCancel,
       handleLogout,
+      handleAddressChange,
       categoryOptions,
       conditionOptions
     }

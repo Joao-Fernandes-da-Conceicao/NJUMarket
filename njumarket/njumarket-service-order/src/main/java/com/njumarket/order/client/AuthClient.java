@@ -45,5 +45,17 @@ public interface AuthClient {
     Result setOrderReminderStatus(@PathVariable String userId,
                                   @RequestParam String role,
                                   @RequestParam Boolean hasNew);
+    
+    /**
+     * 根据地址ID获取地址信息（内部接口）
+     */
+    @GetMapping("/address/{addressId}")
+    Result getAddressById(@PathVariable String addressId);
+    
+    /**
+     * 获取用户的默认地址（内部接口）
+     */
+    @GetMapping("/address/default")
+    Result getDefaultAddress(@RequestParam String userId);
 }
 

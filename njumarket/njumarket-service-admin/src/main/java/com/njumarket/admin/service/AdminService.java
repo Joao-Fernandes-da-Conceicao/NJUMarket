@@ -67,6 +67,13 @@ public interface AdminService {
     Result updateOrderFields(String orderId, String status, String trackingNumber, String remark);
     /** 完整更新订单（包括状态和可见性） */
     Result updateOrderFull(String orderId, java.util.Map<String, Object> payload);
+
+    // 用户地址管理
+    Result listUserAddresses(String userId);
+    Result createUserAddress(String userId, java.util.Map<String, Object> payload);
+    Result updateUserAddress(String userId, String addressId, java.util.Map<String, Object> payload);
+    Result deleteUserAddress(String userId, String addressId);
+    Result setUserAddressDefault(String userId, String addressId);
     Result deleteOrder(String orderId);
 
     // 会话/消息

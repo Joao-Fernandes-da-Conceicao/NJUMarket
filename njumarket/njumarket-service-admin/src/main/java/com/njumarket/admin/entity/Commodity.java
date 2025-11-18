@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.time.LocalDateTime;
 
@@ -40,7 +41,44 @@ public class Commodity {
     private Integer stock;
     
     @Column(name = "location", length = 200)
-    private String location;
+    private String location; // 保留原有字段，用于兼容
+    
+    // ========== 地址相关字段 ==========
+    @Column(name = "address_id", length = 50)
+    private String addressId; // 引用用户地址表，表示商品所在位置
+    
+    // 地址快照字段（保存发布时的地址信息）
+    @Column(name = "address_snapshot_province", length = 50)
+    private String addressSnapshotProvince;
+    
+    @Column(name = "address_snapshot_city", length = 50)
+    private String addressSnapshotCity;
+    
+    @Column(name = "address_snapshot_district", length = 50)
+    private String addressSnapshotDistrict;
+    
+    @Column(name = "address_snapshot_street", length = 200)
+    private String addressSnapshotStreet;
+    
+    @Column(name = "address_snapshot_detail", length = 500)
+    private String addressSnapshotDetail;
+    
+    @Column(name = "address_snapshot_full", columnDefinition = "TEXT")
+    private String addressSnapshotFull;
+    
+    // 地理位置字段（用于地理搜索和距离计算）
+    @Column(name = "location_geography", columnDefinition = "geography(Point,4326)")
+    @ColumnTransformer(
+        write = "public.ST_SetSRID(public.ST_GeomFromText(CAST(? AS text)), 4326)::public.geography",
+        read = "public.ST_AsText(location_geography)"
+    )
+    private String locationGeography; // PostGIS Geography类型，存储为WKT格式
+    
+    @Column(name = "longitude")
+    private Double longitude;
+    
+    @Column(name = "latitude")
+    private Double latitude;
     
     @CreationTimestamp
     @Column(name = "publish_time", nullable = false)

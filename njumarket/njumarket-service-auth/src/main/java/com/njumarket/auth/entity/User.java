@@ -47,6 +47,11 @@ public class User implements IUser {
     @JsonIgnore  // 避免Jackson序列化时的循环引用（服务间通信已使用内部DTO，但保留此注解以防直接序列化实体）
     private UserProfile userProfile;
     
+    // 一对多关系：用户地址（一个用户可以有多个地址）
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore  // 避免Jackson序列化时的循环引用
+    private List<UserAddress> addresses;
+    
     // 一对多关系：用户活动记录
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<UserActivityRecord> activityRecords;

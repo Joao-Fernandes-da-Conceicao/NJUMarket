@@ -28,7 +28,21 @@ public class OrderDTO {
     private Integer quantity;
 
     @NotBlank(message = "收货地址不能为空")
-    private String shippingAddress;
+    private String shippingAddress; // 保留原有字段，用于兼容
+    
+    // 地址相关字段
+    private String shippingAddressId; // 地址ID（可选，如果不传则使用默认地址）
+    
+    // 地址快照字段（保存下单时的地址信息）
+    private String shippingAddressSnapshotProvince;
+    private String shippingAddressSnapshotCity;
+    private String shippingAddressSnapshotDistrict;
+    private String shippingAddressSnapshotStreet;
+    private String shippingAddressSnapshotDetail;
+    private String shippingAddressSnapshotFull;
+    private String shippingAddressSnapshotRecipientName;
+    private String shippingAddressSnapshotRecipientPhone;
+    
     private String trackingNumber;
     private String remark;
     private String createTime; // 订单创建时间
@@ -48,7 +62,14 @@ public class OrderDTO {
     private String commoditySnapshotTitle;
     private String commoditySnapshotDescription;
     private Double commoditySnapshotPrice;
-    private String commoditySnapshotLocation;
+    private String commoditySnapshotLocation; // 兼容字段
+    // 商品地址快照字段
+    private String commoditySnapshotAddressProvince;
+    private String commoditySnapshotAddressCity;
+    private String commoditySnapshotAddressDistrict;
+    private String commoditySnapshotAddressStreet;
+    private String commoditySnapshotAddressDetail;
+    private String commoditySnapshotAddressFull;
     private String commoditySnapshotCategory;
     private String commoditySnapshotConditionLevel;
     private String commoditySnapshotImages; // JSON格式的图片URL列表

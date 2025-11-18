@@ -63,7 +63,36 @@ public class Order {
     private String trackingNumber;
     
     @Column(name = "shipping_address", columnDefinition = "TEXT")
-    private String shippingAddress;
+    private String shippingAddress; // 保留原有字段，用于兼容
+    
+    // ========== 地址相关字段 ==========
+    @Column(name = "shipping_address_id", length = 50)
+    private String shippingAddressId; // 引用用户地址表
+    
+    // 地址快照字段（保存下单时的地址信息）
+    @Column(name = "shipping_address_snapshot_province", length = 50)
+    private String shippingAddressSnapshotProvince;
+    
+    @Column(name = "shipping_address_snapshot_city", length = 50)
+    private String shippingAddressSnapshotCity;
+    
+    @Column(name = "shipping_address_snapshot_district", length = 50)
+    private String shippingAddressSnapshotDistrict;
+    
+    @Column(name = "shipping_address_snapshot_street", length = 200)
+    private String shippingAddressSnapshotStreet;
+    
+    @Column(name = "shipping_address_snapshot_detail", length = 500)
+    private String shippingAddressSnapshotDetail;
+    
+    @Column(name = "shipping_address_snapshot_full", columnDefinition = "TEXT")
+    private String shippingAddressSnapshotFull;
+    
+    @Column(name = "shipping_address_snapshot_recipient_name", length = 100)
+    private String shippingAddressSnapshotRecipientName;
+    
+    @Column(name = "shipping_address_snapshot_recipient_phone", length = 20)
+    private String shippingAddressSnapshotRecipientPhone;
     
     @Column(name = "remark", columnDefinition = "TEXT")
     private String remark;
@@ -102,6 +131,25 @@ public class Order {
     
     @Column(name = "commodity_snapshot_location", length = 200)
     private String commoditySnapshotLocation;
+    
+    // 商品地址快照字段（保存下单时商品的地址信息）
+    @Column(name = "commodity_snapshot_address_province", length = 50)
+    private String commoditySnapshotAddressProvince;
+    
+    @Column(name = "commodity_snapshot_address_city", length = 50)
+    private String commoditySnapshotAddressCity;
+    
+    @Column(name = "commodity_snapshot_address_district", length = 50)
+    private String commoditySnapshotAddressDistrict;
+    
+    @Column(name = "commodity_snapshot_address_street", length = 200)
+    private String commoditySnapshotAddressStreet;
+    
+    @Column(name = "commodity_snapshot_address_detail", length = 500)
+    private String commoditySnapshotAddressDetail;
+    
+    @Column(name = "commodity_snapshot_address_full", columnDefinition = "TEXT")
+    private String commoditySnapshotAddressFull;
     
     @Column(name = "commodity_snapshot_category", length = 50)
     private String commoditySnapshotCategory;
@@ -228,7 +276,7 @@ public class Order {
      * @param commodityTitle 商品标题
      * @param commodityDescription 商品描述
      * @param commodityPrice 商品价格
-     * @param commodityLocation 商品位置
+     * @param commodityLocation 商品位置（兼容字段）
      * @param commodityCategory 商品分类
      * @param commodityConditionLevel 商品成色
      * @param commodityImages 商品图片
@@ -236,13 +284,22 @@ public class Order {
      * @param sellerName 卖家名称
      * @param sellerPhone 卖家电话
      * @param sellerEmail 卖家邮箱
+     * @param commodityAddressProvince 商品地址-省份
+     * @param commodityAddressCity 商品地址-城市
+     * @param commodityAddressDistrict 商品地址-区/县
+     * @param commodityAddressStreet 商品地址-街道
+     * @param commodityAddressDetail 商品地址-详细地址
+     * @param commodityAddressFull 商品地址-完整地址
      * @return 创建是否成功
      */
     public Boolean createCommoditySnapshot(String commodityTitle, String commodityDescription, 
                                          Double commodityPrice, String commodityLocation,
                                          String commodityCategory, String commodityConditionLevel,
                                          String commodityImages, String commodityStatus,
-                                         String sellerName, String sellerPhone, String sellerEmail) {
+                                         String sellerName, String sellerPhone, String sellerEmail,
+                                         String commodityAddressProvince, String commodityAddressCity,
+                                         String commodityAddressDistrict, String commodityAddressStreet,
+                                         String commodityAddressDetail, String commodityAddressFull) {
         if (commodityTitle == null) {
             return false;
         }
@@ -250,7 +307,7 @@ public class Order {
         this.commoditySnapshotTitle = commodityTitle;
         this.commoditySnapshotDescription = commodityDescription;
         this.commoditySnapshotPrice = commodityPrice;
-        this.commoditySnapshotLocation = commodityLocation;
+        this.commoditySnapshotLocation = commodityLocation; // 保留兼容字段
         this.commoditySnapshotCategory = commodityCategory;
         this.commoditySnapshotConditionLevel = commodityConditionLevel;
         // 只保存第一张图片
@@ -259,6 +316,15 @@ public class Order {
         this.commoditySnapshotSellerName = sellerName;
         this.commoditySnapshotSellerPhone = sellerPhone;
         this.commoditySnapshotSellerEmail = sellerEmail;
+        
+        // 商品地址快照字段
+        this.commoditySnapshotAddressProvince = commodityAddressProvince;
+        this.commoditySnapshotAddressCity = commodityAddressCity;
+        this.commoditySnapshotAddressDistrict = commodityAddressDistrict;
+        this.commoditySnapshotAddressStreet = commodityAddressStreet;
+        this.commoditySnapshotAddressDetail = commodityAddressDetail;
+        this.commoditySnapshotAddressFull = commodityAddressFull;
+        
         this.commoditySnapshotTime = LocalDateTime.now();
         
         return true;

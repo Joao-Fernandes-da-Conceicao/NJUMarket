@@ -10,7 +10,11 @@ import com.njumarket.auth.entity.UserProfile;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.repository.UserProfileRepository;
+import com.njumarket.auth.repository.UserAddressRepository;
 import com.njumarket.auth.service.UserProfileService;
+import com.njumarket.auth.service.UserAddressService;
+import com.njumarket.auth.entity.UserAddress;
+import com.njumarket.njumarket.dto.internal.AddressInternalDTO;
 import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +39,9 @@ public class InternalController {
     
     private final UserRepository userRepository;
     private final UserProfileRepository userProfileRepository;
+    private final UserAddressRepository userAddressRepository;
     private final UserProfileService userProfileService;
+    private final UserAddressService userAddressService;
     private final UserInternalDTOConverter userInternalDTOConverter;
     private final UserProfileInternalDTOConverter userProfileInternalDTOConverter;
     private final CacheUtil cacheUtil;
@@ -270,5 +276,57 @@ public class InternalController {
                                         @RequestParam Boolean hasNew) {
             userProfileService.setOrderReminderStatus(userId, role, hasNew);
             return Result.ok("设置成功");
+    }
+    
+    /**
+     * 根据地址ID获取地址信息（内部接口，供Order Service调用）
+     */
+    @GetMapping("/address/{addressId}")
+    public Result getAddressById(@PathVariable String addressId) {
+        UserAddress address = userAddressRepository.findById(addressId)
+            .orElseThrow(() -> new BusinessException("地址不存在"));
+        
+        AddressInternalDTO dto = convertToAddressInternalDTO(address);
+        return Result.ok("查询成功", dto);
+    }
+    
+    /**
+     * 获取用户的默认地址（内部接口，供Order Service调用）
+     */
+    @GetMapping("/address/default")
+    public Result getDefaultAddress(@RequestParam String userId) {
+        UserAddress address = userAddressRepository
+            .findByUserIdAndIsDefaultTrueAndIsActiveTrue(userId)
+            .orElse(null);
+        
+        if (address == null) {
+            return Result.ok("查询成功", null);
+        }
+        
+        AddressInternalDTO dto = convertToAddressInternalDTO(address);
+        return Result.ok("查询成功", dto);
+    }
+    
+    /**
+     * 转换地址实体为内部DTO
+     */
+    private AddressInternalDTO convertToAddressInternalDTO(UserAddress address) {
+        AddressInternalDTO dto = new AddressInternalDTO();
+        dto.setAddressId(address.getAddressId());
+        dto.setUserId(address.getUserId());
+        dto.setRecipientName(address.getRecipientName());
+        dto.setRecipientPhone(address.getRecipientPhone());
+        dto.setProvince(address.getProvince());
+        dto.setCity(address.getCity());
+        dto.setDistrict(address.getDistrict());
+        dto.setStreetAddress(address.getStreetAddress());
+        dto.setDetailAddress(address.getDetailAddress());
+        dto.setFullAddress(address.getFullAddress());
+        dto.setLongitude(address.getLongitude());
+        dto.setLatitude(address.getLatitude());
+        dto.setAddressLabel(address.getAddressLabel());
+        dto.setIsDefault(address.getIsDefault());
+        dto.setIsActive(address.getIsActive());
+        return dto;
     }
 }

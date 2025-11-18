@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -166,6 +165,19 @@ public class InternalController {
             
             Object images = payload.get("images"); 
             if (images instanceof String) c.setImages(((String) images).trim());
+            
+            Object addressProvince = payload.get("addressSnapshotProvince");
+            if (addressProvince instanceof String) c.setAddressSnapshotProvince(((String) addressProvince).trim());
+            Object addressCity = payload.get("addressSnapshotCity");
+            if (addressCity instanceof String) c.setAddressSnapshotCity(((String) addressCity).trim());
+            Object addressDistrict = payload.get("addressSnapshotDistrict");
+            if (addressDistrict instanceof String) c.setAddressSnapshotDistrict(((String) addressDistrict).trim());
+            Object addressStreet = payload.get("addressSnapshotStreet");
+            if (addressStreet instanceof String) c.setAddressSnapshotStreet(((String) addressStreet).trim());
+            Object addressDetail = payload.get("addressSnapshotDetail");
+            if (addressDetail instanceof String) c.setAddressSnapshotDetail(((String) addressDetail).trim());
+            Object addressFull = payload.get("addressSnapshotFull");
+            if (addressFull instanceof String) c.setAddressSnapshotFull(((String) addressFull).trim());
             
             // 点击量：支持 Number 和 String 类型
             Object clickCount = payload.get("clickCount");

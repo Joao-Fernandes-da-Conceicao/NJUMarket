@@ -44,6 +44,10 @@ spring:
           uri: lb://njumarket-service-auth
           predicates:
             - Path=/api/user/**
+        - id: auth-service-auth
+          uri: lb://njumarket-service-auth
+          predicates:
+            - Path=/api/auth/**
         - id: websocket-notification-service
           uri: lb://njumarket-service-notification
           predicates:
@@ -101,6 +105,16 @@ spring:
             allowedHeaders: "*"
             allowCredentials: true
           '[/api/images/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/auth/**]':
             allowedOriginPatterns: "*"
             allowedMethods:
               - GET

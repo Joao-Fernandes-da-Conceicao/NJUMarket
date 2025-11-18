@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 管理员控制器
@@ -271,6 +272,36 @@ public class AdminController {
     @PutMapping("/users/{userId}/full")
     public Result updateUserFull(@PathVariable String userId, @RequestBody java.util.Map<String, Object> payload) {
         return adminService.updateUserFull(userId, payload);
+    }
+
+    // ===================== 管理端最小CRUD：用户地址 =====================
+    @GetMapping("/users/{userId}/addresses")
+    public Result listUserAddresses(@PathVariable String userId) {
+        return adminService.listUserAddresses(userId);
+    }
+
+    @PostMapping("/users/{userId}/addresses")
+    public Result createUserAddress(@PathVariable String userId, @RequestBody Map<String, Object> payload) {
+        return adminService.createUserAddress(userId, payload);
+    }
+
+    @PutMapping("/users/{userId}/addresses/{addressId}")
+    public Result updateUserAddress(@PathVariable String userId,
+                                    @PathVariable String addressId,
+                                    @RequestBody Map<String, Object> payload) {
+        return adminService.updateUserAddress(userId, addressId, payload);
+    }
+
+    @DeleteMapping("/users/{userId}/addresses/{addressId}")
+    public Result deleteUserAddress(@PathVariable String userId,
+                                    @PathVariable String addressId) {
+        return adminService.deleteUserAddress(userId, addressId);
+    }
+
+    @PutMapping("/users/{userId}/addresses/{addressId}/default")
+    public Result setUserAddressDefault(@PathVariable String userId,
+                                        @PathVariable String addressId) {
+        return adminService.setUserAddressDefault(userId, addressId);
     }
 
     // ===================== 管理端最小CRUD：商品 =====================

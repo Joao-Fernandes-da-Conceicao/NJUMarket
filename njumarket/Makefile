@@ -66,9 +66,6 @@ rebuild-service: ## 重新构建并启动指定服务 (使用: make rebuild-serv
 shell: ## 进入指定服务容器 (使用: make shell SERVICE=auth-service)
 	docker-compose exec $(SERVICE) sh
 
-mysql: ## 进入 MySQL 容器
-	docker-compose exec mysql bash
-
 redis: ## 进入 Redis 容器
 	docker-compose exec redis sh
 

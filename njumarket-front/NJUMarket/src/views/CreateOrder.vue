@@ -90,12 +90,21 @@
                 </span>
               </el-form-item>
               
-              <el-form-item label="收货地址" prop="shippingAddress">
+              <el-form-item label="收货地址" prop="shippingAddressId">
+                <AddressSelector
+                  v-model="orderForm.shippingAddressId"
+                  label=""
+                  prop="shippingAddressId"
+                  placeholder="请选择收货地址"
+                  @change="handleAddressChange"
+                />
+                <!-- 保留原有字段用于兼容（隐藏） -->
                 <UnifiedInput
                   v-model="orderForm.shippingAddress"
-                  placeholder="请输入收货地址"
+                  placeholder="请输入收货地址（如果未选择地址）"
                   :disabled="!commodityExists || !commodityOnShelf || currentStock <= 0"
                   class="pill-input"
+                  style="display: none;"
                 />
               </el-form-item>
               
@@ -156,13 +165,15 @@ import { validateQuantity, canCreateOrder as checkCanCreateOrder } from '../util
 import UnifiedButton from '../components/common/UnifiedButton.vue'
 import UnifiedTag from '../components/common/UnifiedTag.vue'
 import UnifiedInput from '../components/common/UnifiedInput.vue'
+import AddressSelector from '../components/address/AddressSelector.vue'
 
 export default {
   name: 'CreateOrder',
   components: {
     UnifiedButton,
     UnifiedTag,
-    UnifiedInput
+    UnifiedInput,
+    AddressSelector
   },
   setup() {
     const route = useRoute()
@@ -181,7 +192,8 @@ export default {
     
     const orderForm = ref({
       quantity: '1',
-      shippingAddress: '校内自提',
+      shippingAddressId: '', // 地址ID
+      shippingAddress: '校内自提', // 保留用于兼容
       remark: ''
     })
     
@@ -204,8 +216,11 @@ export default {
           trigger: 'blur'
         }
       ],
+      shippingAddressId: [
+        { required: false, message: '请选择收货地址', trigger: 'change' }
+      ],
       shippingAddress: [
-        { required: true, message: '请输入收货地址', trigger: 'blur' }
+        { required: false, message: '请输入收货地址', trigger: 'blur' }
       ]
     }
     
@@ -267,6 +282,14 @@ export default {
     const formatTime = (time) => {
       if (!time) return ''
       return new Date(time).toLocaleString()
+    }
+    
+    // 地址选择变化
+    const handleAddressChange = (addressId, address) => {
+      if (address) {
+        // 如果选择了地址，自动填充shippingAddress字段（用于兼容）
+        orderForm.value.shippingAddress = address.fullAddress || ''
+      }
     }
     
     // 获取商品信息
@@ -458,7 +481,8 @@ export default {
           commodityId: commodityIdToOrder,
           quantity: quantityFinal,
           payAmount: parseFloat(calculateTotalAmount()),
-          shippingAddress: orderForm.value.shippingAddress,
+          shippingAddressId: orderForm.value.shippingAddressId || undefined, // 地址ID
+          shippingAddress: orderForm.value.shippingAddress || '校内自提', // 保留用于兼容
           remark: orderForm.value.remark
         })
         
@@ -497,7 +521,8 @@ export default {
       getCommoditySnapshotImage,
       calculateTotalAmount,
       formatTime,
-      handleCreateOrder
+      handleCreateOrder,
+      handleAddressChange
     }
   }
 }
@@ -514,9 +539,9 @@ export default {
 }
 
 .container {
-  max-width: 1000px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 0 40px;
+  padding: 0 24px;
 }
 
 .page-header {
@@ -540,9 +565,10 @@ export default {
 .order-form-wrapper {
   background: transparent;
   border-radius: 16px;
-  padding: 40px 60px;
+  padding: 32px 24px;
   border: none;
   margin: 0 auto;
+  max-width: 760px;
 }
 
 .form-section {
@@ -566,6 +592,7 @@ export default {
 .order-form :deep(.el-form-item) {
   margin: 0 auto 20px auto;
   width: 100%;
+  max-width: 640px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -579,7 +606,7 @@ export default {
 
 .order-form :deep(.el-form-item__content) {
   flex: 1;
-  max-width: 500px;
+  max-width: 480px;
 }
 
 /* 输入框宽度自适应 */
@@ -647,6 +674,28 @@ export default {
   min-width: 120px;
   margin-left: 0 !important;
   border-radius: 20px;
+}
+
+/* 移动端收紧布局 */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 12px;
+  }
+
+  .order-form-wrapper {
+    padding: 20px 12px;
+    max-width: 100%;
+  }
+
+  .order-form :deep(.el-form-item) {
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 100%;
+  }
+
+  .order-form :deep(.el-form-item__content) {
+    max-width: 100%;
+  }
 }
 
 .commodity-card {
@@ -779,10 +828,10 @@ export default {
 /* 宽屏适配：增加容器宽度与两栏布局 */
 @media (min-width: 1200px) {
   .container {
-    max-width: 1280px; /* 更宽容器 */
+    max-width: 1100px; /* 控制整体宽度 */
   }
   .order-form-wrapper {
-    padding: 40px 20px; /* 两栏时减少内边距 */
+    padding: 32px 20px; /* 两栏时适当内边距 */
   }
   .order-form-wrapper {
     display: grid;

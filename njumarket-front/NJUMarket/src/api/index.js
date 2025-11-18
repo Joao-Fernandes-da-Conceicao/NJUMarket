@@ -367,7 +367,11 @@ export const orderAPI = {
   
   // ✅ 批量查询订单状态（用于聊天界面，轻量级查询）
   getBatchStatus: (orderIds) => 
-    api.post('/user/order/batch-status', orderIds)
+    api.post('/user/order/batch-status', orderIds),
+  
+  // 更新订单收货地址（买家或卖家都可以更新）
+  updateShippingAddress: (orderId, data) => 
+    api.put(`/user/order/${orderId}/shipping-address`, data)
 }
 
 // 用户资料相关API
@@ -450,6 +454,40 @@ export const chatAPI = {
     api.get('/user/chat/incremental-update', { 
       params: { lastPollTimestamp } 
     })
+}
+
+// 地址相关API
+export const addressAPI = {
+  // 创建地址
+  create: (data) => api.post('/auth/addresses', data),
+  
+  // 更新地址
+  update: (addressId, data) => api.put(`/auth/addresses/${addressId}`, data),
+  
+  // 删除地址
+  delete: (addressId) => api.delete(`/auth/addresses/${addressId}`),
+  
+  // 获取地址详情
+  getById: (addressId) => api.get(`/auth/addresses/${addressId}`),
+  
+  // 获取用户的所有地址（userId可选，不传则获取当前登录用户的地址）
+  getUserAddresses: (userId) => {
+    const params = userId ? { userId } : {}
+    return api.get('/auth/addresses', { params })
+  },
+  
+  // 获取用户的默认地址（userId可选，不传则获取当前登录用户的默认地址）
+  getDefaultAddress: (userId) => {
+    const params = userId ? { userId } : {}
+    return api.get('/auth/addresses/default', { params })
+  },
+  
+  // 设置默认地址
+  setDefault: (addressId) => api.put(`/auth/addresses/${addressId}/default`),
+  
+  // 启用/禁用地址
+  setActive: (addressId, isActive) => 
+    api.put(`/auth/addresses/${addressId}/active`, null, { params: { isActive } })
 }
 
 export default api

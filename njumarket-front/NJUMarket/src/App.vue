@@ -90,6 +90,10 @@ export default {
   
   /* ===== 响应式缩放因子 ===== */
   --mobile-scale: 1;
+  
+  /* ===== 移动端安全边距与弹窗宽度 ===== */
+  --mobile-safe-margin: 8px;
+  --mobile-dialog-max-width: 400px;
 }
 
 /* ===== 通用布局 ===== */
@@ -182,6 +186,8 @@ export default {
   :root {
     --mobile-scale: 0.75; /* 移动端缩小到0.85倍以适应更小的卡片 */
     --container-padding: 15px;
+    --mobile-safe-margin: 6px;
+    --mobile-dialog-max-width: 440px;
   }
   
   .container {

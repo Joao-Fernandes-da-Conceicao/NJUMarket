@@ -1,428 +1,555 @@
-2025-11-15 01:26:26.930 | Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
-2025-11-15 01:26:38.639 | 
-2025-11-15 01:26:38.639 |   .   ____          _            __ _ _
-2025-11-15 01:26:38.639 |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
-2025-11-15 01:26:38.639 | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
-2025-11-15 01:26:38.639 |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
-2025-11-15 01:26:38.639 |   '  |____| .__|_| |_|_| |_\__, | / / / /
-2025-11-15 01:26:38.639 |  =========|_|==============|___/=/_/_/_/
-2025-11-15 01:26:38.642 |  :: Spring Boot ::                (v3.2.0)
-2025-11-15 01:26:38.646 | 
-2025-11-15 01:26:39.259 | 2025-11-15T01:26:39.246+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] c.n.c.CommodityServiceApplication        : Starting CommodityServiceApplication v0.0.1-SNAPSHOT using Java 17.0.17 with PID 1 (/app/app.jar started by spring in /app)
-2025-11-15 01:26:39.260 | 2025-11-15T01:26:39.259+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] c.n.c.CommodityServiceApplication        : The following 1 profile is active: "dev"
-2025-11-15 01:26:40.205 | 2025-11-15T01:26:40.204+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Fetching config from server at : http://config-server:8888
-2025-11-15 01:26:40.212 | 2025-11-15T01:26:40.209+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Located environment: name=application, profiles=[default], label=null, version=null, state=null
-2025-11-15 01:26:40.213 | 2025-11-15T01:26:40.212+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Fetching config from server at : http://config-server:8888
-2025-11-15 01:26:40.221 | 2025-11-15T01:26:40.213+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Located environment: name=njumarket-service-commodity, profiles=[default], label=null, version=null, state=null
-2025-11-15 01:26:40.221 | 2025-11-15T01:26:40.220+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Fetching config from server at : http://config-server:8888
-2025-11-15 01:26:40.227 | 2025-11-15T01:26:40.226+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Located environment: name=njumarket-service-commodity, profiles=[dev], label=null, version=null, state=null
-2025-11-15 01:26:47.565 | 2025-11-15T01:26:47.564+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
-2025-11-15 01:26:47.570 | 2025-11-15T01:26:47.565+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2025-11-15 01:26:48.206 | 2025-11-15T01:26:48.193+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 596 ms. Found 2 JPA repository interfaces.
-2025-11-15 01:26:51.753 | 2025-11-15T01:26:51.752+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
-2025-11-15 01:26:51.758 | 2025-11-15T01:26:51.757+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
-2025-11-15 01:26:51.892 | 2025-11-15T01:26:51.891+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.njumarket.commodity.repository.CommodityRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
-2025-11-15 01:26:51.895 | 2025-11-15T01:26:51.893+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.njumarket.commodity.repository.CommoditySnapshotRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
-2025-11-15 01:26:51.896 | 2025-11-15T01:26:51.895+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 66 ms. Found 0 Redis repository interfaces.
-2025-11-15 01:26:55.064 | 2025-11-15T01:26:55.063+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.cloud.context.scope.GenericScope     : BeanFactory id=ab020009-a1e9-3bfc-8b8b-d18aef1c0d45
-2025-11-15 01:26:57.391 | 2025-11-15T01:26:57.391+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig' of type [org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). The currently created BeanPostProcessor [lbRestClientPostProcessor] is declared through a non-static factory method on that class; consider declaring it as static instead.
-2025-11-15 01:26:57.415 | 2025-11-15T01:26:57.414+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] trationDelegate$BeanPostProcessorChecker : Bean 'deferringLoadBalancerInterceptor' of type [org.springframework.cloud.client.loadbalancer.DeferringLoadBalancerInterceptor] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected into a currently created BeanPostProcessor [lbRestClientPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies.
-2025-11-15 01:26:59.631 | 2025-11-15T01:26:59.621+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8092 (http)
-2025-11-15 01:26:59.705 | 2025-11-15T01:26:59.690+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2025-11-15 01:26:59.707 | 2025-11-15T01:26:59.705+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.16]
-2025-11-15 01:27:00.195 | 2025-11-15T01:27:00.187+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2025-11-15 01:27:00.216 | 2025-11-15T01:27:00.211+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 19934 ms
-2025-11-15 01:27:08.186 | 2025-11-15T01:27:08.178+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.openfeign.FeignClientFactoryBean   : For 'njumarket-service-auth' URL not provided. Will try picking an instance via load-balancing.
-2025-11-15 01:27:11.591 | 2025-11-15T01:27:11.587+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2025-11-15 01:27:12.654 | 2025-11-15T01:27:12.649+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2025-11-15 01:27:13.433 | 2025-11-15T01:27:13.433+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.3.1.Final
-2025-11-15 01:27:13.667 | 2025-11-15T01:27:13.666+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2025-11-15 01:27:15.395 | 2025-11-15T01:27:15.394+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2025-11-15 01:27:15.479 | 2025-11-15T01:27:15.476+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2025-11-15 01:27:16.620 | 2025-11-15T01:27:16.619+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@ab5d5c8
-2025-11-15 01:27:16.627 | 2025-11-15T01:27:16.626+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2025-11-15 01:27:17.048 | 2025-11-15T01:27:17.047+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] org.hibernate.orm.deprecation            : HHH90000025: MySQL8Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2025-11-15 01:27:17.056 | 2025-11-15T01:27:17.056+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] org.hibernate.orm.deprecation            : HHH90000026: MySQL8Dialect has been deprecated; use org.hibernate.dialect.MySQLDialect instead
-2025-11-15 01:27:21.365 | 2025-11-15T01:27:21.362+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2025-11-15 01:27:21.692 | 2025-11-15T01:27:21.691+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2025-11-15 01:27:25.701 | 2025-11-15T01:27:25.700+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
-2025-11-15 01:27:31.076 | 2025-11-15T01:27:31.075+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.openfeign.FeignClientFactoryBean   : For 'njumarket-service-order' URL not provided. Will try picking an instance via load-balancing.
-2025-11-15 01:27:31.219 | 2025-11-15T01:27:31.217+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.openfeign.FeignClientFactoryBean   : For 'njumarket-service-image' URL not provided. Will try picking an instance via load-balancing.
-2025-11-15 01:27:31.484 | 2025-11-15T01:27:31.484+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.openfeign.FeignClientFactoryBean   : For 'njumarket-service-message' URL not provided. Will try picking an instance via load-balancing.
-2025-11-15 01:27:31.637 | 2025-11-15T01:27:31.636+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.openfeign.FeignClientFactoryBean   : For 'njumarket-service-notification' URL not provided. Will try picking an instance via load-balancing.
-2025-11-15 01:27:34.537 | 2025-11-15T01:27:34.534+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.s.UserDetailsServiceAutoConfiguration : 
-2025-11-15 01:27:34.537 | 
-2025-11-15 01:27:34.537 | Using generated security password: 2fcfc9e5-9b0a-49e2-bc84-7d162598be89
-2025-11-15 01:27:34.537 | 
-2025-11-15 01:27:34.537 | This generated password is for development use only. Your security configuration must be updated before running your application in production.
-2025-11-15 01:27:34.537 | 
-2025-11-15 01:27:39.812 | 2025-11-15T01:27:39.801+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 7 endpoint(s) beneath base path '/actuator'
-2025-11-15 01:27:40.286 | 2025-11-15T01:27:40.275+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@461e3e5, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@481bd693, org.springframework.security.web.context.SecurityContextHolderFilter@1f4fe0de, org.springframework.security.web.header.HeaderWriterFilter@15a4e7d8, org.springframework.web.filter.CorsFilter@6179761f, org.springframework.security.web.authentication.logout.LogoutFilter@1fd42c99, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@4436b8b, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@59f3c17e, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@684968be, org.springframework.security.web.session.SessionManagementFilter@1eedd4c7, org.springframework.security.web.access.ExceptionTranslationFilter@4f920265, org.springframework.security.web.access.intercept.AuthorizationFilter@5dadf7d9]
-2025-11-15 01:27:43.289 | 2025-11-15T01:27:43.288+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] ion$DefaultTemplateResolverConfiguration : Cannot find template location: classpath:/templates/ (please add some templates, check your Thymeleaf configuration, or set spring.thymeleaf.check-template-location=false)
-2025-11-15 01:27:47.515 | 2025-11-15T01:27:47.514+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] DiscoveryClientOptionalArgsConfiguration : Eureka HTTP Client uses RestTemplate.
-2025-11-15 01:27:47.940 | 2025-11-15T01:27:47.939+08:00  WARN 1 --- [njumarket-service-commodity] [           main] [                                                 ] iguration$LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in production.You can switch to using Caffeine cache, by adding it and org.springframework.cache.caffeine.CaffeineCacheManager to the classpath.
-2025-11-15 01:27:48.215 | 2025-11-15T01:27:48.210+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.n.eureka.InstanceInfoFactory       : Setting initial instance status as: STARTING
-2025-11-15 01:27:48.396 | 2025-11-15T01:27:48.392+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Initializing Eureka in region us-east-1
-2025-11-15 01:27:48.522 | 2025-11-15T01:27:48.516+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
-2025-11-15 01:27:48.875 | 2025-11-15T01:27:48.871+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Disable delta property : false
-2025-11-15 01:27:48.886 | 2025-11-15T01:27:48.873+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Single vip registry refresh property : null
-2025-11-15 01:27:48.886 | 2025-11-15T01:27:48.875+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Force full registry fetch : false
-2025-11-15 01:27:48.886 | 2025-11-15T01:27:48.879+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Application is null : false
-2025-11-15 01:27:48.896 | 2025-11-15T01:27:48.881+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Registered Applications size is zero : true
-2025-11-15 01:27:48.911 | 2025-11-15T01:27:48.896+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Application version is -1: true
-2025-11-15 01:27:48.914 | 2025-11-15T01:27:48.911+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Getting all instance registry info from the eureka server
-2025-11-15 01:27:50.171 | 2025-11-15T01:27:50.170+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : The response status is 200
-2025-11-15 01:27:50.179 | 2025-11-15T01:27:50.178+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Starting heartbeat executor: renew interval is: 30
-2025-11-15 01:27:50.193 | 2025-11-15T01:27:50.189+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] c.n.discovery.InstanceInfoReplicator     : InstanceInfoReplicator onDemand update allowed rate per min is 4
-2025-11-15 01:27:50.199 | 2025-11-15T01:27:50.199+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Discovery Client initialized at timestamp 1763141270198 with initial instances count: 2
-2025-11-15 01:27:50.234 | 2025-11-15T01:27:50.234+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.c.n.e.s.EurekaServiceRegistry        : Registering application NJUMARKET-SERVICE-COMMODITY with eureka with status UP
-2025-11-15 01:27:50.236 | 2025-11-15T01:27:50.235+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Saw local status change event StatusChangeEvent [timestamp=1763141270235, current=UP, previous=STARTING]
-2025-11-15 01:27:50.240 | 2025-11-15T01:27:50.240+08:00  INFO 1 --- [njumarket-service-commodity] [foReplicator-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092: registering service...
-2025-11-15 01:27:50.305 | 2025-11-15T01:27:50.305+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8092 (http) with context path ''
-2025-11-15 01:27:50.310 | 2025-11-15T01:27:50.309+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] .s.c.n.e.s.EurekaAutoServiceRegistration : Updating port to 8092
-2025-11-15 01:27:50.361 | 2025-11-15T01:27:50.359+08:00  INFO 1 --- [njumarket-service-commodity] [           main] [                                                 ] c.n.c.CommodityServiceApplication        : Started CommodityServiceApplication in 79.835 seconds (process running for 83.531)
-2025-11-15 01:27:50.465 | 2025-11-15T01:27:50.465+08:00  INFO 1 --- [njumarket-service-commodity] [foReplicator-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092 - registration status: 204
-2025-11-15 01:27:53.577 | 2025-11-15T01:27:53.576+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-1] [                                                 ] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2025-11-15 01:27:53.578 | 2025-11-15T01:27:53.577+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2025-11-15 01:27:53.584 | 2025-11-15T01:27:53.583+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Completed initialization in 4 ms
-2025-11-15 01:27:53.676 | 2025-11-15T01:27:53.674+08:00  WARN 1 --- [njumarket-service-commodity] [nio-8092-exec-1] [6917669989a30ed076369479a3990fcb-2033adf84b7df28b] o.s.w.s.h.HandlerMappingIntrospector     : Cache miss for REQUEST dispatch to '/actuator/prometheus' (previous null). Performing CorsConfiguration lookup. This is logged once only at WARN level, and every time at TRACE.
-2025-11-15 01:28:00.566 | 2025-11-15T01:28:00.566+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-2] [691766a07c87e39c6df197658981bfe0-f4204155cf3d1f66] o.s.a.r.c.CachingConnectionFactory       : Attempting to connect to: [rabbitmq:5672]
-2025-11-15 01:28:00.661 | 2025-11-15T01:28:00.661+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-2] [691766a07c87e39c6df197658981bfe0-f4204155cf3d1f66] o.s.a.r.c.CachingConnectionFactory       : Created new connection: rabbitConnectionFactory#d7ad9e5:0/SimpleConnection@3576ba1 [delegate=amqp://admin@172.18.0.4:5672/, localPort=45000]
-2025-11-15 01:29:17.119 | 2025-11-15T01:29:17.117+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-4] [691766ec2184d19e14d256fdcd0512ab-b52e29a4a90101f5] c.n.njumarket.aspect.ServiceLogAspect    : 查询开始 - className=CommodityQueryServiceImpl, method=getLatestCommodities, params=8
-2025-11-15 01:29:17.119 | 2025-11-15T01:29:17.116+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-2] [691766ec1f767b8d1c36026cde820679-e2b8f13574955565] c.n.njumarket.aspect.ServiceLogAspect    : 查询开始 - className=CommodityQueryServiceImpl, method=getHotCommodities, params=8
-2025-11-15 01:29:17.121 | 2025-11-15T01:29:17.120+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-4] [691766ec2184d19e14d256fdcd0512ab-b52e29a4a90101f5] c.n.c.s.impl.CommodityQueryServiceImpl   : 获取最新商品 - limit: 8
-2025-11-15 01:29:17.121 | 2025-11-15T01:29:17.120+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-2] [691766ec1f767b8d1c36026cde820679-e2b8f13574955565] c.n.c.s.impl.CommodityQueryServiceImpl   : 获取热门商品 - limit: 8
-2025-11-15 01:29:17.343 | 2025-11-15T01:29:17.342+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-2] [691766ec1f767b8d1c36026cde820679-e2b8f13574955565] c.n.njumarket.aspect.ServiceLogAspect    : 查询成功 - className=CommodityQueryServiceImpl, method=getHotCommodities, result=成功，数量=8, executionTime=240ms
-2025-11-15 01:29:18.119 | 2025-11-15T01:29:18.118+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-4] [691766ec2184d19e14d256fdcd0512ab-b52e29a4a90101f5] c.n.njumarket.aspect.ServiceLogAspect    : 查询成功 - className=CommodityQueryServiceImpl, method=getLatestCommodities, result=成功，数量=8, executionTime=1016ms
-2025-11-15 01:29:27.812 | 2025-11-15T01:29:27.811+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-5] [691766f7d82e719b77de73f49a3ddf80-e06b12c7205329a7] c.n.njumarket.aspect.ServiceLogAspect    : 查询开始 - className=CommodityQueryServiceImpl, method=getHotCommodities, params=8
-2025-11-15 01:29:27.812 | 2025-11-15T01:29:27.812+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-5] [691766f7d82e719b77de73f49a3ddf80-e06b12c7205329a7] c.n.c.s.impl.CommodityQueryServiceImpl   : 获取热门商品 - limit: 8
-2025-11-15 01:29:27.820 | 2025-11-15T01:29:27.819+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-6] [691766f7848b4be3acda4713bdc2c1b5-3d73dcb7173fa394] c.n.njumarket.aspect.ServiceLogAspect    : 查询开始 - className=CommodityQueryServiceImpl, method=getLatestCommodities, params=8
-2025-11-15 01:29:27.820 | 2025-11-15T01:29:27.820+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-5] [691766f7d82e719b77de73f49a3ddf80-e06b12c7205329a7] c.n.njumarket.aspect.ServiceLogAspect    : 查询成功 - className=CommodityQueryServiceImpl, method=getHotCommodities, result=成功，数量=8, executionTime=9ms
-2025-11-15 01:29:27.820 | 2025-11-15T01:29:27.820+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-6] [691766f7848b4be3acda4713bdc2c1b5-3d73dcb7173fa394] c.n.c.s.impl.CommodityQueryServiceImpl   : 获取最新商品 - limit: 8
-2025-11-15 01:29:27.826 | 2025-11-15T01:29:27.825+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-6] [691766f7848b4be3acda4713bdc2c1b5-3d73dcb7173fa394] c.n.njumarket.aspect.ServiceLogAspect    : 查询成功 - className=CommodityQueryServiceImpl, method=getLatestCommodities, result=成功，数量=8, executionTime=6ms
-2025-11-15 01:32:48.302 | 2025-11-15T01:32:48.298+08:00  INFO 1 --- [njumarket-service-commodity] [rap-executor-%d] [                                                 ] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
-2025-11-15 01:33:49.558 | 2025-11-15T01:33:49.555+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] c.n.d.s.t.d.RedirectingEurekaHttpClient  : Request execution error. endpoint=DefaultEndpoint{ serviceUrl='http://discovery:8761/eureka/} exception=I/O error on GET request for "http://discovery:8761/eureka/apps/delta": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused stacktrace=org.springframework.web.client.ResourceAccessException: I/O error on GET request for "http://discovery:8761/eureka/apps/delta": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.560 | 	at org.springframework.web.client.RestTemplate.createResourceAccessException(RestTemplate.java:905)
-2025-11-15 01:33:49.560 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:885)
-2025-11-15 01:33:49.560 | 	at org.springframework.web.client.RestTemplate.execute(RestTemplate.java:781)
-2025-11-15 01:33:49.560 | 	at org.springframework.web.client.RestTemplate.exchange(RestTemplate.java:663)
-2025-11-15 01:33:49.560 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateEurekaHttpClient.getApplicationsInternal(RestTemplateEurekaHttpClient.java:145)
-2025-11-15 01:33:49.560 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateEurekaHttpClient.getDelta(RestTemplateEurekaHttpClient.java:155)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$7.execute(EurekaHttpClientDecorator.java:152)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.RedirectingEurekaHttpClient.execute(RedirectingEurekaHttpClient.java:91)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$7.execute(EurekaHttpClientDecorator.java:152)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.RetryableEurekaHttpClient.execute(RetryableEurekaHttpClient.java:120)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$7.execute(EurekaHttpClientDecorator.java:152)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.SessionedEurekaHttpClient.execute(SessionedEurekaHttpClient.java:76)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.DiscoveryClient.getAndUpdateDelta(DiscoveryClient.java:1080)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.DiscoveryClient.fetchRegistry(DiscoveryClient.java:963)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.DiscoveryClient.refreshRegistry(DiscoveryClient.java:1473)
-2025-11-15 01:33:49.560 | 	at com.netflix.discovery.DiscoveryClient$CacheRefreshThread.run(DiscoveryClient.java:1441)
-2025-11-15 01:33:49.560 | 	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/java.util.concurrent.FutureTask.run(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/java.lang.Thread.run(Unknown Source)
-2025-11-15 01:33:49.560 | Caused by: org.apache.hc.client5.http.HttpHostConnectException: Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.560 | 	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
-2025-11-15 01:33:49.560 | 	at java.base/sun.nio.ch.Net.pollConnectNow(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/sun.nio.ch.NioSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/java.net.SocksSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.560 | 	at java.base/java.net.Socket.connect(Unknown Source)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.lambda$connectSocket$0(PlainConnectionSocketFactory.java:85)
-2025-11-15 01:33:49.560 | 	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.connectSocket(PlainConnectionSocketFactory.java:84)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.socket.ConnectionSocketFactory.connectSocket(ConnectionSocketFactory.java:113)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.io.DefaultHttpClientConnectionOperator.connect(DefaultHttpClientConnectionOperator.java:181)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager.connect(PoolingHttpClientConnectionManager.java:447)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:162)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:172)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:142)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ContentCompressionExec.execute(ContentCompressionExec.java:152)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:87)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:55)
-2025-11-15 01:33:49.560 | 	at org.apache.hc.client5.http.classic.HttpClient.executeOpen(HttpClient.java:183)
-2025-11-15 01:33:49.560 | 	at org.springframework.http.client.HttpComponentsClientHttpRequest.executeInternal(HttpComponentsClientHttpRequest.java:95)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractStreamingClientHttpRequest.executeInternal(AbstractStreamingClientHttpRequest.java:70)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:101)
-2025-11-15 01:33:49.561 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateTransportClientFactory.lambda$restTemplate$3(RestTemplateTransportClientFactory.java:170)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:87)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.InterceptingClientHttpRequest.executeInternal(InterceptingClientHttpRequest.java:71)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractBufferingClientHttpRequest.executeInternal(AbstractBufferingClientHttpRequest.java:48)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.561 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:879)
-2025-11-15 01:33:49.561 | 	... 22 more
-2025-11-15 01:33:49.561 | 
-2025-11-15 01:33:49.561 | 2025-11-15T01:33:49.555+08:00  INFO 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] c.n.d.s.t.d.RedirectingEurekaHttpClient  : Request execution error. endpoint=DefaultEndpoint{ serviceUrl='http://discovery:8761/eureka/} exception=I/O error on PUT request for "http://discovery:8761/eureka/apps/NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused stacktrace=org.springframework.web.client.ResourceAccessException: I/O error on PUT request for "http://discovery:8761/eureka/apps/NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.561 | 	at org.springframework.web.client.RestTemplate.createResourceAccessException(RestTemplate.java:905)
-2025-11-15 01:33:49.561 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:885)
-2025-11-15 01:33:49.561 | 	at org.springframework.web.client.RestTemplate.execute(RestTemplate.java:781)
-2025-11-15 01:33:49.561 | 	at org.springframework.web.client.RestTemplate.exchange(RestTemplate.java:663)
-2025-11-15 01:33:49.561 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateEurekaHttpClient.sendHeartBeat(RestTemplateEurekaHttpClient.java:99)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$3.execute(EurekaHttpClientDecorator.java:92)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.RedirectingEurekaHttpClient.execute(RedirectingEurekaHttpClient.java:91)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$3.execute(EurekaHttpClientDecorator.java:92)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.RetryableEurekaHttpClient.execute(RetryableEurekaHttpClient.java:120)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$3.execute(EurekaHttpClientDecorator.java:92)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.SessionedEurekaHttpClient.execute(SessionedEurekaHttpClient.java:76)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.DiscoveryClient.renew(DiscoveryClient.java:845)
-2025-11-15 01:33:49.561 | 	at com.netflix.discovery.DiscoveryClient$HeartbeatThread.run(DiscoveryClient.java:1402)
-2025-11-15 01:33:49.561 | 	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/java.util.concurrent.FutureTask.run(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/java.lang.Thread.run(Unknown Source)
-2025-11-15 01:33:49.561 | Caused by: org.apache.hc.client5.http.HttpHostConnectException: Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.561 | 	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
-2025-11-15 01:33:49.561 | 	at java.base/sun.nio.ch.Net.pollConnectNow(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/sun.nio.ch.NioSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/java.net.SocksSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.561 | 	at java.base/java.net.Socket.connect(Unknown Source)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.lambda$connectSocket$0(PlainConnectionSocketFactory.java:85)
-2025-11-15 01:33:49.561 | 	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.connectSocket(PlainConnectionSocketFactory.java:84)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.socket.ConnectionSocketFactory.connectSocket(ConnectionSocketFactory.java:113)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.io.DefaultHttpClientConnectionOperator.connect(DefaultHttpClientConnectionOperator.java:181)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager.connect(PoolingHttpClientConnectionManager.java:447)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:162)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:172)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:142)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ContentCompressionExec.execute(ContentCompressionExec.java:152)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:87)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:55)
-2025-11-15 01:33:49.561 | 	at org.apache.hc.client5.http.classic.HttpClient.executeOpen(HttpClient.java:183)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.HttpComponentsClientHttpRequest.executeInternal(HttpComponentsClientHttpRequest.java:95)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractStreamingClientHttpRequest.executeInternal(AbstractStreamingClientHttpRequest.java:70)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:101)
-2025-11-15 01:33:49.561 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateTransportClientFactory.lambda$restTemplate$3(RestTemplateTransportClientFactory.java:170)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:87)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.InterceptingClientHttpRequest.executeInternal(InterceptingClientHttpRequest.java:71)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractBufferingClientHttpRequest.executeInternal(AbstractBufferingClientHttpRequest.java:48)
-2025-11-15 01:33:49.561 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.561 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:879)
-2025-11-15 01:33:49.561 | 	... 19 more
-2025-11-15 01:33:49.561 | 
-2025-11-15 01:33:49.561 | 2025-11-15T01:33:49.556+08:00  WARN 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] c.n.d.s.t.d.RetryableEurekaHttpClient    : Request execution failed with message: I/O error on GET request for "http://discovery:8761/eureka/apps/delta": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.561 | 2025-11-15T01:33:49.556+08:00  WARN 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] c.n.d.s.t.d.RetryableEurekaHttpClient    : Request execution failed with message: I/O error on PUT request for "http://discovery:8761/eureka/apps/NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.638 | 2025-11-15T01:33:49.637+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] c.n.d.s.t.d.RedirectingEurekaHttpClient  : Request execution error. endpoint=DefaultEndpoint{ serviceUrl='http://discovery:8761/eureka/}, exception=I/O error on GET request for "http://discovery:8761/eureka/apps/delta": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused stacktrace=org.springframework.web.client.ResourceAccessException: I/O error on GET request for "http://discovery:8761/eureka/apps/delta": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.638 | 	at org.springframework.web.client.RestTemplate.createResourceAccessException(RestTemplate.java:905)
-2025-11-15 01:33:49.638 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:885)
-2025-11-15 01:33:49.638 | 	at org.springframework.web.client.RestTemplate.execute(RestTemplate.java:781)
-2025-11-15 01:33:49.638 | 	at org.springframework.web.client.RestTemplate.exchange(RestTemplate.java:663)
-2025-11-15 01:33:49.638 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateEurekaHttpClient.getApplicationsInternal(RestTemplateEurekaHttpClient.java:145)
-2025-11-15 01:33:49.638 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateEurekaHttpClient.getDelta(RestTemplateEurekaHttpClient.java:155)
-2025-11-15 01:33:49.638 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$7.execute(EurekaHttpClientDecorator.java:152)
-2025-11-15 01:33:49.638 | 	at com.netflix.discovery.shared.transport.decorator.RedirectingEurekaHttpClient.executeOnNewServer(RedirectingEurekaHttpClient.java:121)
-2025-11-15 01:33:49.638 | 	at com.netflix.discovery.shared.transport.decorator.RedirectingEurekaHttpClient.execute(RedirectingEurekaHttpClient.java:80)
-2025-11-15 01:33:49.638 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$7.execute(EurekaHttpClientDecorator.java:152)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.RetryableEurekaHttpClient.execute(RetryableEurekaHttpClient.java:120)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$7.execute(EurekaHttpClientDecorator.java:152)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.SessionedEurekaHttpClient.execute(SessionedEurekaHttpClient.java:76)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.DiscoveryClient.getAndUpdateDelta(DiscoveryClient.java:1080)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.DiscoveryClient.fetchRegistry(DiscoveryClient.java:963)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.DiscoveryClient.refreshRegistry(DiscoveryClient.java:1473)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.DiscoveryClient$CacheRefreshThread.run(DiscoveryClient.java:1441)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.FutureTask.run(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.lang.Thread.run(Unknown Source)
-2025-11-15 01:33:49.639 | Caused by: org.apache.hc.client5.http.HttpHostConnectException: Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.Net.pollConnectNow(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.NioSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.net.SocksSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.net.Socket.connect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.lambda$connectSocket$0(PlainConnectionSocketFactory.java:85)
-2025-11-15 01:33:49.639 | 	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.connectSocket(PlainConnectionSocketFactory.java:84)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.socket.ConnectionSocketFactory.connectSocket(ConnectionSocketFactory.java:113)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.io.DefaultHttpClientConnectionOperator.connect(DefaultHttpClientConnectionOperator.java:181)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager.connect(PoolingHttpClientConnectionManager.java:447)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:162)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:172)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:142)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ContentCompressionExec.execute(ContentCompressionExec.java:152)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:87)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:55)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.classic.HttpClient.executeOpen(HttpClient.java:183)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.HttpComponentsClientHttpRequest.executeInternal(HttpComponentsClientHttpRequest.java:95)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractStreamingClientHttpRequest.executeInternal(AbstractStreamingClientHttpRequest.java:70)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:101)
-2025-11-15 01:33:49.639 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateTransportClientFactory.lambda$restTemplate$3(RestTemplateTransportClientFactory.java:170)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:87)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.InterceptingClientHttpRequest.executeInternal(InterceptingClientHttpRequest.java:71)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractBufferingClientHttpRequest.executeInternal(AbstractBufferingClientHttpRequest.java:48)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.639 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:879)
-2025-11-15 01:33:49.639 | 	... 23 more
-2025-11-15 01:33:49.639 | 
-2025-11-15 01:33:49.639 | 2025-11-15T01:33:49.638+08:00  WARN 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] c.n.d.s.t.d.RetryableEurekaHttpClient    : Request execution failed with message: I/O error on GET request for "http://discovery:8761/eureka/apps/delta": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.639 | 2025-11-15T01:33:49.637+08:00  INFO 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] c.n.d.s.t.d.RedirectingEurekaHttpClient  : Request execution error. endpoint=DefaultEndpoint{ serviceUrl='http://discovery:8761/eureka/}, exception=I/O error on PUT request for "http://discovery:8761/eureka/apps/NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused stacktrace=org.springframework.web.client.ResourceAccessException: I/O error on PUT request for "http://discovery:8761/eureka/apps/NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.639 | 	at org.springframework.web.client.RestTemplate.createResourceAccessException(RestTemplate.java:905)
-2025-11-15 01:33:49.639 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:885)
-2025-11-15 01:33:49.639 | 	at org.springframework.web.client.RestTemplate.execute(RestTemplate.java:781)
-2025-11-15 01:33:49.639 | 	at org.springframework.web.client.RestTemplate.exchange(RestTemplate.java:663)
-2025-11-15 01:33:49.639 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateEurekaHttpClient.sendHeartBeat(RestTemplateEurekaHttpClient.java:99)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$3.execute(EurekaHttpClientDecorator.java:92)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.RedirectingEurekaHttpClient.executeOnNewServer(RedirectingEurekaHttpClient.java:121)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.RedirectingEurekaHttpClient.execute(RedirectingEurekaHttpClient.java:80)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$3.execute(EurekaHttpClientDecorator.java:92)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.RetryableEurekaHttpClient.execute(RetryableEurekaHttpClient.java:120)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$3.execute(EurekaHttpClientDecorator.java:92)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.SessionedEurekaHttpClient.execute(SessionedEurekaHttpClient.java:76)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.DiscoveryClient.renew(DiscoveryClient.java:845)
-2025-11-15 01:33:49.639 | 	at com.netflix.discovery.DiscoveryClient$HeartbeatThread.run(DiscoveryClient.java:1402)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.FutureTask.run(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.lang.Thread.run(Unknown Source)
-2025-11-15 01:33:49.639 | Caused by: org.apache.hc.client5.http.HttpHostConnectException: Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.Net.pollConnect(Native Method)
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.Net.pollConnectNow(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.NioSocketImpl.timedFinishConnect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/sun.nio.ch.NioSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.net.SocksSocketImpl.connect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at java.base/java.net.Socket.connect(Unknown Source)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.lambda$connectSocket$0(PlainConnectionSocketFactory.java:85)
-2025-11-15 01:33:49.639 | 	at java.base/java.security.AccessController.doPrivileged(Unknown Source)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.socket.PlainConnectionSocketFactory.connectSocket(PlainConnectionSocketFactory.java:84)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.socket.ConnectionSocketFactory.connectSocket(ConnectionSocketFactory.java:113)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.io.DefaultHttpClientConnectionOperator.connect(DefaultHttpClientConnectionOperator.java:181)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager.connect(PoolingHttpClientConnectionManager.java:447)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:162)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.InternalExecRuntime.connectEndpoint(InternalExecRuntime.java:172)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ConnectExec.execute(ConnectExec.java:142)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ProtocolExec.execute(ProtocolExec.java:192)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.HttpRequestRetryExec.execute(HttpRequestRetryExec.java:96)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ContentCompressionExec.execute(ContentCompressionExec.java:152)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.RedirectExec.execute(RedirectExec.java:115)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.ExecChainElement.execute(ExecChainElement.java:51)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.InternalHttpClient.doExecute(InternalHttpClient.java:170)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:87)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.impl.classic.CloseableHttpClient.execute(CloseableHttpClient.java:55)
-2025-11-15 01:33:49.639 | 	at org.apache.hc.client5.http.classic.HttpClient.executeOpen(HttpClient.java:183)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.HttpComponentsClientHttpRequest.executeInternal(HttpComponentsClientHttpRequest.java:95)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractStreamingClientHttpRequest.executeInternal(AbstractStreamingClientHttpRequest.java:70)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:101)
-2025-11-15 01:33:49.639 | 	at org.springframework.cloud.netflix.eureka.http.RestTemplateTransportClientFactory.lambda$restTemplate$3(RestTemplateTransportClientFactory.java:170)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.InterceptingClientHttpRequest$InterceptingRequestExecution.execute(InterceptingClientHttpRequest.java:87)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.InterceptingClientHttpRequest.executeInternal(InterceptingClientHttpRequest.java:71)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractBufferingClientHttpRequest.executeInternal(AbstractBufferingClientHttpRequest.java:48)
-2025-11-15 01:33:49.639 | 	at org.springframework.http.client.AbstractClientHttpRequest.execute(AbstractClientHttpRequest.java:66)
-2025-11-15 01:33:49.639 | 	at org.springframework.web.client.RestTemplate.doExecute(RestTemplate.java:879)
-2025-11-15 01:33:49.639 | 	... 20 more
-2025-11-15 01:33:49.639 | 
-2025-11-15 01:33:49.639 | 2025-11-15T01:33:49.639+08:00  WARN 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] c.n.d.s.t.d.RetryableEurekaHttpClient    : Request execution failed with message: I/O error on PUT request for "http://discovery:8761/eureka/apps/NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092": Connect to http://discovery:8761 [discovery/172.18.0.6] failed: Connection refused
-2025-11-15 01:33:49.640 | 2025-11-15T01:33:49.639+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092 - was unable to refresh its cache! This periodic background refresh will be retried in 30 seconds. status = Cannot execute request on any known server stacktrace = com.netflix.discovery.shared.transport.TransportException: Cannot execute request on any known server
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.shared.transport.decorator.RetryableEurekaHttpClient.execute(RetryableEurekaHttpClient.java:112)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$7.execute(EurekaHttpClientDecorator.java:152)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.shared.transport.decorator.SessionedEurekaHttpClient.execute(SessionedEurekaHttpClient.java:76)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.getDelta(EurekaHttpClientDecorator.java:149)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.DiscoveryClient.getAndUpdateDelta(DiscoveryClient.java:1080)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.DiscoveryClient.fetchRegistry(DiscoveryClient.java:963)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.DiscoveryClient.refreshRegistry(DiscoveryClient.java:1473)
-2025-11-15 01:33:49.640 | 	at com.netflix.discovery.DiscoveryClient$CacheRefreshThread.run(DiscoveryClient.java:1441)
-2025-11-15 01:33:49.640 | 	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Unknown Source)
-2025-11-15 01:33:49.640 | 	at java.base/java.util.concurrent.FutureTask.run(Unknown Source)
-2025-11-15 01:33:49.640 | 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source)
-2025-11-15 01:33:49.640 | 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source)
-2025-11-15 01:33:49.640 | 	at java.base/java.lang.Thread.run(Unknown Source)
-2025-11-15 01:33:49.640 | 
-2025-11-15 01:33:49.686 | 2025-11-15T01:33:49.639+08:00 ERROR 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092 - was unable to send heartbeat!
-2025-11-15 01:33:49.686 | 
-2025-11-15 01:33:49.686 | com.netflix.discovery.shared.transport.TransportException: Cannot execute request on any known server
-2025-11-15 01:33:49.686 | 	at com.netflix.discovery.shared.transport.decorator.RetryableEurekaHttpClient.execute(RetryableEurekaHttpClient.java:112) ~[eureka-client-2.0.3.jar!/:2.0.3]
-2025-11-15 01:33:49.686 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89) ~[eureka-client-2.0.3.jar!/:2.0.3]
-2025-11-15 01:33:49.686 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator$3.execute(EurekaHttpClientDecorator.java:92) ~[eureka-client-2.0.3.jar!/:2.0.3]
-2025-11-15 01:33:49.686 | 	at com.netflix.discovery.shared.transport.decorator.SessionedEurekaHttpClient.execute(SessionedEurekaHttpClient.java:76) ~[eureka-client-2.0.3.jar!/:2.0.3]
-2025-11-15 01:33:49.686 | 	at com.netflix.discovery.shared.transport.decorator.EurekaHttpClientDecorator.sendHeartBeat(EurekaHttpClientDecorator.java:89) ~[eureka-client-2.0.3.jar!/:2.0.3]
-2025-11-15 01:33:49.686 | 	at com.netflix.discovery.DiscoveryClient.renew(DiscoveryClient.java:845) ~[eureka-client-2.0.3.jar!/:2.0.3]
-2025-11-15 01:33:49.686 | 	at com.netflix.discovery.DiscoveryClient$HeartbeatThread.run(DiscoveryClient.java:1402) ~[eureka-client-2.0.3.jar!/:2.0.3]
-2025-11-15 01:33:49.686 | 	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Unknown Source) ~[na:na]
-2025-11-15 01:33:49.686 | 	at java.base/java.util.concurrent.FutureTask.run(Unknown Source) ~[na:na]
-2025-11-15 01:33:49.686 | 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(Unknown Source) ~[na:na]
-2025-11-15 01:33:49.686 | 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(Unknown Source) ~[na:na]
-2025-11-15 01:33:49.686 | 	at java.base/java.lang.Thread.run(Unknown Source) ~[na:na]
-2025-11-15 01:33:49.686 | 
-2025-11-15 01:34:19.642 | 2025-11-15T01:34:19.641+08:00  INFO 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092 - Re-registering apps/NJUMARKET-SERVICE-COMMODITY
-2025-11-15 01:34:19.642 | 2025-11-15T01:34:19.642+08:00  INFO 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092: registering service...
-2025-11-15 01:34:19.661 | 2025-11-15T01:34:19.661+08:00  INFO 1 --- [njumarket-service-commodity] [beatExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-COMMODITY/d387f8fed4f0:njumarket-service-commodity:8092 - registration status: 204
-2025-11-15 01:34:49.508 | 2025-11-15T01:34:49.507+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : Disable delta property : false
-2025-11-15 01:34:49.508 | 2025-11-15T01:34:49.508+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : Single vip registry refresh property : null
-2025-11-15 01:34:49.508 | 2025-11-15T01:34:49.508+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : Force full registry fetch : false
-2025-11-15 01:34:49.508 | 2025-11-15T01:34:49.508+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : Application is null : false
-2025-11-15 01:34:49.509 | 2025-11-15T01:34:49.508+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : Registered Applications size is zero : true
-2025-11-15 01:34:49.509 | 2025-11-15T01:34:49.509+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : Application version is -1: false
-2025-11-15 01:34:49.509 | 2025-11-15T01:34:49.509+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : Getting all instance registry info from the eureka server
-2025-11-15 01:34:49.522 | 2025-11-15T01:34:49.521+08:00  INFO 1 --- [njumarket-service-commodity] [reshExecutor-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : The response status is 200
-2025-11-15 01:35:32.455 | 2025-11-15T01:35:32.454+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-6] [69176864f7a7e3430556b00f8ca363cd-ab54be8a7240c69a] c.n.commodity.filter.UserContextFilter   : 用户信息已设置: userId=USER_1761133111693_499, username=user_004, accountStatus=ACTIVE, SecurityContext已设置
-2025-11-15 01:35:32.592 | 2025-11-15T01:35:32.591+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-6] [69176864f7a7e3430556b00f8ca363cd-ab54be8a7240c69a] c.n.njumarket.aspect.ServiceLogAspect    : 查询开始 - className=CommodityQueryServiceImpl, method=getCommoditiesBatchStatus, params=ArrayList(size=2)
-2025-11-15 01:35:33.650 | 2025-11-15T01:35:33.649+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-6] [69176864f7a7e3430556b00f8ca363cd-ab54be8a7240c69a] c.n.c.s.impl.CommodityQueryServiceImpl   : Batch query commodity status successful - queried 2 commodities, returned 2 commodities
-2025-11-15 01:35:33.651 | 2025-11-15T01:35:33.650+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-6] [69176864f7a7e3430556b00f8ca363cd-ab54be8a7240c69a] c.n.njumarket.aspect.ServiceLogAspect    : 查询成功 - className=CommodityQueryServiceImpl, method=getCommoditiesBatchStatus, result=成功，数量=2, executionTime=1063ms
-2025-11-15 01:35:33.900 | 2025-11-15T01:35:33.899+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-9] [6917686529a1d884a58cce39977a97e6-78a25939786164d6] c.n.commodity.filter.UserContextFilter   : 用户信息已设置: userId=user_003, username=user_003, accountStatus=ACTIVE, SecurityContext已设置
-2025-11-15 01:35:33.906 | 2025-11-15T01:35:33.905+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-9] [6917686529a1d884a58cce39977a97e6-78a25939786164d6] c.n.njumarket.aspect.ServiceLogAspect    : 查询开始 - className=CommodityQueryServiceImpl, method=getCommoditiesBatchStatus, params=ArrayList(size=2)
-2025-11-15 01:35:33.948 | 2025-11-15T01:35:33.948+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-9] [6917686529a1d884a58cce39977a97e6-78a25939786164d6] c.n.c.s.impl.CommodityQueryServiceImpl   : Batch query commodity status successful - queried 2 commodities, returned 2 commodities
-2025-11-15 01:35:33.949 | 2025-11-15T01:35:33.948+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-9] [6917686529a1d884a58cce39977a97e6-78a25939786164d6] c.n.njumarket.aspect.ServiceLogAspect    : 查询成功 - className=CommodityQueryServiceImpl, method=getCommoditiesBatchStatus, result=成功，数量=2, executionTime=43ms
-2025-11-15 01:37:47.660 | 2025-11-15T01:37:47.659+08:00  INFO 1 --- [njumarket-service-commodity] [rap-executor-%d] [                                                 ] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
-2025-11-15 01:42:46.992 | 2025-11-15T01:42:46.991+08:00  INFO 1 --- [njumarket-service-commodity] [rap-executor-%d] [                                                 ] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
-2025-11-15 01:47:46.263 | 2025-11-15T01:47:46.252+08:00  INFO 1 --- [njumarket-service-commodity] [rap-executor-%d] [                                                 ] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
-2025-11-15 01:48:54.729 | 2025-11-15T01:48:54.727+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-8] [69176b8603de280a22e7197b7a867ab9-ffec8091f593eb45] c.n.njumarket.aspect.ServiceLogAspect    : 查询开始 - className=CommodityQueryServiceImpl, method=getCategories, params=无参数
-2025-11-15 01:48:54.732 | 2025-11-15T01:48:54.731+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-8] [69176b8603de280a22e7197b7a867ab9-ffec8091f593eb45] c.n.c.s.impl.CommodityQueryServiceImpl   : 获取商品分类
-2025-11-15 01:48:54.742 | 2025-11-15T01:48:54.741+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-7] [69176b86f245b3cb3245cc915bd27a79-576560252e65dc47] c.n.njumarket.aspect.ServiceLogAspect    : searchCommodities开始 - className=CommodityQueryServiceImpl, method=searchCommodities, params=null, 1, 20, null, null, null, null, null
-2025-11-15 01:48:54.743 | 2025-11-15T01:48:54.742+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-7] [69176b86f245b3cb3245cc915bd27a79-576560252e65dc47] c.n.c.s.impl.CommodityQueryServiceImpl   : 搜索商品 - keyword: null, page: 1, size: 20, location: null, minPrice: null, maxPrice: null, category: null, sortBy: null
-2025-11-15 01:48:54.775 | 2025-11-15T01:48:54.775+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-8] [69176b8603de280a22e7197b7a867ab9-ffec8091f593eb45] c.n.njumarket.aspect.ServiceLogAspect    : 查询成功 - className=CommodityQueryServiceImpl, method=getCategories, result=成功，数量=8, executionTime=47ms
-2025-11-15 01:48:55.320 | 2025-11-15T01:48:55.319+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-7] [69176b86f245b3cb3245cc915bd27a79-576560252e65dc47] c.n.c.s.impl.CommodityQueryServiceImpl   : 搜索商品成功 - 找到 14 个商品
-2025-11-15 01:48:55.321 | 2025-11-15T01:48:55.320+08:00  INFO 1 --- [njumarket-service-commodity] [nio-8092-exec-7] [69176b86f245b3cb3245cc915bd27a79-576560252e65dc47] c.n.njumarket.aspect.ServiceLogAspect    : searchCommodities成功 - className=CommodityQueryServiceImpl, method=searchCommodities, result=成功，data=CommodityPageResultVO, executionTime=580ms
+2025-11-18 13:29:24.446 | Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
+2025-11-18 13:29:33.040 | 
+2025-11-18 13:29:33.041 |   .   ____          _            __ _ _
+2025-11-18 13:29:33.041 |  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+2025-11-18 13:29:33.041 | ( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+2025-11-18 13:29:33.041 |  \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+2025-11-18 13:29:33.041 |   '  |____| .__|_| |_|_| |_\__, | / / / /
+2025-11-18 13:29:33.041 |  =========|_|==============|___/=/_/_/_/
+2025-11-18 13:29:33.042 |  :: Spring Boot ::                (v3.2.0)
+2025-11-18 13:29:33.042 | 
+2025-11-18 13:29:33.396 | 2025-11-18T13:29:33.387+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] c.njumarket.auth.AuthServiceApplication  : Starting AuthServiceApplication v0.0.1-SNAPSHOT using Java 17.0.17 with PID 1 (/app/app.jar started by spring in /app)
+2025-11-18 13:29:33.397 | 2025-11-18T13:29:33.397+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] c.njumarket.auth.AuthServiceApplication  : The following 1 profile is active: "dev"
+2025-11-18 13:29:33.733 | 2025-11-18T13:29:33.732+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Fetching config from server at : http://config-server:8888
+2025-11-18 13:29:33.733 | 2025-11-18T13:29:33.732+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Located environment: name=application, profiles=[default], label=null, version=null, state=null
+2025-11-18 13:29:33.733 | 2025-11-18T13:29:33.733+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Fetching config from server at : http://config-server:8888
+2025-11-18 13:29:33.733 | 2025-11-18T13:29:33.733+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Located environment: name=njumarket-service-auth, profiles=[default], label=null, version=null, state=null
+2025-11-18 13:29:33.733 | 2025-11-18T13:29:33.733+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Fetching config from server at : http://config-server:8888
+2025-11-18 13:29:33.733 | 2025-11-18T13:29:33.733+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.c.c.ConfigServerConfigDataLoader   : Located environment: name=njumarket-service-auth, profiles=[dev], label=null, version=null, state=null
+2025-11-18 13:29:35.895 | 2025-11-18T13:29:35.894+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-18 13:29:35.895 | 2025-11-18T13:29:35.895+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2025-11-18 13:29:37.771 | 2025-11-18T13:29:37.770+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 1861 ms. Found 3 JPA repository interfaces.
+2025-11-18 13:29:39.647 | 2025-11-18T13:29:39.646+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2025-11-18 13:29:39.650 | 2025-11-18T13:29:39.649+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Redis repositories in DEFAULT mode.
+2025-11-18 13:29:39.707 | 2025-11-18T13:29:39.706+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.njumarket.auth.repository.UserProfileRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2025-11-18 13:29:39.707 | 2025-11-18T13:29:39.707+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.njumarket.auth.repository.UserAddressRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2025-11-18 13:29:39.707 | 2025-11-18T13:29:39.707+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .RepositoryConfigurationExtensionSupport : Spring Data Redis - Could not safely identify store assignment for repository candidate interface com.njumarket.auth.repository.UserRepository; If you want this repository to be a Redis repository, consider annotating your entities with one of these annotations: org.springframework.data.redis.core.RedisHash (preferred), or consider extending one of the following types with your repository: org.springframework.data.keyvalue.repository.KeyValueRepository
+2025-11-18 13:29:39.708 | 2025-11-18T13:29:39.707+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 35 ms. Found 0 Redis repository interfaces.
+2025-11-18 13:29:41.881 | 2025-11-18T13:29:41.880+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.cloud.context.scope.GenericScope     : BeanFactory id=66db70ac-1768-3f1c-b374-230a9684f387
+2025-11-18 13:29:43.724 | 2025-11-18T13:29:43.720+08:00  WARN 1 --- [njumarket-service-auth] [           main] [                                                 ] trationDelegate$BeanPostProcessorChecker : Bean 'org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig' of type [org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). The currently created BeanPostProcessor [lbRestClientPostProcessor] is declared through a non-static factory method on that class; consider declaring it as static instead.
+2025-11-18 13:29:43.741 | 2025-11-18T13:29:43.740+08:00  WARN 1 --- [njumarket-service-auth] [           main] [                                                 ] trationDelegate$BeanPostProcessorChecker : Bean 'deferringLoadBalancerInterceptor' of type [org.springframework.cloud.client.loadbalancer.DeferringLoadBalancerInterceptor] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected into a currently created BeanPostProcessor [lbRestClientPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies.
+2025-11-18 13:29:45.121 | 2025-11-18T13:29:45.119+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8091 (http)
+2025-11-18 13:29:45.163 | 2025-11-18T13:29:45.162+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2025-11-18 13:29:45.164 | 2025-11-18T13:29:45.163+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.16]
+2025-11-18 13:29:45.304 | 2025-11-18T13:29:45.304+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2025-11-18 13:29:45.307 | 2025-11-18T13:29:45.306+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 11568 ms
+2025-11-18 13:29:47.904 | 2025-11-18T13:29:47.901+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2025-11-18 13:29:47.988 | 2025-11-18T13:29:47.987+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] org.hibernate.Version                    : HHH000412: Hibernate ORM core version 6.3.1.Final
+2025-11-18 13:29:48.061 | 2025-11-18T13:29:48.060+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2025-11-18 13:29:48.483 | 2025-11-18T13:29:48.482+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2025-11-18 13:29:48.533 | 2025-11-18T13:29:48.532+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2025-11-18 13:29:48.805 | 2025-11-18T13:29:48.805+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@1f41f259
+2025-11-18 13:29:48.809 | 2025-11-18T13:29:48.808+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2025-11-18 13:29:48.856 | 2025-11-18T13:29:48.856+08:00  WARN 1 --- [njumarket-service-auth] [           main] [                                                 ] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2025-11-18 13:29:50.825 | 2025-11-18T13:29:50.825+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2025-11-18 13:29:50.830 | 2025-11-18T13:29:50.829+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2025-11-18 13:29:51.617 | 2025-11-18T13:29:51.616+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.d.j.r.query.QueryEnhancerFactory     : Hibernate is in classpath; If applicable, HQL parser will be used.
+2025-11-18 13:29:54.319 | 2025-11-18T13:29:54.319+08:00  WARN 1 --- [njumarket-service-auth] [           main] [                                                 ] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2025-11-18 13:29:54.582 | 2025-11-18T13:29:54.581+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.openfeign.FeignClientFactoryBean   : For 'njumarket-service-image' URL not provided. Will try picking an instance via load-balancing.
+2025-11-18 13:29:56.003 | 2025-11-18T13:29:56.003+08:00  WARN 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.s.UserDetailsServiceAutoConfiguration : 
+2025-11-18 13:29:56.003 | 
+2025-11-18 13:29:56.003 | Using generated security password: e61063c9-474f-4cf8-9189-30f27063db32
+2025-11-18 13:29:56.003 | 
+2025-11-18 13:29:56.003 | This generated password is for development use only. Your security configuration must be updated before running your application in production.
+2025-11-18 13:29:56.003 | 
+2025-11-18 13:29:59.655 | 2025-11-18T13:29:59.654+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 6 endpoint(s) beneath base path '/actuator'
+2025-11-18 13:29:59.786 | 2025-11-18T13:29:59.785+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.s.web.DefaultSecurityFilterChain     : Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@54d4c35f, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@7db205ba, org.springframework.security.web.context.SecurityContextHolderFilter@f9ad4c9, org.springframework.security.web.header.HeaderWriterFilter@6514666f, org.springframework.web.filter.CorsFilter@4df95b03, org.springframework.security.web.authentication.logout.LogoutFilter@ba9a098, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@57c32102, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@23258315, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@2eaf17c5, org.springframework.security.web.session.SessionManagementFilter@525aeba9, org.springframework.security.web.access.ExceptionTranslationFilter@39785b39, org.springframework.security.web.access.intercept.AuthorizationFilter@4a38c42e]
+2025-11-18 13:30:02.213 | 2025-11-18T13:30:02.213+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] DiscoveryClientOptionalArgsConfiguration : Eureka HTTP Client uses RestTemplate.
+2025-11-18 13:30:02.476 | 2025-11-18T13:30:02.475+08:00  WARN 1 --- [njumarket-service-auth] [           main] [                                                 ] iguration$LoadBalancerCaffeineWarnLogger : Spring Cloud LoadBalancer is currently working with the default cache. While this cache implementation is useful for development and tests, it's recommended to use Caffeine cache in production.You can switch to using Caffeine cache, by adding it and org.springframework.cache.caffeine.CaffeineCacheManager to the classpath.
+2025-11-18 13:30:02.638 | 2025-11-18T13:30:02.638+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.n.eureka.InstanceInfoFactory       : Setting initial instance status as: STARTING
+2025-11-18 13:30:02.686 | 2025-11-18T13:30:02.686+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Initializing Eureka in region us-east-1
+2025-11-18 13:30:02.696 | 2025-11-18T13:30:02.695+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] c.n.d.s.r.aws.ConfigClusterResolver      : Resolving eureka endpoints via configuration
+2025-11-18 13:30:02.717 | 2025-11-18T13:30:02.717+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Disable delta property : false
+2025-11-18 13:30:02.718 | 2025-11-18T13:30:02.717+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Single vip registry refresh property : null
+2025-11-18 13:30:02.718 | 2025-11-18T13:30:02.718+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Force full registry fetch : false
+2025-11-18 13:30:02.718 | 2025-11-18T13:30:02.718+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Application is null : false
+2025-11-18 13:30:02.718 | 2025-11-18T13:30:02.718+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Registered Applications size is zero : true
+2025-11-18 13:30:02.718 | 2025-11-18T13:30:02.718+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Application version is -1: true
+2025-11-18 13:30:02.718 | 2025-11-18T13:30:02.718+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Getting all instance registry info from the eureka server
+2025-11-18 13:30:03.126 | 2025-11-18T13:30:03.125+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : The response status is 200
+2025-11-18 13:30:03.131 | 2025-11-18T13:30:03.130+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Starting heartbeat executor: renew interval is: 30
+2025-11-18 13:30:03.149 | 2025-11-18T13:30:03.149+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] c.n.discovery.InstanceInfoReplicator     : InstanceInfoReplicator onDemand update allowed rate per min is 4
+2025-11-18 13:30:03.153 | 2025-11-18T13:30:03.152+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Discovery Client initialized at timestamp 1763443803152 with initial instances count: 7
+2025-11-18 13:30:03.177 | 2025-11-18T13:30:03.177+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.c.n.e.s.EurekaServiceRegistry        : Registering application NJUMARKET-SERVICE-AUTH with eureka with status UP
+2025-11-18 13:30:03.178 | 2025-11-18T13:30:03.178+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] com.netflix.discovery.DiscoveryClient    : Saw local status change event StatusChangeEvent [timestamp=1763443803177, current=UP, previous=STARTING]
+2025-11-18 13:30:03.181 | 2025-11-18T13:30:03.180+08:00  INFO 1 --- [njumarket-service-auth] [foReplicator-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-AUTH/ab15f2f6671c:njumarket-service-auth:8091: registering service...
+2025-11-18 13:30:03.221 | 2025-11-18T13:30:03.220+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8091 (http) with context path ''
+2025-11-18 13:30:03.222 | 2025-11-18T13:30:03.222+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] .s.c.n.e.s.EurekaAutoServiceRegistration : Updating port to 8091
+2025-11-18 13:30:03.256 | 2025-11-18T13:30:03.255+08:00  INFO 1 --- [njumarket-service-auth] [           main] [                                                 ] c.njumarket.auth.AuthServiceApplication  : Started AuthServiceApplication in 34.859 seconds (process running for 36.011)
+2025-11-18 13:30:03.268 | 2025-11-18T13:30:03.267+08:00  INFO 1 --- [njumarket-service-auth] [foReplicator-%d] [                                                 ] com.netflix.discovery.DiscoveryClient    : DiscoveryClient_NJUMARKET-SERVICE-AUTH/ab15f2f6671c:njumarket-service-auth:8091 - registration status: 204
+2025-11-18 13:30:04.570 | 2025-11-18T13:30:04.569+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-1] [                                                 ] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2025-11-18 13:30:04.570 | 2025-11-18T13:30:04.570+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2025-11-18 13:30:04.575 | 2025-11-18T13:30:04.574+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-1] [                                                 ] o.s.web.servlet.DispatcherServlet        : Completed initialization in 4 ms
+2025-11-18 13:30:04.620 | 2025-11-18T13:30:04.620+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-1] [691c045c98f1343c1af8726cae6dda5c-b5a80f8237814977] o.s.w.s.h.HandlerMappingIntrospector     : Cache miss for REQUEST dispatch to '/actuator/health' (previous null). Performing CorsConfiguration lookup. This is logged once only at WARN level, and every time at TRACE.
+2025-11-18 13:30:04.637 | 2025-11-18T13:30:04.637+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-1] [691c045c98f1343c1af8726cae6dda5c-f994d291b5805d39] o.s.w.s.h.HandlerMappingIntrospector     : Cache miss for REQUEST dispatch to '/actuator/health' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
+2025-11-18 13:31:26.754 | 2025-11-18T13:31:26.753+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/user/auth/login, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:26.755 | 2025-11-18T13:31:26.754+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/user/auth/login, 所有请求头=[content-length, pragma, cache-control, sec-ch-ua-platform, user-agent, accept, sec-ch-ua, content-type, sec-ch-ua-mobile, origin, sec-fetch-site, sec-fetch-mode, sec-fetch-dest, referer, accept-encoding, accept-language, forwarded, x-forwarded-for, x-forwarded-proto, x-forwarded-port, x-forwarded-host, b3, host]
+2025-11-18 13:31:26.894 | 2025-11-18T13:31:26.894+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.njumarket.aspect.ServiceLogAspect    : 用户登录开始 - className=UserServiceImpl, method=login, params=LoginFormDTO(...), StandardSessionFacade(...)
+2025-11-18 13:31:27.222 | 2025-11-18T13:31:27.222+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.service.impl.UserServiceImpl    : 开始生成并存储Token: userId=user_003
+2025-11-18 13:31:27.368 | 2025-11-18T13:31:27.367+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.service.impl.UserServiceImpl    : Token生成完成: userId=user_003, accessToken长度=233, refreshToken长度=205
+2025-11-18 13:31:27.429 | 2025-11-18T13:31:27.427+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.service.impl.UserServiceImpl    : 检测到旧AccessToken，将被覆盖: userId=user_003, tokenKey=login:token:user_003, 旧Token前10字符=eyJhbGciOi...
+2025-11-18 13:31:27.442 | 2025-11-18T13:31:27.441+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.service.impl.UserServiceImpl    : AccessToken存储成功: userId=user_003, tokenKey=login:token:user_003, TTL=1440分钟, 覆盖旧Token=true
+2025-11-18 13:31:27.443 | 2025-11-18T13:31:27.443+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.service.impl.UserServiceImpl    : 检测到旧RefreshToken，将被覆盖: userId=user_003, refreshKey=refresh:token:user_003
+2025-11-18 13:31:27.447 | 2025-11-18T13:31:27.447+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.service.impl.UserServiceImpl    : RefreshToken存储成功: userId=user_003, refreshKey=refresh:token:user_003, TTL=10080分钟, 覆盖旧Token=true
+2025-11-18 13:31:27.449 | 2025-11-18T13:31:27.448+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.auth.service.impl.UserServiceImpl    : 双Token机制：Token生成并存储完成: userId=user_003, accessTokenKey=login:token:user_003, refreshTokenKey=refresh:token:user_003, 覆盖旧Token=true
+2025-11-18 13:31:27.451 | 2025-11-18T13:31:27.451+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.njumarket.aspect.ServiceLogAspect    : 查询订单开始 - className=UserProfileServiceImpl, method=getOrderReminderStatus, params=user_003
+2025-11-18 13:31:27.483 | 2025-11-18T13:31:27.482+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.njumarket.aspect.ServiceLogAspect    : 查询订单成功 - className=UserProfileServiceImpl, method=getOrderReminderStatus, result=HashMap, executionTime=32ms
+2025-11-18 13:31:27.484 | 2025-11-18T13:31:27.484+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04aec88fd00184aaba808202853c-44481b2ca92547df] c.n.njumarket.aspect.ServiceLogAspect    : 用户登录成功 - className=UserServiceImpl, method=login, result=成功，data=LoginResultVO, executionTime=591ms
+2025-11-18 13:31:28.734 | 2025-11-18T13:31:28.733+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04afeda1a7b6d7388e0a596479af-254c14a370833630] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/internal/user/profile/batch, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:28.735 | 2025-11-18T13:31:28.734+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04afeda1a7b6d7388e0a596479af-254c14a370833630] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/internal/user/profile/batch, 所有请求头=[b3, accept, user-agent, host, connection]
+2025-11-18 13:31:29.219 | 2025-11-18T13:31:29.213+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-4] [691c04b17332d62ca5f0e96dd10548ce-105ec66dbbe6a29e] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/user/profile/order-reminder/clear, X-User-Id=user_003, X-User-Id是否为null=false
+2025-11-18 13:31:29.219 | 2025-11-18T13:31:29.218+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-4] [691c04b17332d62ca5f0e96dd10548ce-105ec66dbbe6a29e] c.n.auth.filter.UserContextFilter        : 从数据库查询用户: userId=user_003
+2025-11-18 13:31:29.426 | 2025-11-18T13:31:29.423+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-4] [691c04b17332d62ca5f0e96dd10548ce-105ec66dbbe6a29e] c.n.auth.filter.UserContextFilter        : 从数据库获取的accountStatus: [ACTIVE], userId=user_003, accountStatus是否为null=false
+2025-11-18 13:31:29.427 | 2025-11-18T13:31:29.426+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-4] [691c04b17332d62ca5f0e96dd10548ce-105ec66dbbe6a29e] c.n.auth.filter.UserContextFilter        : 用户信息已设置: userId=user_003, username=user_003, accountStatus=ACTIVE, SecurityContext已设置
+2025-11-18 13:31:29.435 | 2025-11-18T13:31:29.431+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-4] [691c04b17332d62ca5f0e96dd10548ce-105ec66dbbe6a29e] c.n.njumarket.aspect.ServiceLogAspect    : clearOrderReminderStatus开始 - className=UserProfileServiceImpl, method=clearOrderReminderStatus, params=user_003, SELLER
+2025-11-18 13:31:29.523 | 2025-11-18T13:31:29.522+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-4] [691c04b17332d62ca5f0e96dd10548ce-105ec66dbbe6a29e] c.n.njumarket.aspect.ServiceLogAspect    : clearOrderReminderStatus成功 - className=UserProfileServiceImpl, method=clearOrderReminderStatus, result=null, executionTime=91ms
+2025-11-18 13:31:29.575 | 2025-11-18T13:31:29.574+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-5] [691c04b1b15dabfa741afaaef88333bf-8c9fb8de33cc7a1f] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/internal/user/user_003, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:29.576 | 2025-11-18T13:31:29.575+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-5] [691c04b1b15dabfa741afaaef88333bf-8c9fb8de33cc7a1f] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/internal/user/user_003, 所有请求头=[b3, accept, user-agent, host, connection]
+2025-11-18 13:31:30.149 | 2025-11-18T13:31:30.149+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-6] [691c04b1b15dabfa741afaaef88333bf-1faf8793e4da0971] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/internal/user/profile/batch, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:30.149 | 2025-11-18T13:31:30.149+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-6] [691c04b1b15dabfa741afaaef88333bf-1faf8793e4da0971] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/internal/user/profile/batch, 所有请求头=[b3, accept, user-agent, host, connection]
+2025-11-18 13:31:32.724 | 2025-11-18T13:31:32.723+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-7] [691c04b4ab3b37199885fcaea00cfbd5-95e98b7c4d5021b7] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/user/profile/order-reminder/clear, X-User-Id=user_003, X-User-Id是否为null=false
+2025-11-18 13:31:32.724 | 2025-11-18T13:31:32.724+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-7] [691c04b4ab3b37199885fcaea00cfbd5-95e98b7c4d5021b7] c.n.auth.filter.UserContextFilter        : 从数据库查询用户: userId=user_003
+2025-11-18 13:31:32.735 | 2025-11-18T13:31:32.735+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-7] [691c04b4ab3b37199885fcaea00cfbd5-95e98b7c4d5021b7] c.n.auth.filter.UserContextFilter        : 从数据库获取的accountStatus: [ACTIVE], userId=user_003, accountStatus是否为null=false
+2025-11-18 13:31:32.736 | 2025-11-18T13:31:32.735+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-7] [691c04b4ab3b37199885fcaea00cfbd5-95e98b7c4d5021b7] c.n.auth.filter.UserContextFilter        : 用户信息已设置: userId=user_003, username=user_003, accountStatus=ACTIVE, SecurityContext已设置
+2025-11-18 13:31:32.740 | 2025-11-18T13:31:32.737+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-7] [691c04b4ab3b37199885fcaea00cfbd5-95e98b7c4d5021b7] c.n.njumarket.aspect.ServiceLogAspect    : clearOrderReminderStatus开始 - className=UserProfileServiceImpl, method=clearOrderReminderStatus, params=user_003, BUYER
+2025-11-18 13:31:32.743 | 2025-11-18T13:31:32.740+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04b453872e1ed6d66bc32f500cbf-5d8ec84a35c15c96] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/internal/user/user_003, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:32.744 | 2025-11-18T13:31:32.743+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04b453872e1ed6d66bc32f500cbf-5d8ec84a35c15c96] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/internal/user/user_003, 所有请求头=[b3, accept, user-agent, host, connection]
+2025-11-18 13:31:32.753 | 2025-11-18T13:31:32.752+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-7] [691c04b4ab3b37199885fcaea00cfbd5-95e98b7c4d5021b7] c.n.njumarket.aspect.ServiceLogAspect    : clearOrderReminderStatus成功 - className=UserProfileServiceImpl, method=clearOrderReminderStatus, result=null, executionTime=15ms
+2025-11-18 13:31:32.891 | 2025-11-18T13:31:32.891+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-9] [691c04b453872e1ed6d66bc32f500cbf-f51d7fe3eac12568] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/internal/user/profile/batch, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:32.891 | 2025-11-18T13:31:32.891+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-9] [691c04b453872e1ed6d66bc32f500cbf-f51d7fe3eac12568] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/internal/user/profile/batch, 所有请求头=[b3, accept, user-agent, host, connection]
+2025-11-18 13:31:35.128 | 2025-11-18T13:31:35.128+08:00  INFO 1 --- [njumarket-service-auth] [io-8091-exec-10] [691c04b7e0b92a07719b749089d5e91f-a32bc98966d1e3cd] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/internal/user/user_003, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:35.129 | 2025-11-18T13:31:35.128+08:00  WARN 1 --- [njumarket-service-auth] [io-8091-exec-10] [691c04b7e0b92a07719b749089d5e91f-a32bc98966d1e3cd] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/internal/user/user_003, 所有请求头=[b3, accept, user-agent, host, connection]
+2025-11-18 13:31:35.249 | 2025-11-18T13:31:35.249+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-1] [691c04b7e0b92a07719b749089d5e91f-a57805b60a015134] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/internal/user/profile/batch, X-User-Id=null, X-User-Id是否为null=true
+2025-11-18 13:31:35.249 | 2025-11-18T13:31:35.249+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-1] [691c04b7e0b92a07719b749089d5e91f-a57805b60a015134] c.n.auth.filter.UserContextFilter        : 请求头中未找到X-User-Id: uri=/api/internal/user/profile/batch, 所有请求头=[b3, accept, user-agent, host, connection]
+2025-11-18 13:31:35.403 | 2025-11-18T13:31:35.402+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04b7e74a144c8a2b89e854aa62d9-07c5a1d57ebb9d90] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/auth/addresses, X-User-Id=user_003, X-User-Id是否为null=false
+2025-11-18 13:31:35.403 | 2025-11-18T13:31:35.402+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04b7e74a144c8a2b89e854aa62d9-07c5a1d57ebb9d90] c.n.auth.filter.UserContextFilter        : 从数据库查询用户: userId=user_003
+2025-11-18 13:31:35.421 | 2025-11-18T13:31:35.420+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04b7e74a144c8a2b89e854aa62d9-07c5a1d57ebb9d90] c.n.auth.filter.UserContextFilter        : 从数据库获取的accountStatus: [ACTIVE], userId=user_003, accountStatus是否为null=false
+2025-11-18 13:31:35.421 | 2025-11-18T13:31:35.421+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04b7e74a144c8a2b89e854aa62d9-07c5a1d57ebb9d90] c.n.auth.filter.UserContextFilter        : 用户信息已设置: userId=user_003, username=user_003, accountStatus=ACTIVE, SecurityContext已设置
+2025-11-18 13:31:35.430 | 2025-11-18T13:31:35.429+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04b7e74a144c8a2b89e854aa62d9-07c5a1d57ebb9d90] c.n.njumarket.aspect.ServiceLogAspect    : 查询用户开始 - className=UserAddressServiceImpl, method=getUserAddresses, params=null
+2025-11-18 13:31:35.467 | 2025-11-18T13:31:35.466+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-2] [691c04b7e74a144c8a2b89e854aa62d9-07c5a1d57ebb9d90] c.n.njumarket.aspect.ServiceLogAspect    : 查询用户成功 - className=UserAddressServiceImpl, method=getUserAddresses, result=成功，数量=1, executionTime=37ms
+2025-11-18 13:31:37.732 | 2025-11-18T13:31:37.731+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04b9b952b6d96023582ed279ea73-166c72765ab1d9e6] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/auth/addresses, X-User-Id=user_003, X-User-Id是否为null=false
+2025-11-18 13:31:37.732 | 2025-11-18T13:31:37.731+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04b9b952b6d96023582ed279ea73-166c72765ab1d9e6] c.n.auth.filter.UserContextFilter        : 从数据库查询用户: userId=user_003
+2025-11-18 13:31:37.741 | 2025-11-18T13:31:37.740+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04b9b952b6d96023582ed279ea73-166c72765ab1d9e6] c.n.auth.filter.UserContextFilter        : 从数据库获取的accountStatus: [ACTIVE], userId=user_003, accountStatus是否为null=false
+2025-11-18 13:31:37.741 | 2025-11-18T13:31:37.741+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04b9b952b6d96023582ed279ea73-166c72765ab1d9e6] c.n.auth.filter.UserContextFilter        : 用户信息已设置: userId=user_003, username=user_003, accountStatus=ACTIVE, SecurityContext已设置
+2025-11-18 13:31:37.743 | 2025-11-18T13:31:37.743+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04b9b952b6d96023582ed279ea73-166c72765ab1d9e6] c.n.njumarket.aspect.ServiceLogAspect    : 查询用户开始 - className=UserAddressServiceImpl, method=getUserAddresses, params=null
+2025-11-18 13:31:37.765 | 2025-11-18T13:31:37.764+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-3] [691c04b9b952b6d96023582ed279ea73-166c72765ab1d9e6] c.n.njumarket.aspect.ServiceLogAspect    : 查询用户成功 - className=UserAddressServiceImpl, method=getUserAddresses, result=成功，数量=1, executionTime=21ms
+2025-11-18 13:31:55.539 | 2025-11-18T13:31:55.538+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.auth.filter.UserContextFilter        : UserContextFilter处理请求: uri=/api/auth/addresses, X-User-Id=user_003, X-User-Id是否为null=false
+2025-11-18 13:31:55.539 | 2025-11-18T13:31:55.539+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.auth.filter.UserContextFilter        : 从数据库查询用户: userId=user_003
+2025-11-18 13:31:55.548 | 2025-11-18T13:31:55.547+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.auth.filter.UserContextFilter        : 从数据库获取的accountStatus: [ACTIVE], userId=user_003, accountStatus是否为null=false
+2025-11-18 13:31:55.548 | 2025-11-18T13:31:55.547+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.auth.filter.UserContextFilter        : 用户信息已设置: userId=user_003, username=user_003, accountStatus=ACTIVE, SecurityContext已设置
+2025-11-18 13:31:55.556 | 2025-11-18T13:31:55.555+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.njumarket.aspect.ServiceLogAspect    : 创建开始 - className=UserAddressServiceImpl, method=createAddress, params=UserAddressDTO(...)
+2025-11-18 13:31:55.652 | 2025-11-18T13:31:55.651+08:00  INFO 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.a.s.impl.UserAddressServiceImpl      : 用户创建地址成功: userId=user_003, addressId=ADDRuser_003_1763443915556
+2025-11-18 13:31:55.734 | 2025-11-18T13:31:55.733+08:00  WARN 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 42883
+2025-11-18 13:31:55.734 | 2025-11-18T13:31:55.734+08:00 ERROR 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.734 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.734 |   Position: 279
+2025-11-18 13:31:55.767 | 2025-11-18T13:31:55.750+08:00 ERROR 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.njumarket.aspect.ServiceLogAspect    : 创建失败（系统异常） - className=UserAddressServiceImpl, method=createAddress, error=could not execute statement [ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.767 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.767 |   Position: 279] [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]; SQL [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)], executionTime=196ms
+2025-11-18 13:31:55.767 | 
+2025-11-18 13:31:55.767 | org.springframework.dao.InvalidDataAccessResourceUsageException: could not execute statement [ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.767 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.767 |   Position: 279] [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]; SQL [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]
+2025-11-18 13:31:55.767 | 	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:277) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:241) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.orm.jpa.JpaTransactionManager.doCommit(JpaTransactionManager.java:565) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.transaction.support.AbstractPlatformTransactionManager.processCommit(AbstractPlatformTransactionManager.java:794) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.transaction.support.AbstractPlatformTransactionManager.commit(AbstractPlatformTransactionManager.java:757) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.transaction.interceptor.TransactionAspectSupport.commitTransactionAfterReturning(TransactionAspectSupport.java:669) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:419) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:89) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at com.njumarket.njumarket.aspect.ServiceLogAspect.logServiceMethod(ServiceLogAspect.java:73) ~[njumarket-common-0.0.1-SNAPSHOT.jar!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.767 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[na:na]
+2025-11-18 13:31:55.767 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.767 | 	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.767 | 	at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethodWithGivenArgs(AbstractAspectJAdvice.java:637) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethod(AbstractAspectJAdvice.java:627) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.aspectj.AspectJAroundAdvice.invoke(AspectJAroundAdvice.java:71) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:173) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.interceptor.ExposeInvocationInterceptor.invoke(ExposeInvocationInterceptor.java:97) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:717) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at com.njumarket.auth.service.impl.UserAddressServiceImpl$$SpringCGLIB$$0.createAddress(<generated>) ~[!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.767 | 	at com.njumarket.auth.controller.UserAddressController.createAddress(UserAddressController.java:26) ~[!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.767 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[na:na]
+2025-11-18 13:31:55.767 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.767 | 	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.767 | 	at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.767 | 	at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:254) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.767 | 	at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:182) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:118) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:917) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:829) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:979) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:914) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:590) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:205) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51) ~[tomcat-embed-websocket-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at com.njumarket.auth.filter.UserContextFilter.doFilterInternal(UserContextFilter.java:119) ~[!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$3(FilterChainProxy.java:231) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:479) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:340) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:82) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:128) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:100) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:131) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:85) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:179) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:107) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:93) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:323) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:224) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:233) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:191) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:352) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:268) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:109) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:167) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:90) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:482) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:74) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:340) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:391) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:896) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1744) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1191) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.768 | 	at java.base/java.lang.Thread.run(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.768 | Caused by: org.hibernate.exception.SQLGrammarException: could not execute statement [ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.768 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.768 |   Position: 279] [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]
+2025-11-18 13:31:55.768 | 	at org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:91) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.jdbc.internal.ResultSetReturnImpl.executeUpdate(ResultSetReturnImpl.java:283) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.jdbc.mutation.internal.AbstractMutationExecutor.performNonBatchedMutation(AbstractMutationExecutor.java:107) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.jdbc.mutation.internal.MutationExecutorSingleNonBatched.performNonBatchedOperations(MutationExecutorSingleNonBatched.java:40) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.jdbc.mutation.internal.AbstractMutationExecutor.execute(AbstractMutationExecutor.java:52) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.persister.entity.mutation.InsertCoordinator.doStaticInserts(InsertCoordinator.java:171) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.persister.entity.mutation.InsertCoordinator.coordinateInsert(InsertCoordinator.java:112) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.persister.entity.AbstractEntityPersister.insert(AbstractEntityPersister.java:2865) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.action.internal.EntityInsertAction.execute(EntityInsertAction.java:102) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.spi.ActionQueue.executeActions(ActionQueue.java:631) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.spi.ActionQueue.executeActions(ActionQueue.java:498) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.event.internal.AbstractFlushingEventListener.performExecutions(AbstractFlushingEventListener.java:363) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.event.internal.DefaultFlushEventListener.onFlush(DefaultFlushEventListener.java:39) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.event.service.internal.EventListenerGroupImpl.fireEventOnEachListener(EventListenerGroupImpl.java:127) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.internal.SessionImpl.doFlush(SessionImpl.java:1415) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.internal.SessionImpl.managedFlush(SessionImpl.java:496) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.internal.SessionImpl.flushBeforeTransactionCompletion(SessionImpl.java:2325) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.internal.SessionImpl.beforeTransactionCompletion(SessionImpl.java:1988) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.jdbc.internal.JdbcCoordinatorImpl.beforeTransactionCompletion(JdbcCoordinatorImpl.java:439) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorImpl.beforeCompletionCallback(JdbcResourceLocalTransactionCoordinatorImpl.java:169) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorImpl$TransactionDriverControlImpl.commit(JdbcResourceLocalTransactionCoordinatorImpl.java:267) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.transaction.internal.TransactionImpl.commit(TransactionImpl.java:101) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	at org.springframework.orm.jpa.JpaTransactionManager.doCommit(JpaTransactionManager.java:561) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.768 | 	... 151 common frames omitted
+2025-11-18 13:31:55.768 | Caused by: org.postgresql.util.PSQLException: ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.768 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.768 |   Position: 279
+2025-11-18 13:31:55.768 | 	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2713) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.768 | 	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2401) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.768 | 	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:368) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.768 | 	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:498) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.768 | 	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:415) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.768 | 	at org.postgresql.jdbc.PgPreparedStatement.executeWithFlags(PgPreparedStatement.java:190) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.768 | 	at org.postgresql.jdbc.PgPreparedStatement.executeUpdate(PgPreparedStatement.java:152) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.768 | 	at com.zaxxer.hikari.pool.ProxyPreparedStatement.executeUpdate(ProxyPreparedStatement.java:61) ~[HikariCP-5.0.1.jar!/:na]
+2025-11-18 13:31:55.768 | 	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.executeUpdate(HikariProxyPreparedStatement.java) ~[HikariCP-5.0.1.jar!/:na]
+2025-11-18 13:31:55.768 | 	at org.hibernate.engine.jdbc.internal.ResultSetReturnImpl.executeUpdate(ResultSetReturnImpl.java:280) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.768 | 	... 172 common frames omitted
+2025-11-18 13:31:55.768 | 
+2025-11-18 13:31:55.784 | 2025-11-18T13:31:55.773+08:00 ERROR 1 --- [njumarket-service-auth] [nio-8091-exec-8] [691c04cb53dd32c209a124224f97bc35-a50a82c75b0c15f5] c.n.n.exception.GlobalExceptionHandler   : 系统异常: could not execute statement [ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.784 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.784 |   Position: 279] [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]; SQL [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]
+2025-11-18 13:31:55.784 | 
+2025-11-18 13:31:55.784 | org.springframework.dao.InvalidDataAccessResourceUsageException: could not execute statement [ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.784 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.784 |   Position: 279] [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]; SQL [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]
+2025-11-18 13:31:55.784 | 	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.convertHibernateAccessException(HibernateJpaDialect.java:277) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.orm.jpa.vendor.HibernateJpaDialect.translateExceptionIfPossible(HibernateJpaDialect.java:241) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.orm.jpa.JpaTransactionManager.doCommit(JpaTransactionManager.java:565) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.transaction.support.AbstractPlatformTransactionManager.processCommit(AbstractPlatformTransactionManager.java:794) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.transaction.support.AbstractPlatformTransactionManager.commit(AbstractPlatformTransactionManager.java:757) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.transaction.interceptor.TransactionAspectSupport.commitTransactionAfterReturning(TransactionAspectSupport.java:669) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.transaction.interceptor.TransactionAspectSupport.invokeWithinTransaction(TransactionAspectSupport.java:419) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.transaction.interceptor.TransactionInterceptor.invoke(TransactionInterceptor.java:119) ~[spring-tx-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.aspectj.MethodInvocationProceedingJoinPoint.proceed(MethodInvocationProceedingJoinPoint.java:89) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at com.njumarket.njumarket.aspect.ServiceLogAspect.logServiceMethod(ServiceLogAspect.java:73) ~[njumarket-common-0.0.1-SNAPSHOT.jar!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.784 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[na:na]
+2025-11-18 13:31:55.784 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.784 | 	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.784 | 	at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethodWithGivenArgs(AbstractAspectJAdvice.java:637) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.aspectj.AbstractAspectJAdvice.invokeAdviceMethod(AbstractAspectJAdvice.java:627) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.aspectj.AspectJAroundAdvice.invoke(AspectJAroundAdvice.java:71) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:173) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.interceptor.ExposeInvocationInterceptor.invoke(ExposeInvocationInterceptor.java:97) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.framework.ReflectiveMethodInvocation.proceed(ReflectiveMethodInvocation.java:184) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.framework.CglibAopProxy$CglibMethodInvocation.proceed(CglibAopProxy.java:765) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.aop.framework.CglibAopProxy$DynamicAdvisedInterceptor.intercept(CglibAopProxy.java:717) ~[spring-aop-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at com.njumarket.auth.service.impl.UserAddressServiceImpl$$SpringCGLIB$$0.createAddress(<generated>) ~[!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.784 | 	at com.njumarket.auth.controller.UserAddressController.createAddress(UserAddressController.java:26) ~[!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.784 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[na:na]
+2025-11-18 13:31:55.784 | 	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.784 | 	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.784 | 	at java.base/java.lang.reflect.Method.invoke(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.method.support.InvocableHandlerMethod.doInvoke(InvocableHandlerMethod.java:254) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.method.support.InvocableHandlerMethod.invokeForRequest(InvocableHandlerMethod.java:182) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.mvc.method.annotation.ServletInvocableHandlerMethod.invokeAndHandle(ServletInvocableHandlerMethod.java:118) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.invokeHandlerMethod(RequestMappingHandlerAdapter.java:917) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter.handleInternal(RequestMappingHandlerAdapter.java:829) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.mvc.method.AbstractHandlerMethodAdapter.handle(AbstractHandlerMethodAdapter.java:87) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1089) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.DispatcherServlet.doService(DispatcherServlet.java:979) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.FrameworkServlet.processRequest(FrameworkServlet.java:1014) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.FrameworkServlet.doPost(FrameworkServlet.java:914) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:590) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.servlet.FrameworkServlet.service(FrameworkServlet.java:885) ~[spring-webmvc-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:658) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:205) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.apache.tomcat.websocket.server.WsFilter.doFilter(WsFilter.java:51) ~[tomcat-embed-websocket-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at com.njumarket.auth.filter.UserContextFilter.doFilterInternal(UserContextFilter.java:119) ~[!/:0.0.1-SNAPSHOT]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.FilterChainProxy.lambda$doFilterInternal$3(FilterChainProxy.java:231) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$FilterObservation$SimpleFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:479) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$1(ObservationFilterChainDecorator.java:340) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator.lambda$wrapSecured$0(ObservationFilterChainDecorator.java:82) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:128) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.access.intercept.AuthorizationFilter.doFilter(AuthorizationFilter.java:100) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:126) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:120) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:131) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.session.SessionManagementFilter.doFilter(SessionManagementFilter.java:85) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.authentication.AnonymousAuthenticationFilter.doFilter(AnonymousAuthenticationFilter.java:100) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter.doFilter(SecurityContextHolderAwareRequestFilter.java:179) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.savedrequest.RequestCacheAwareFilter.doFilter(RequestCacheAwareFilter.java:63) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:107) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.authentication.logout.LogoutFilter.doFilter(LogoutFilter.java:93) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.filter.CorsFilter.doFilterInternal(CorsFilter.java:91) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.header.HeaderWriterFilter.doHeadersAfter(HeaderWriterFilter.java:90) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.header.HeaderWriterFilter.doFilterInternal(HeaderWriterFilter.java:75) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.784 | 	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:82) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.context.SecurityContextHolderFilter.doFilter(SecurityContextHolderFilter.java:69) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter.doFilterInternal(WebAsyncManagerIntegrationFilter.java:62) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:227) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.session.DisableEncodeUrlFilter.doFilterInternal(DisableEncodeUrlFilter.java:42) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.wrapFilter(ObservationFilterChainDecorator.java:240) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$AroundFilterObservation$SimpleAroundFilterObservation.lambda$wrap$0(ObservationFilterChainDecorator.java:323) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$ObservationFilter.doFilter(ObservationFilterChainDecorator.java:224) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.ObservationFilterChainDecorator$VirtualFilterChain.doFilter(ObservationFilterChainDecorator.java:137) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.FilterChainProxy.doFilterInternal(FilterChainProxy.java:233) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.security.web.FilterChainProxy.doFilter(FilterChainProxy.java:191) ~[spring-security-web-6.2.0.jar!/:6.2.0]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.DelegatingFilterProxy.invokeDelegate(DelegatingFilterProxy.java:352) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.DelegatingFilterProxy.doFilter(DelegatingFilterProxy.java:268) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.RequestContextFilter.doFilterInternal(RequestContextFilter.java:100) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.FormContentFilter.doFilterInternal(FormContentFilter.java:93) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.ServerHttpObservationFilter.doFilterInternal(ServerHttpObservationFilter.java:109) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.CharacterEncodingFilter.doFilterInternal(CharacterEncodingFilter.java:201) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.springframework.web.filter.OncePerRequestFilter.doFilter(OncePerRequestFilter.java:116) ~[spring-web-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.internalDoFilter(ApplicationFilterChain.java:174) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.ApplicationFilterChain.doFilter(ApplicationFilterChain.java:149) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.StandardWrapperValve.invoke(StandardWrapperValve.java:167) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.StandardContextValve.invoke(StandardContextValve.java:90) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.authenticator.AuthenticatorBase.invoke(AuthenticatorBase.java:482) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.StandardHostValve.invoke(StandardHostValve.java:115) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:93) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.core.StandardEngineValve.invoke(StandardEngineValve.java:74) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.catalina.connector.CoyoteAdapter.service(CoyoteAdapter.java:340) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.coyote.http11.Http11Processor.service(Http11Processor.java:391) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.coyote.AbstractProcessorLight.process(AbstractProcessorLight.java:63) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.coyote.AbstractProtocol$ConnectionHandler.process(AbstractProtocol.java:896) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.tomcat.util.net.NioEndpoint$SocketProcessor.doRun(NioEndpoint.java:1744) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.tomcat.util.net.SocketProcessorBase.run(SocketProcessorBase.java:52) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.tomcat.util.threads.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1191) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.tomcat.util.threads.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:659) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.apache.tomcat.util.threads.TaskThread$WrappingRunnable.run(TaskThread.java:61) ~[tomcat-embed-core-10.1.16.jar!/:na]
+2025-11-18 13:31:55.785 | 	at java.base/java.lang.Thread.run(Unknown Source) ~[na:na]
+2025-11-18 13:31:55.785 | Caused by: org.hibernate.exception.SQLGrammarException: could not execute statement [ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.785 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.785 |   Position: 279] [insert into nju_market.user_addresses (address_label,city,create_time,detail_address,district,full_address,is_active,is_default,latitude,location,longitude,province,recipient_name,recipient_phone,street_address,update_time,user_id,address_id) values (?,?,?,?,?,?,?,?,?,public.ST_GeogFromText(CAST(? AS text), 4326),?,?,?,?,?,?,?,?)]
+2025-11-18 13:31:55.785 | 	at org.hibernate.exception.internal.SQLStateConversionDelegate.convert(SQLStateConversionDelegate.java:91) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.jdbc.internal.ResultSetReturnImpl.executeUpdate(ResultSetReturnImpl.java:283) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.jdbc.mutation.internal.AbstractMutationExecutor.performNonBatchedMutation(AbstractMutationExecutor.java:107) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.jdbc.mutation.internal.MutationExecutorSingleNonBatched.performNonBatchedOperations(MutationExecutorSingleNonBatched.java:40) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.jdbc.mutation.internal.AbstractMutationExecutor.execute(AbstractMutationExecutor.java:52) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.persister.entity.mutation.InsertCoordinator.doStaticInserts(InsertCoordinator.java:171) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.persister.entity.mutation.InsertCoordinator.coordinateInsert(InsertCoordinator.java:112) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.persister.entity.AbstractEntityPersister.insert(AbstractEntityPersister.java:2865) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.action.internal.EntityInsertAction.execute(EntityInsertAction.java:102) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.spi.ActionQueue.executeActions(ActionQueue.java:631) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.spi.ActionQueue.executeActions(ActionQueue.java:498) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.event.internal.AbstractFlushingEventListener.performExecutions(AbstractFlushingEventListener.java:363) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.event.internal.DefaultFlushEventListener.onFlush(DefaultFlushEventListener.java:39) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.event.service.internal.EventListenerGroupImpl.fireEventOnEachListener(EventListenerGroupImpl.java:127) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.internal.SessionImpl.doFlush(SessionImpl.java:1415) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.internal.SessionImpl.managedFlush(SessionImpl.java:496) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.internal.SessionImpl.flushBeforeTransactionCompletion(SessionImpl.java:2325) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.internal.SessionImpl.beforeTransactionCompletion(SessionImpl.java:1988) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.jdbc.internal.JdbcCoordinatorImpl.beforeTransactionCompletion(JdbcCoordinatorImpl.java:439) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorImpl.beforeCompletionCallback(JdbcResourceLocalTransactionCoordinatorImpl.java:169) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.resource.transaction.backend.jdbc.internal.JdbcResourceLocalTransactionCoordinatorImpl$TransactionDriverControlImpl.commit(JdbcResourceLocalTransactionCoordinatorImpl.java:267) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.transaction.internal.TransactionImpl.commit(TransactionImpl.java:101) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	at org.springframework.orm.jpa.JpaTransactionManager.doCommit(JpaTransactionManager.java:561) ~[spring-orm-6.1.1.jar!/:6.1.1]
+2025-11-18 13:31:55.785 | 	... 151 common frames omitted
+2025-11-18 13:31:55.785 | Caused by: org.postgresql.util.PSQLException: ERROR: function public.st_geogfromtext(text, integer) does not exist
+2025-11-18 13:31:55.785 |   Hint: No function matches the given name and argument types. You might need to add explicit type casts.
+2025-11-18 13:31:55.785 |   Position: 279
+2025-11-18 13:31:55.785 | 	at org.postgresql.core.v3.QueryExecutorImpl.receiveErrorResponse(QueryExecutorImpl.java:2713) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.785 | 	at org.postgresql.core.v3.QueryExecutorImpl.processResults(QueryExecutorImpl.java:2401) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.785 | 	at org.postgresql.core.v3.QueryExecutorImpl.execute(QueryExecutorImpl.java:368) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.785 | 	at org.postgresql.jdbc.PgStatement.executeInternal(PgStatement.java:498) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.785 | 	at org.postgresql.jdbc.PgStatement.execute(PgStatement.java:415) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.785 | 	at org.postgresql.jdbc.PgPreparedStatement.executeWithFlags(PgPreparedStatement.java:190) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.785 | 	at org.postgresql.jdbc.PgPreparedStatement.executeUpdate(PgPreparedStatement.java:152) ~[postgresql-42.6.0.jar!/:42.6.0]
+2025-11-18 13:31:55.785 | 	at com.zaxxer.hikari.pool.ProxyPreparedStatement.executeUpdate(ProxyPreparedStatement.java:61) ~[HikariCP-5.0.1.jar!/:na]
+2025-11-18 13:31:55.785 | 	at com.zaxxer.hikari.pool.HikariProxyPreparedStatement.executeUpdate(HikariProxyPreparedStatement.java) ~[HikariCP-5.0.1.jar!/:na]
+2025-11-18 13:31:55.785 | 	at org.hibernate.engine.jdbc.internal.ResultSetReturnImpl.executeUpdate(ResultSetReturnImpl.java:280) ~[hibernate-core-6.3.1.Final.jar!/:6.3.1.Final]
+2025-11-18 13:31:55.785 | 	... 172 common frames omitted
+2025-11-18 13:31:55.785 | 

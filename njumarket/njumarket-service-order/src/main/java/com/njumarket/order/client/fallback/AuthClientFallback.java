@@ -40,5 +40,17 @@ public class AuthClientFallback implements AuthClient {
         log.warn("订单提醒状态设置失败，但不影响订单流程");
         return Result.ok("提醒状态设置失败，但不影响订单流程");
     }
+    
+    @Override
+    public Result getAddressById(String addressId) {
+        log.warn("认证服务不可用，触发熔断降级: addressId={}", addressId);
+        return Result.fail("认证服务暂时不可用，请稍后重试");
+    }
+    
+    @Override
+    public Result getDefaultAddress(String userId) {
+        log.warn("认证服务不可用，触发熔断降级: userId={}", userId);
+        return Result.fail("认证服务暂时不可用，请稍后重试");
+    }
 }
 

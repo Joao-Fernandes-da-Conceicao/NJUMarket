@@ -83,10 +83,37 @@
             </div>
           </div>
           
-          <!-- 显示商品快照信息 -->
-          <p v-if="order.commoditySnapshotLocation" class="commodity-location">
-            位置：{{ order.commoditySnapshotLocation }}
-          </p>
+          <!-- 买家订单：显示商品地址（商品所在位置） -->
+          <div v-if="type === 'buyer' && formatCommodityAddress(order)" class="commodity-location">
+            <span class="location-label">位置：</span>
+            <!-- 如果有地址快照字段，使用标准格式（省市区-详细地址） -->
+            <div v-if="!shouldUseSingleLineCommodityAddress(order)" class="address-display">
+              <div class="address-region">
+                {{ formatCommodityAddressRegion(order) }}
+              </div>
+              <div v-if="formatCommodityAddressDetail(order)" class="address-detail">
+                {{ formatCommodityAddressDetail(order) }}
+              </div>
+            </div>
+            <!-- 如果是旧数据（只有commoditySnapshotLocation），使用单行显示（废物利用） -->
+            <span v-else class="address-single-line">{{ formatCommodityAddressRegion(order) }}</span>
+          </div>
+          
+          <!-- 卖家订单：显示收货地址（用户给的地址） -->
+          <div v-if="type === 'seller' && formatShippingAddress(order)" class="commodity-location">
+            <span class="location-label">收货地址：</span>
+            <!-- 如果有地址快照字段，使用标准格式（省市区-详细地址） -->
+            <div v-if="!shouldUseSingleLineShippingAddress(order)" class="address-display">
+              <div class="address-region">
+                {{ formatShippingAddressRegion(order) }}
+              </div>
+              <div v-if="formatShippingAddressDetail(order)" class="address-detail">
+                {{ formatShippingAddressDetail(order) }}
+              </div>
+            </div>
+            <!-- 如果是旧数据（只有shippingAddress），使用单行显示（废物利用） -->
+            <span v-else class="address-single-line">{{ formatShippingAddressRegion(order) }}</span>
+          </div>
           
           <!-- 商品快照信息 -->
           <p v-if="order.commoditySnapshotTime" class="snapshot-time">
@@ -226,6 +253,168 @@ const getAvatarUrl = (avatar) => {
   if (!avatar) return ''
   if (avatar.startsWith('http')) return avatar
   return `http://localhost:8080/api/images/avatars/${avatar}`
+}
+
+// 格式化商品地址（判断是否有地址数据）
+const formatCommodityAddress = (order) => {
+  // 如果有省市区字段，使用标准格式
+  if (order.commoditySnapshotAddressProvince || 
+      order.commoditySnapshotAddressCity || 
+      order.commoditySnapshotAddressDistrict) {
+    return true
+  }
+  // 如果有完整地址快照，也返回true
+  if (order.commoditySnapshotAddressFull) {
+    return true
+  }
+  // 如果有旧字段 commoditySnapshotLocation，也返回true（废物利用）
+  if (order.commoditySnapshotLocation) {
+    return true
+  }
+  return false
+}
+
+// 格式化商品地址的省市区部分
+const formatCommodityAddressRegion = (order) => {
+  // 优先使用地址快照的省市区字段（结构化数据）
+  const parts = []
+  if (order.commoditySnapshotAddressProvince) {
+    parts.push(order.commoditySnapshotAddressProvince)
+  }
+  if (order.commoditySnapshotAddressCity) {
+    parts.push(order.commoditySnapshotAddressCity)
+  }
+  if (order.commoditySnapshotAddressDistrict) {
+    parts.push(order.commoditySnapshotAddressDistrict)
+  }
+  
+  if (parts.length > 0) {
+    return parts.join('')
+  }
+  
+  // 如果没有省市区字段，尝试从完整地址快照中提取
+  if (order.commoditySnapshotAddressFull) {
+    return order.commoditySnapshotAddressFull
+  }
+  
+  // 兼容旧字段：将 commoditySnapshotLocation 作为完整地址显示（废物利用）
+  return order.commoditySnapshotLocation || ''
+}
+
+// 格式化商品地址的详细地址部分
+const formatCommodityAddressDetail = (order) => {
+  // 如果有地址快照的详细地址字段，使用结构化数据
+  const parts = []
+  if (order.commoditySnapshotAddressStreet) {
+    parts.push(order.commoditySnapshotAddressStreet)
+  }
+  if (order.commoditySnapshotAddressDetail) {
+    parts.push(order.commoditySnapshotAddressDetail)
+  }
+  
+  if (parts.length > 0) {
+    return parts.join('')
+  }
+  
+  // 如果没有详细地址字段，但有完整地址快照，说明是旧数据格式
+  // 这种情况下，详细地址部分为空，完整地址已经在省市区部分显示了
+  return ''
+}
+
+// 检查是否应该使用单行显示（旧数据格式）
+const shouldUseSingleLineCommodityAddress = (order) => {
+  // 如果有地址快照的省市区字段，使用标准格式（省市区-详细地址）
+  if (order.commoditySnapshotAddressProvince || 
+      order.commoditySnapshotAddressCity || 
+      order.commoditySnapshotAddressDistrict) {
+    return false
+  }
+  // 如果没有地址快照字段，但有 commoditySnapshotLocation，使用单行显示（废物利用）
+  if (order.commoditySnapshotLocation && !order.commoditySnapshotAddressFull) {
+    return true
+  }
+  return false
+}
+
+// 格式化收货地址（判断是否有地址数据）
+const formatShippingAddress = (order) => {
+  // 如果有省市区字段，使用标准格式
+  if (order.shippingAddressSnapshotProvince || 
+      order.shippingAddressSnapshotCity || 
+      order.shippingAddressSnapshotDistrict) {
+    return true
+  }
+  // 如果有完整地址快照，也返回true
+  if (order.shippingAddressSnapshotFull) {
+    return true
+  }
+  // 如果有旧字段 shippingAddress，也返回true（废物利用）
+  if (order.shippingAddress) {
+    return true
+  }
+  return false
+}
+
+// 格式化收货地址的省市区部分
+const formatShippingAddressRegion = (order) => {
+  // 优先使用地址快照的省市区字段（结构化数据）
+  const parts = []
+  if (order.shippingAddressSnapshotProvince) {
+    parts.push(order.shippingAddressSnapshotProvince)
+  }
+  if (order.shippingAddressSnapshotCity) {
+    parts.push(order.shippingAddressSnapshotCity)
+  }
+  if (order.shippingAddressSnapshotDistrict) {
+    parts.push(order.shippingAddressSnapshotDistrict)
+  }
+  
+  if (parts.length > 0) {
+    return parts.join('')
+  }
+  
+  // 如果没有省市区字段，尝试从完整地址快照中提取
+  if (order.shippingAddressSnapshotFull) {
+    return order.shippingAddressSnapshotFull
+  }
+  
+  // 兼容旧字段：将 shippingAddress 作为完整地址显示（废物利用）
+  return order.shippingAddress || ''
+}
+
+// 格式化收货地址的详细地址部分
+const formatShippingAddressDetail = (order) => {
+  // 如果有地址快照的详细地址字段，使用结构化数据
+  const parts = []
+  if (order.shippingAddressSnapshotStreet) {
+    parts.push(order.shippingAddressSnapshotStreet)
+  }
+  if (order.shippingAddressSnapshotDetail) {
+    parts.push(order.shippingAddressSnapshotDetail)
+  }
+  
+  if (parts.length > 0) {
+    return parts.join('')
+  }
+  
+  // 如果没有详细地址字段，但有完整地址快照，说明是旧数据格式
+  // 这种情况下，详细地址部分为空，完整地址已经在省市区部分显示了
+  return ''
+}
+
+// 检查是否应该使用单行显示（旧数据格式）
+const shouldUseSingleLineShippingAddress = (order) => {
+  // 如果有地址快照的省市区字段，使用标准格式（省市区-详细地址）
+  if (order.shippingAddressSnapshotProvince || 
+      order.shippingAddressSnapshotCity || 
+      order.shippingAddressSnapshotDistrict) {
+    return false
+  }
+  // 如果没有地址快照字段，但有 shippingAddress，使用单行显示（废物利用）
+  if (order.shippingAddress && !order.shippingAddressSnapshotFull) {
+    return true
+  }
+  return false
 }
 </script>
 
@@ -449,6 +638,39 @@ const getAvatarUrl = (avatar) => {
   font-size: 14px;
   color: #666;
   margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.location-label {
+  flex-shrink: 0;
+  color: #999;
+}
+
+.address-display {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.address-region {
+  color: #666;
+  font-weight: normal;
+}
+
+.address-detail {
+  color: #999;
+  font-size: 12px;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.address-single-line {
+  color: #666;
+  font-weight: normal;
+  flex: 1;
 }
 
 .seller-name {

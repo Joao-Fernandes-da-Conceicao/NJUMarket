@@ -15,6 +15,7 @@ import CreateOrder from '../views/CreateOrder.vue'
 import OrderDetail from '../views/OrderDetail.vue'
 import Messages from '../views/Messages.vue'
 import SellerCommodities from '../views/SellerCommodities.vue'
+import AddressManagement from '../views/AddressManagement.vue'
 
 const routes = [
   {
@@ -118,6 +119,12 @@ const routes = [
     name: 'SellerCommodities',
     component: SellerCommodities,
     meta: { requiresAuth: false }
+  },
+  {
+    path: '/addresses',
+    name: 'AddressManagement',
+    component: AddressManagement,
+    meta: { requiresAuth: true }
   }
 ]
 

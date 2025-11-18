@@ -30,6 +30,13 @@ public class OrderInternalDTO implements Serializable {
     private LocalDateTime payTime;
     private LocalDateTime shippingTime;
     private LocalDateTime deliveryTime;
+    
+    // 地址相关字段
+    private String shippingAddressId; // 引用用户地址表
+    private String shippingAddressSnapshotFull; // 地址快照-完整地址
+    private String shippingAddressSnapshotRecipientName; // 地址快照-收货人姓名
+    private String shippingAddressSnapshotRecipientPhone; // 地址快照-收货人电话
+    
     // 不包含 Commodity、User、OrderSnapshot 等关联对象
 }
 

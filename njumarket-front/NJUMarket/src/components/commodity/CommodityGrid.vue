@@ -192,14 +192,22 @@ const handleEmptyAction = () => {
 
 @media (max-width: 900px) {
   .commodity-grid {
-    grid-template-columns: repeat(2, 1fr); /* 移动端强制每行2个卡片 */
-    gap: calc(12px * var(--mobile-scale, 1));
-    padding: calc(16px * var(--mobile-scale, 1)) 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px 0;
+  }
+  
+  .grid-item {
+    width: 100%;
   }
   
   .loading-state {
-    grid-template-columns: repeat(2, 1fr); /* 移动端强制每行2个卡片 */
-    gap: calc(12px * var(--mobile-scale, 1));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  
+  .loading-state .skeleton-card {
+    width: 100%;
   }
   
   .skeleton-image {

@@ -64,7 +64,36 @@ public class Order {
     private String trackingNumber;
     
     @Column(name = "shipping_address", columnDefinition = "TEXT")
-    private String shippingAddress;
+    private String shippingAddress; // 保留原有字段，用于兼容
+    
+    // ========== 地址相关字段 ==========
+    @Column(name = "shipping_address_id", length = 50)
+    private String shippingAddressId; // 引用用户地址表
+    
+    // 地址快照字段（保存下单时的地址信息）
+    @Column(name = "shipping_address_snapshot_province", length = 50)
+    private String shippingAddressSnapshotProvince;
+    
+    @Column(name = "shipping_address_snapshot_city", length = 50)
+    private String shippingAddressSnapshotCity;
+    
+    @Column(name = "shipping_address_snapshot_district", length = 50)
+    private String shippingAddressSnapshotDistrict;
+    
+    @Column(name = "shipping_address_snapshot_street", length = 200)
+    private String shippingAddressSnapshotStreet;
+    
+    @Column(name = "shipping_address_snapshot_detail", length = 500)
+    private String shippingAddressSnapshotDetail;
+    
+    @Column(name = "shipping_address_snapshot_full", columnDefinition = "TEXT")
+    private String shippingAddressSnapshotFull;
+    
+    @Column(name = "shipping_address_snapshot_recipient_name", length = 100)
+    private String shippingAddressSnapshotRecipientName;
+    
+    @Column(name = "shipping_address_snapshot_recipient_phone", length = 20)
+    private String shippingAddressSnapshotRecipientPhone;
     
     @Column(name = "remark", columnDefinition = "TEXT")
     private String remark;
@@ -103,6 +132,25 @@ public class Order {
     
     @Column(name = "commodity_snapshot_location", length = 200)
     private String commoditySnapshotLocation;
+    
+    // 商品地址快照字段（保存下单时商品的地址信息）
+    @Column(name = "commodity_snapshot_address_province", length = 50)
+    private String commoditySnapshotAddressProvince;
+    
+    @Column(name = "commodity_snapshot_address_city", length = 50)
+    private String commoditySnapshotAddressCity;
+    
+    @Column(name = "commodity_snapshot_address_district", length = 50)
+    private String commoditySnapshotAddressDistrict;
+    
+    @Column(name = "commodity_snapshot_address_street", length = 200)
+    private String commoditySnapshotAddressStreet;
+    
+    @Column(name = "commodity_snapshot_address_detail", length = 500)
+    private String commoditySnapshotAddressDetail;
+    
+    @Column(name = "commodity_snapshot_address_full", columnDefinition = "TEXT")
+    private String commoditySnapshotAddressFull;
     
     @Column(name = "commodity_snapshot_category", length = 50)
     private String commoditySnapshotCategory;

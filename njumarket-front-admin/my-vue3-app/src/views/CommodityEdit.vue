@@ -9,6 +9,79 @@
       <el-form-item label="价格"><UnifiedInput v-model="form.price" type="number" placeholder="请输入价格" /></el-form-item>
       <el-form-item label="库存"><UnifiedInput v-model="form.stock" type="number" placeholder="请输入库存" /></el-form-item>
       <el-form-item label="位置"><UnifiedInput v-model="form.location" placeholder="请输入位置" /></el-form-item>
+      <el-divider content-position="left">地址信息</el-divider>
+      <el-form-item label="地址ID">
+        <UnifiedInput 
+          v-model="form.addressId" 
+          placeholder="可选：关联用户地址ID（仅作为引用，不影响下方地址快照）" 
+        />
+        <div style="font-size: 12px; color: #999; margin-top: 4px;">
+          注意：地址ID只是数据来源引用，下方的地址快照字段是独立的，可以独立编辑
+        </div>
+      </el-form-item>
+      <el-form-item label="省 / 市 / 区">
+        <div class="region-row">
+          <UnifiedInput
+            v-model="form.addressSnapshotProvince"
+            placeholder="省份"
+            @input="handleAddressPartChange"
+          />
+          <UnifiedInput
+            v-model="form.addressSnapshotCity"
+            placeholder="城市"
+            @input="handleAddressPartChange"
+          />
+          <UnifiedInput
+            v-model="form.addressSnapshotDistrict"
+            placeholder="区/县"
+            @input="handleAddressPartChange"
+          />
+        </div>
+      </el-form-item>
+      <el-form-item label="街道">
+        <UnifiedInput
+          v-model="form.addressSnapshotStreet"
+          placeholder="街道/镇"
+          @input="handleAddressPartChange"
+        />
+      </el-form-item>
+      <el-form-item label="详细地址">
+        <UnifiedInput
+          v-model="form.addressSnapshotDetail"
+          placeholder="楼栋、门牌等"
+          @input="handleAddressPartChange"
+        />
+      </el-form-item>
+      <el-form-item label="地址快照">
+        <el-input
+          v-model="form.addressSnapshotFull"
+          type="textarea"
+          rows="3"
+          placeholder="默认根据上方字段拼接，可手动调整"
+          @input="handleFullAddressInput"
+        />
+      </el-form-item>
+      <el-form-item label="经纬度">
+        <div class="coord-row">
+          <UnifiedInput
+            v-model="form.longitude"
+            placeholder="经度"
+            @blur="handleManualCoordinateBlur"
+          />
+          <UnifiedInput
+            v-model="form.latitude"
+            placeholder="纬度"
+            @blur="handleManualCoordinateBlur"
+          />
+        </div>
+      </el-form-item>
+      <el-form-item label="地图标注">
+        <AddressMapPicker
+          v-model="mapLocation"
+          :default-location="mapDefaultLocation"
+          @change="handleMapLocationChange"
+        />
+      </el-form-item>
       <el-form-item label="分类">
         <UnifiedSelect 
           v-model="form.category" 
@@ -81,6 +154,7 @@
 import UnifiedInput from '../components/common/UnifiedInput.vue'
 import UnifiedButton from '../components/common/UnifiedButton.vue'
 import UnifiedSelect from '../components/common/UnifiedSelect.vue'
+import AddressMapPicker from '../components/address/AddressMapPicker.vue'
 import { commoditiesAPI } from '../api/admin/commodities'
 import { reviewCommodityPayload } from '../utils/commodityReview'
 import { ElMessage } from 'element-plus'
@@ -88,12 +162,15 @@ import { Plus } from '@element-plus/icons-vue'
 
 export default {
   name: 'CommodityEdit',
-  components:{ UnifiedInput, UnifiedButton, UnifiedSelect, Plus },
+  components:{ UnifiedInput, UnifiedButton, UnifiedSelect, AddressMapPicker, Plus },
   data(){
     return {
       form: {
         commodityId: '', sellerId: '', title: '', description: '', price: '', stock: '',
-        location: '', category: '', conditionLevel: '', commodityStatus: '',
+        location: '', addressId: '', addressSnapshotProvince: '', addressSnapshotCity: '',
+        addressSnapshotDistrict: '', addressSnapshotStreet: '', addressSnapshotDetail: '',
+        addressSnapshotFull: '', longitude: '', latitude: '',
+        category: '', conditionLevel: '', commodityStatus: '',
         sellerVisibility: '', buyerVisibility: '', publishTime: '', reportCount: 0,
         clickCount: '', images: ''
       },
@@ -129,7 +206,11 @@ export default {
       // 图片上传相关
       fileList: [],
       uploadUrl: 'http://localhost:8080/api/user/commodity/upload-image',
-      uploadHeaders: {}
+      uploadHeaders: {},
+      mapLocation: null,
+      mapDefaultLocation: { longitude: 118.959, latitude: 32.114 },
+      addressFullManuallyEdited: false,
+      addressSyncReady: false
     }
   },
   async mounted(){
@@ -153,6 +234,15 @@ export default {
         price: c.price ?? '',
         stock: c.stock ?? '',
         location: c.location || '',
+        addressId: c.addressId || '',
+        addressSnapshotProvince: c.addressSnapshotProvince || '',
+        addressSnapshotCity: c.addressSnapshotCity || '',
+        addressSnapshotDistrict: c.addressSnapshotDistrict || '',
+        addressSnapshotStreet: c.addressSnapshotStreet || '',
+        addressSnapshotDetail: c.addressSnapshotDetail || '',
+        addressSnapshotFull: c.addressSnapshotFull || '',
+        longitude: c.longitude ?? '',
+        latitude: c.latitude ?? '',
         category: c.category || '',
         conditionLevel: c.conditionLevel || '',
         commodityStatus: c.commodityStatus || '',
@@ -163,10 +253,34 @@ export default {
         clickCount: c.clickCount ?? '',
         images: c.images || ''
       }
+
+      this.addressFullManuallyEdited = false
+      this.updateFullAddress(true)
+
+      const lon = typeof c.longitude === 'number' ? c.longitude : Number(c.longitude)
+      const lat = typeof c.latitude === 'number' ? c.latitude : Number(c.latitude)
+      if (Number.isFinite(lon) && Number.isFinite(lat)) {
+        this.mapDefaultLocation = { longitude: lon, latitude: lat }
+        this.mapLocation = {
+          longitude: lon,
+          latitude: lat,
+          address: this.form.addressSnapshotFull || this.form.location || ''
+        }
+      } else {
+        this.mapLocation = null
+      }
       
       // 处理图片列表
       this.initImageList()
     }
+    this.addressSyncReady = true
+  },
+  watch: {
+    'form.addressSnapshotProvince': function () { this.handleAddressPartChange() },
+    'form.addressSnapshotCity': function () { this.handleAddressPartChange() },
+    'form.addressSnapshotDistrict': function () { this.handleAddressPartChange() },
+    'form.addressSnapshotStreet': function () { this.handleAddressPartChange() },
+    'form.addressSnapshotDetail': function () { this.handleAddressPartChange() }
   },
   methods:{
     // 初始化图片列表
@@ -249,9 +363,88 @@ export default {
         this.form.images = updatedImages.length > 0 ? updatedImages.join(',') : ''
       }
     },
+    handleAddressPartChange() {
+      this.updateFullAddress()
+    },
+    handleFullAddressInput() {
+      this.addressFullManuallyEdited = true
+    },
+    updateFullAddress(force = false) {
+      if (!force && this.addressFullManuallyEdited) return
+      const parts = [
+        this.form.addressSnapshotProvince,
+        this.form.addressSnapshotCity,
+        this.form.addressSnapshotDistrict,
+        this.form.addressSnapshotStreet,
+        this.form.addressSnapshotDetail
+      ].map(item => (item || '').trim()).filter(Boolean)
+      const full = parts.join('')
+      this.form.addressSnapshotFull = full
+      if (!this.form.location && full) {
+        this.form.location = full
+      }
+    },
+    handleMapLocationChange(location) {
+      if (!this.addressSyncReady || !location) return
+      this.mapLocation = { ...location }
+      this.form.longitude = location.longitude
+      this.form.latitude = location.latitude
+      if (location.province) this.form.addressSnapshotProvince = location.province
+      if (location.city) this.form.addressSnapshotCity = location.city
+      if (location.district) this.form.addressSnapshotDistrict = location.district
+      if (location.streetAddress) this.form.addressSnapshotStreet = location.streetAddress
+      if (location.detailAddress) this.form.addressSnapshotDetail = location.detailAddress
+      this.addressFullManuallyEdited = false
+      if (location.address) {
+        this.form.addressSnapshotFull = location.address
+      } else {
+        this.updateFullAddress(true)
+      }
+      if (!this.form.location && this.form.addressSnapshotFull) {
+        this.form.location = this.form.addressSnapshotFull
+      }
+    },
+    handleManualCoordinateBlur() {
+      if (!this.addressSyncReady) return
+      const lon = Number(this.form.longitude)
+      const lat = Number(this.form.latitude)
+      if (!Number.isNaN(lon) && !Number.isNaN(lat)) {
+        this.mapLocation = {
+          ...(this.mapLocation || {}),
+          longitude: lon,
+          latitude: lat,
+          address: this.form.addressSnapshotFull || (this.mapLocation && this.mapLocation.address) || ''
+        }
+      }
+    },
     async save(){
       const id = this.form.commodityId
-      const payload = { ...this.form }
+      // 构建payload，确保数据类型正确
+      // 注意：addressId 只是引用字段，地址快照字段（addressSnapshot*）是独立的，不依赖 addressId
+      const payload = {
+        commodityId: this.form.commodityId, // ✅ 添加商品ID，验证函数需要
+        title: this.form.title || '',
+        description: this.form.description || '',
+        price: this.form.price !== '' ? Number(this.form.price) : null,
+        stock: this.form.stock !== '' ? Number(this.form.stock) : null,
+        location: this.form.location || '',
+        addressId: this.form.addressId || null, // 仅作为引用，不影响快照字段
+        addressSnapshotProvince: this.form.addressSnapshotProvince || null, // 独立字段
+        addressSnapshotCity: this.form.addressSnapshotCity || null,
+        addressSnapshotDistrict: this.form.addressSnapshotDistrict || null,
+        addressSnapshotStreet: this.form.addressSnapshotStreet || null,
+        addressSnapshotDetail: this.form.addressSnapshotDetail || null,
+        addressSnapshotFull: this.form.addressSnapshotFull || null,
+        longitude: this.form.longitude !== '' ? Number(this.form.longitude) : null,
+        latitude: this.form.latitude !== '' ? Number(this.form.latitude) : null,
+        category: this.form.category || '',
+        conditionLevel: this.form.conditionLevel || '',
+        commodityStatus: this.form.commodityStatus || '',
+        sellerVisibility: this.form.sellerVisibility || '',
+        buyerVisibility: this.form.buyerVisibility || '',
+        clickCount: this.form.clickCount !== '' ? Number(this.form.clickCount) : null,
+        images: this.form.images || ''
+      }
       const err = reviewCommodityPayload(payload)
       if (err) { this.$message.error(err); return }
       const res = await commoditiesAPI.updateFull(id, payload)
@@ -311,6 +504,20 @@ export default {
 
 .upload-tip p {
   margin: 4px 0;
+}
+
+.region-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.coord-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
 }
 </style>
 

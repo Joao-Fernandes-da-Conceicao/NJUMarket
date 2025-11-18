@@ -90,9 +90,21 @@
             </h3>
             <p class="commodity-price">单价：¥{{ getCommodityPrice(order) }}</p>
             <p class="commodity-quantity">数量：{{ order.quantity }}</p>
-            <p v-if="getCommodityLocation(order)" class="commodity-location">
-              位置：{{ getCommodityLocation(order) }}
-            </p>
+            <!-- 商品位置：使用地址快照字段，按省市区-详细地址格式显示 -->
+            <div v-if="formatCommodityAddress(order)" class="commodity-location">
+              <label>位置：</label>
+              <!-- 如果有地址快照字段，使用标准格式（省市区-详细地址） -->
+              <div v-if="!shouldUseSingleLineCommodityAddress(order)" class="address-display">
+                <div class="address-region">
+                  {{ formatCommodityAddressRegion(order) }}
+                </div>
+                <div v-if="formatCommodityAddressDetail(order)" class="address-detail">
+                  {{ formatCommodityAddressDetail(order) }}
+                </div>
+              </div>
+              <!-- 如果是旧数据（只有commoditySnapshotLocation），使用单行显示（废物利用） -->
+              <span v-else class="address-single-line">{{ formatCommodityAddressRegion(order) }}</span>
+            </div>
             <p v-if="getCommodityCategory(order)" class="commodity-category">
               分类：{{ getCommodityCategory(order) }}
             </p>
@@ -186,12 +198,49 @@
 
       <!-- 收货信息 -->
       <div class="shipping-section">
+        <div class="section-header">
         <h2>收货信息</h2>
+          <!-- 修改地址按钮：只有买家或卖家本人，且订单状态为 CREATED 或 PAID 时显示 -->
+          <UnifiedButton 
+            v-if="canModifyAddress"
+            type="primary" 
+            size="small"
+            @click="showEditAddressDialog = true"
+          >
+            修改地址
+          </UnifiedButton>
+        </div>
         <div class="shipping-info">
-          <div class="info-item">
-            <label>收货地址：</label>
-            <span>{{ order.shippingAddress || '校内自提' }}</span>
+          <!-- 收货人信息（如果有快照） -->
+          <div v-if="getShippingRecipientName(order)" class="info-item">
+            <label>收货人：</label>
+            <span>{{ getShippingRecipientName(order) }}</span>
           </div>
+          <div v-if="getShippingRecipientPhone(order)" class="info-item">
+            <label>联系电话：</label>
+            <span>{{ getShippingRecipientPhone(order) }}</span>
+          </div>
+          
+          <!-- 使用地址快照字段，按省市区-详细地址格式显示 -->
+          <div v-if="formatShippingAddress(order)" class="info-item">
+            <label>收货地址：</label>
+            <!-- 如果有地址快照字段，使用标准格式（省市区-详细地址） -->
+            <div v-if="!shouldUseSingleLineShippingAddress(order)" class="address-display">
+              <div class="address-region">
+                {{ formatShippingAddressRegion(order) }}
+          </div>
+              <div v-if="formatShippingAddressDetail(order)" class="address-detail">
+                {{ formatShippingAddressDetail(order) }}
+              </div>
+            </div>
+            <!-- 如果是旧数据（只有shippingAddress），使用单行显示（废物利用） -->
+            <span v-else class="address-single-line">{{ formatShippingAddressRegion(order) }}</span>
+          </div>
+          <div v-else class="info-item">
+            <label>收货地址：</label>
+            <span>校内自提</span>
+          </div>
+          
           <div v-if="order.trackingNumber" class="info-item">
             <label>物流单号：</label>
             <span>{{ order.trackingNumber }}</span>
@@ -202,6 +251,41 @@
           </div>
         </div>
       </div>
+      
+      <!-- 修改地址自定义弹窗 -->
+      <transition name="address-manager-fade">
+        <div 
+          v-if="showEditAddressDialog" 
+          class="address-manager-modal"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div class="address-manager-modal__overlay" @click="showEditAddressDialog = false"></div>
+          <div class="address-manager-modal__panel">
+            <div class="address-manager-modal__header">
+              <h3>{{ isBuyer ? '修改收货地址' : '修改发货地址' }}</h3>
+              <el-icon class="modal-close" @click="showEditAddressDialog = false">
+                <Close />
+              </el-icon>
+            </div>
+            <div class="address-manager-modal__body">
+              <AddressSelector
+                v-model="selectedAddressId"
+                label="选择地址"
+                prop="addressId"
+                placeholder="请选择地址"
+                @change="handleAddressChange"
+              />
+            </div>
+            <div class="address-manager-modal__footer">
+              <UnifiedButton @click="showEditAddressDialog = false">取消</UnifiedButton>
+              <UnifiedButton type="primary" @click="handleUpdateAddress" :loading="updatingAddress">
+                确认修改
+              </UnifiedButton>
+            </div>
+          </div>
+        </div>
+      </transition>
 
       <!-- 退货进度信息 -->
       <div v-if="hasReturnInfo(order)" class="return-section">
@@ -330,15 +414,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { orderAPI, imageAPI, contactAPI } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Close } from '@element-plus/icons-vue'
 import { canPayOrder, canConfirmOrder, canCancelOrder, canShipOrder } from '../utils/orderRules'
 import UnifiedButton from '../components/common/UnifiedButton.vue'
 import UnifiedTag from '../components/common/UnifiedTag.vue'
+import AddressSelector from '../components/address/AddressSelector.vue'
 
 export default {
   name: 'OrderDetail',
   components: {
     UnifiedButton,
-    UnifiedTag
+    Close,
+    UnifiedTag,
+    AddressSelector
   },
   setup() {
     const route = useRoute()
@@ -352,6 +440,20 @@ export default {
     const user = computed(() => userStore.user)
     const isBuyer = computed(() => order.value && user.value && order.value.buyerId === user.value.userId)
     const isSeller = computed(() => order.value && user.value && order.value.sellerId === user.value.userId)
+    
+    // 检查是否可以修改地址：只有买家或卖家本人，且订单状态为 CREATED 或 PAID
+    const canModifyAddress = computed(() => {
+      if (!order.value || !user.value) return false
+      if (!isBuyer.value && !isSeller.value) return false
+      const status = order.value.orderStatus
+      return status === 'CREATED' || status === 'PAID'
+    })
+    
+    // 地址修改相关状态
+    const showEditAddressDialog = ref(false)
+    const selectedAddressId = ref('')
+    const selectedAddress = ref(null)
+    const updatingAddress = ref(false)
     
     // 统一规则检查（基于当前订单和用户）
     const payCheck = computed(() => {
@@ -486,8 +588,196 @@ export default {
       return order.commoditySnapshotPrice || order.commodity?.price || 0
     }
     
+    // 获取商品位置（兼容方法，保留用于其他可能的使用场景）
     const getCommodityLocation = (order) => {
-      return order.commoditySnapshotLocation || order.commodity?.location
+      // 优先使用商品地址快照的完整地址
+      if (order.commoditySnapshotAddressFull) {
+        return order.commoditySnapshotAddressFull
+      }
+      // 兼容：使用商品快照的location字段
+      if (order.commoditySnapshotLocation) {
+        return order.commoditySnapshotLocation
+      }
+      // 兼容：如果商品快照没有location，尝试从商品实体获取
+      return order.commodity?.addressSnapshotFull || order.commodity?.location
+    }
+    
+    // 格式化商品地址（判断是否有地址数据）
+    const formatCommodityAddress = (order) => {
+      // 如果有省市区字段，使用标准格式
+      if (order.commoditySnapshotAddressProvince || 
+          order.commoditySnapshotAddressCity || 
+          order.commoditySnapshotAddressDistrict) {
+        return true
+      }
+      // 如果有完整地址快照，也返回true
+      if (order.commoditySnapshotAddressFull) {
+        return true
+      }
+      // 如果有旧字段 commoditySnapshotLocation，也返回true（废物利用）
+      if (order.commoditySnapshotLocation) {
+        return true
+      }
+      return false
+    }
+    
+    // 格式化商品地址的省市区部分
+    const formatCommodityAddressRegion = (order) => {
+      // 优先使用地址快照的省市区字段（结构化数据）
+      const parts = []
+      if (order.commoditySnapshotAddressProvince) {
+        parts.push(order.commoditySnapshotAddressProvince)
+      }
+      if (order.commoditySnapshotAddressCity) {
+        parts.push(order.commoditySnapshotAddressCity)
+      }
+      if (order.commoditySnapshotAddressDistrict) {
+        parts.push(order.commoditySnapshotAddressDistrict)
+      }
+      
+      if (parts.length > 0) {
+        return parts.join('')
+      }
+      
+      // 如果没有省市区字段，尝试从完整地址快照中提取
+      if (order.commoditySnapshotAddressFull) {
+        return order.commoditySnapshotAddressFull
+      }
+      
+      // 兼容旧字段：将 commoditySnapshotLocation 作为完整地址显示（废物利用）
+      return order.commoditySnapshotLocation || ''
+    }
+    
+    // 格式化商品地址的详细地址部分
+    const formatCommodityAddressDetail = (order) => {
+      // 如果有地址快照的详细地址字段，使用结构化数据
+      const parts = []
+      if (order.commoditySnapshotAddressStreet) {
+        parts.push(order.commoditySnapshotAddressStreet)
+      }
+      if (order.commoditySnapshotAddressDetail) {
+        parts.push(order.commoditySnapshotAddressDetail)
+      }
+      
+      if (parts.length > 0) {
+        return parts.join('')
+      }
+      
+      // 如果没有详细地址字段，但有完整地址快照，说明是旧数据格式
+      // 这种情况下，详细地址部分为空，完整地址已经在省市区部分显示了
+      return ''
+    }
+    
+    // 检查是否应该使用单行显示（旧数据格式）
+    const shouldUseSingleLineCommodityAddress = (order) => {
+      // 如果有地址快照的省市区字段，使用标准格式（省市区-详细地址）
+      if (order.commoditySnapshotAddressProvince || 
+          order.commoditySnapshotAddressCity || 
+          order.commoditySnapshotAddressDistrict) {
+        return false
+      }
+      // 如果没有地址快照字段，但有 commoditySnapshotLocation，使用单行显示（废物利用）
+      if (order.commoditySnapshotLocation && !order.commoditySnapshotAddressFull) {
+        return true
+      }
+      return false
+    }
+    
+    // 获取收货地址完整信息（优先使用地址快照）
+    const getShippingAddressFull = (order) => {
+      return order.shippingAddressSnapshotFull
+    }
+    
+    // 获取收货人姓名
+    const getShippingRecipientName = (order) => {
+      return order.shippingAddressSnapshotRecipientName
+    }
+    
+    // 获取收货人电话
+    const getShippingRecipientPhone = (order) => {
+      return order.shippingAddressSnapshotRecipientPhone
+    }
+    
+    // 格式化收货地址（省市区-详细地址）
+    const formatShippingAddress = (order) => {
+      // 如果有省市区字段，使用标准格式
+      if (order.shippingAddressSnapshotProvince || 
+          order.shippingAddressSnapshotCity || 
+          order.shippingAddressSnapshotDistrict) {
+        return true
+      }
+      // 如果有完整地址快照，也返回true
+      if (order.shippingAddressSnapshotFull) {
+        return true
+      }
+      // 如果有旧字段 shippingAddress，也返回true（废物利用）
+      if (order.shippingAddress) {
+        return true
+      }
+      return false
+    }
+    
+    // 格式化收货地址的省市区部分
+    const formatShippingAddressRegion = (order) => {
+      // 优先使用地址快照的省市区字段（结构化数据）
+      const parts = []
+      if (order.shippingAddressSnapshotProvince) {
+        parts.push(order.shippingAddressSnapshotProvince)
+      }
+      if (order.shippingAddressSnapshotCity) {
+        parts.push(order.shippingAddressSnapshotCity)
+      }
+      if (order.shippingAddressSnapshotDistrict) {
+        parts.push(order.shippingAddressSnapshotDistrict)
+      }
+      
+      if (parts.length > 0) {
+        return parts.join('')
+      }
+      
+      // 如果没有省市区字段，尝试从完整地址快照中提取
+      if (order.shippingAddressSnapshotFull) {
+        return order.shippingAddressSnapshotFull
+      }
+      
+      // 兼容旧字段：将 shippingAddress 作为完整地址显示（废物利用）
+      // 注意：旧数据的 shippingAddress 可能是自由文本，格式不统一，所以作为完整地址单行显示
+      return order.shippingAddress || ''
+    }
+    
+    // 格式化收货地址的详细地址部分
+    const formatShippingAddressDetail = (order) => {
+      // 如果有地址快照的详细地址字段，使用结构化数据
+      const parts = []
+      if (order.shippingAddressSnapshotStreet) {
+        parts.push(order.shippingAddressSnapshotStreet)
+      }
+      if (order.shippingAddressSnapshotDetail) {
+        parts.push(order.shippingAddressSnapshotDetail)
+      }
+      
+      if (parts.length > 0) {
+        return parts.join('')
+      }
+      
+      // 如果没有详细地址字段，但有完整地址快照，说明是旧数据格式
+      // 这种情况下，详细地址部分为空，完整地址已经在省市区部分显示了
+      return ''
+    }
+    
+    // 检查是否应该使用单行显示（旧数据格式）
+    const shouldUseSingleLineShippingAddress = (order) => {
+      // 如果有地址快照的省市区字段，使用标准格式（省市区-详细地址）
+      if (order.shippingAddressSnapshotProvince || 
+          order.shippingAddressSnapshotCity || 
+          order.shippingAddressSnapshotDistrict) {
+        return false
+      }
+      // 如果没有地址快照字段，但有 shippingAddress，使用单行显示（废物利用）
+      if (order.shippingAddress && !order.shippingAddressSnapshotFull) {
+        return true
+      }
+      return false
     }
     
     const getCommodityCategory = (order) => {
@@ -822,6 +1112,57 @@ export default {
       return '退货拒绝历史'
     }
     
+    // 处理地址选择变化
+    const handleAddressChange = (addressId, address) => {
+      selectedAddressId.value = addressId
+      selectedAddress.value = address
+    }
+    
+    // 更新订单地址
+    const handleUpdateAddress = async () => {
+      if (!selectedAddress.value) {
+        ElMessage.warning('请先选择一个地址')
+        return
+      }
+      
+      if (!order.value) {
+        ElMessage.error('订单信息不存在')
+        return
+      }
+      
+      updatingAddress.value = true
+      try {
+        // 构建地址更新数据
+        const addressData = {
+          addressId: selectedAddress.value.addressId || null,
+          province: selectedAddress.value.province,
+          city: selectedAddress.value.city,
+          district: selectedAddress.value.district,
+          streetAddress: selectedAddress.value.streetAddress,
+          detailAddress: selectedAddress.value.detailAddress || '',
+          fullAddress: selectedAddress.value.fullAddress,
+          recipientName: selectedAddress.value.recipientName,
+          recipientPhone: selectedAddress.value.recipientPhone
+        }
+        
+        const response = await orderAPI.updateShippingAddress(order.value.orderId, addressData)
+        
+        if (response.success) {
+          ElMessage.success('地址更新成功')
+          showEditAddressDialog.value = false
+          // 重新获取订单详情以刷新显示
+          await fetchOrderDetail()
+        } else {
+          ElMessage.error(response.message || '地址更新失败')
+        }
+      } catch (error) {
+        console.error('更新订单地址失败:', error)
+        ElMessage.error(error.response?.data?.message || '地址更新失败，请稍后重试')
+      } finally {
+        updatingAddress.value = false
+      }
+    }
+    
     onMounted(() => {
       fetchOrderDetail()
     })
@@ -832,6 +1173,13 @@ export default {
       user,
       isBuyer,
       isSeller,
+      canModifyAddress,
+      showEditAddressDialog,
+      selectedAddressId,
+      selectedAddress,
+      updatingAddress,
+      handleAddressChange,
+      handleUpdateAddress,
       payCheck,
       confirmCheck,
       cancelCheck,
@@ -851,10 +1199,21 @@ export default {
       getCommodityTitle,
       getCommodityPrice,
       getCommodityLocation,
+      formatCommodityAddress,
+      formatCommodityAddressRegion,
+      formatCommodityAddressDetail,
+      shouldUseSingleLineCommodityAddress,
       getCommodityCategory,
       getCommodityCondition,
       getCommodityDescription,
       isCommoditySnapshotOffShelf,
+      getShippingAddressFull,
+      getShippingRecipientName,
+      getShippingRecipientPhone,
+      formatShippingAddress,
+      formatShippingAddressRegion,
+      formatShippingAddressDetail,
+      shouldUseSingleLineShippingAddress,
       getSellerName,
       getSellerPhone,
       getSellerEmail,
@@ -1016,6 +1375,29 @@ export default {
   word-wrap: break-word;
 }
 
+.address-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.address-region {
+  color: #303133;
+  font-weight: normal;
+}
+
+.address-detail {
+  color: #606266;
+  font-size: 14px;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.address-single-line {
+  color: #303133;
+  font-weight: normal;
+}
+
 .total-amount {
   font-size: 18px;
   font-weight: normal;
@@ -1071,6 +1453,20 @@ export default {
 .commodity-condition {
   margin: 5px 0;
   color: #606266;
+}
+
+.commodity-location {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.commodity-location label {
+  font-weight: normal;
+  color: #606266;
+  margin-right: 0;
+  min-width: auto;
+  flex-shrink: 0;
 }
 
 .commodity-description {
@@ -1155,6 +1551,17 @@ export default {
   margin-top: 15px;
 }
 
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin: 0;
+}
+
 .shipping-info {
   display: flex;
   flex-direction: column;
@@ -1230,6 +1637,100 @@ export default {
   .buyer-card {
     flex-direction: column;
     text-align: center;
+  }
+}
+
+/* 修改地址弹窗宽度与安全边距 */
+/* 订单修改地址弹窗与 AddressSelector 共享 */
+.address-manager-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.address-manager-modal__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.address-manager-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(600px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+
+.address-manager-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.address-manager-modal__body {
+  padding: 12px 20px 20px;
+  overflow-y: auto;
+}
+
+.address-manager-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.address-manager-modal__header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--primary-color);
+}
+
+.modal-close {
+  cursor: pointer;
+  font-size: 18px;
+  color: #999;
+}
+
+.modal-close:hover {
+  color: var(--primary-color);
+}
+
+@media (max-width: 900px) {
+  .address-manager-modal {
+    padding: calc(env(safe-area-inset-top, 8px) + 70px) var(--mobile-safe-margin, 6px) var(--mobile-safe-margin, 6px);
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  
+  .address-manager-modal__panel {
+    width: calc(100vw - 2 * var(--mobile-safe-margin, 6px));
+    max-height: calc(100vh - (env(safe-area-inset-top, 8px) + 70px) - var(--mobile-safe-margin, 6px));
+  }
+  
+  .address-manager-modal__body {
+    padding: 12px var(--mobile-safe-margin, 6px) var(--mobile-safe-margin, 6px);
+  }
+  
+  .address-manager-modal__footer {
+    flex-direction: column;
+    padding: var(--mobile-safe-margin, 6px);
+  }
+  
+  .address-manager-modal__footer :deep(.el-button) {
+    width: 100%;
+    margin-left: 0 !important;
   }
 }
 </style>

@@ -27,7 +27,7 @@
     <div class="commodity-stats">
       <span class="stat-item">
         <el-icon><Location /></el-icon>
-        {{ commodity.location || '未设置位置' }}
+        {{ getLocationDisplay(commodity) }}
         <span class="stat-divider">|</span>
         <el-icon><View /></el-icon>
         {{ commodity.clickCount || 0 }}
@@ -139,6 +139,23 @@ const sellerInfo = computed(() => {
 })
 
 const sellerLoading = computed(() => false) // 后端已返回，无需加载
+
+// 获取位置显示文本（省+市）
+const getLocationDisplay = (commodity) => {
+  // 优先使用地址快照的省+市
+  if (commodity.addressSnapshotProvince && commodity.addressSnapshotCity) {
+    return `${commodity.addressSnapshotProvince}${commodity.addressSnapshotCity}`
+  }
+  // 如果只有省或只有市，也显示
+  if (commodity.addressSnapshotProvince) {
+    return commodity.addressSnapshotProvince
+  }
+  if (commodity.addressSnapshotCity) {
+    return commodity.addressSnapshotCity
+  }
+  // 最后回退到旧字段 location（兼容旧数据）
+  return commodity.location || '未设置位置'
+}
 </script>
 
 <style scoped>
@@ -290,6 +307,12 @@ const sellerLoading = computed(() => false) // 后端已返回，无需加载
 /* 响应式设计 - 综合移动端查询 */
 /* 注意：此文件中的所有数值已通过 CSS 变量 --mobile-scale 自动缩放 */
 @media (max-width: 900px) {
+  .commodity-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+  }
+  
   .commodity-image {
     aspect-ratio: 3 / 2; /* 3:2比例，移动端保持一致 */
     border-radius: 10px;

@@ -50,11 +50,12 @@
           </UnifiedTag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <UnifiedButton size="small" @click="disable(row)">禁用</UnifiedButton>
           <UnifiedButton size="small" type="danger" @click="remove(row)">删除</UnifiedButton>
           <UnifiedButton size="small" type="primary" @click="edit(row)">编辑</UnifiedButton>
+          <UnifiedButton size="small" type="success" @click="manageAddresses(row)">地址管理</UnifiedButton>
         </template>
       </el-table-column>
     </el-table>
@@ -115,6 +116,9 @@ export default {
     },
     edit(row){
       this.$router.push(`/users/${row.userId}/edit`)
+    },
+    manageAddresses(row){
+      this.$router.push(`/users/${row.userId}/addresses`)
     },
     onSortChange({ prop, order }){
       this.sortKey = prop

@@ -162,6 +162,88 @@ public class OrderServiceImpl implements OrderService {
             order.setRemark(orderDTO.getRemark());
             order.setCreateTime(LocalDateTime.now());
             
+            // ✅ 创建地址快照
+            // 重要设计原则：地址快照字段是完全独立的，不依赖 address_id
+            // 如果 DTO 中已经提供了快照字段，优先使用这些字段（快照字段已独立设置）
+            // 只有在快照字段为空时，才从 address_id 获取地址信息并填充到快照字段
+            try {
+                // ✅ 优先检查：如果 DTO 中已经提供了快照字段，直接使用（快照字段已独立设置）
+                boolean hasSnapshotFields = StringUtils.hasText(orderDTO.getShippingAddressSnapshotProvince()) ||
+                                           StringUtils.hasText(orderDTO.getShippingAddressSnapshotCity()) ||
+                                           StringUtils.hasText(orderDTO.getShippingAddressSnapshotFull());
+                
+                if (hasSnapshotFields) {
+                    // 快照字段已独立提供，直接使用
+                    order.setShippingAddressSnapshotProvince(orderDTO.getShippingAddressSnapshotProvince());
+                    order.setShippingAddressSnapshotCity(orderDTO.getShippingAddressSnapshotCity());
+                    order.setShippingAddressSnapshotDistrict(orderDTO.getShippingAddressSnapshotDistrict());
+                    order.setShippingAddressSnapshotStreet(orderDTO.getShippingAddressSnapshotStreet());
+                    order.setShippingAddressSnapshotDetail(orderDTO.getShippingAddressSnapshotDetail());
+                    order.setShippingAddressSnapshotFull(orderDTO.getShippingAddressSnapshotFull());
+                    order.setShippingAddressSnapshotRecipientName(orderDTO.getShippingAddressSnapshotRecipientName());
+                    order.setShippingAddressSnapshotRecipientPhone(orderDTO.getShippingAddressSnapshotRecipientPhone());
+                    
+                    // address_id 只是作为引用保存（如果提供了）
+                    if (StringUtils.hasText(orderDTO.getShippingAddressId())) {
+                        order.setShippingAddressId(orderDTO.getShippingAddressId());
+                    }
+                } else {
+                    // ✅ 只有在快照字段为空时，才从 address_id 获取地址信息并填充到快照字段
+                    com.njumarket.njumarket.dto.internal.AddressInternalDTO addressDTO = null;
+                    
+                    // 如果传了地址ID，则根据ID获取地址
+                    if (StringUtils.hasText(orderDTO.getShippingAddressId())) {
+                        Result addressResult = authClient.getAddressById(orderDTO.getShippingAddressId());
+                        if (addressResult.getSuccess() && addressResult.getData() != null) {
+                            addressDTO = objectMapper.convertValue(
+                                addressResult.getData(),
+                                new TypeReference<com.njumarket.njumarket.dto.internal.AddressInternalDTO>() {}
+                            );
+                            order.setShippingAddressId(orderDTO.getShippingAddressId());
+                        }
+                    }
+                    
+                    // 如果没有传地址ID或获取失败，则使用默认地址
+                    if (addressDTO == null) {
+                        Result defaultAddressResult = authClient.getDefaultAddress(currentUser.getUserId());
+                        if (defaultAddressResult.getSuccess() && defaultAddressResult.getData() != null) {
+                            addressDTO = objectMapper.convertValue(
+                                defaultAddressResult.getData(),
+                                new TypeReference<com.njumarket.njumarket.dto.internal.AddressInternalDTO>() {}
+                            );
+                            if (addressDTO != null && StringUtils.hasText(addressDTO.getAddressId())) {
+                                order.setShippingAddressId(addressDTO.getAddressId());
+                            }
+                        }
+                    }
+                    
+                    // 如果获取到地址信息，写入地址快照（从 address_id 填充）
+                    if (addressDTO != null) {
+                        order.setShippingAddressSnapshotProvince(addressDTO.getProvince());
+                        order.setShippingAddressSnapshotCity(addressDTO.getCity());
+                        order.setShippingAddressSnapshotDistrict(addressDTO.getDistrict());
+                        order.setShippingAddressSnapshotStreet(addressDTO.getStreetAddress());
+                        order.setShippingAddressSnapshotDetail(addressDTO.getDetailAddress());
+                        order.setShippingAddressSnapshotFull(addressDTO.getFullAddress());
+                        order.setShippingAddressSnapshotRecipientName(addressDTO.getRecipientName());
+                        order.setShippingAddressSnapshotRecipientPhone(addressDTO.getRecipientPhone());
+                    } else {
+                        // 如果无法获取地址信息，使用原有shippingAddress字段作为快照
+                        log.warn("创建订单警告 - userId={}, 无法获取地址信息，使用原有shippingAddress字段", currentUser.getUserId());
+                        if (StringUtils.hasText(orderDTO.getShippingAddress())) {
+                            order.setShippingAddressSnapshotFull(orderDTO.getShippingAddress());
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("获取地址信息失败: userId={}, error={}", currentUser.getUserId(), e.getMessage(), e);
+                log.warn("创建订单警告 - userId={}, 地址信息获取失败，使用原有shippingAddress字段", currentUser.getUserId());
+                // 地址获取失败不影响订单创建，使用原有字段
+                if (StringUtils.hasText(orderDTO.getShippingAddress())) {
+                    order.setShippingAddressSnapshotFull(orderDTO.getShippingAddress());
+                }
+            }
+            
             // ✅ 创建商品快照 - 获取卖家信息（使用Feign Client）
             Result sellerResult = authClient.getUserById(commodityDTO.getSellerId());
             if (sellerResult.getSuccess() && sellerResult.getData() != null) {
@@ -172,18 +254,30 @@ public class OrderServiceImpl implements OrderService {
                         new TypeReference<UserInternalDTO>() {}
                     );
                     // 直接使用DTO数据创建商品快照（不转换为实体）
+                    // 优先使用地址快照完整地址，如果没有则使用location字段
+                    String commodityLocation = StringUtils.hasText(commodityDTO.getAddressSnapshotFull()) 
+                        ? commodityDTO.getAddressSnapshotFull() 
+                        : commodityDTO.getLocation();
+                    
                     order.createCommoditySnapshot(
                         commodityDTO.getTitle(),
                         commodityDTO.getDescription(),
                         commodityDTO.getPrice() != null ? commodityDTO.getPrice().doubleValue() : null,
-                        commodityDTO.getLocation(),
+                        commodityLocation, // 保留兼容字段
                         commodityDTO.getCategory(),
                         commodityDTO.getConditionLevel(),
                         commodityDTO.getImages(),
                         commodityDTO.getStatus(),
                         sellerDTO.getUsername() != null ? sellerDTO.getUsername() : "",
                         sellerDTO.getPrimaryPhone() != null ? sellerDTO.getPrimaryPhone() : "",
-                        "" // 邮箱字段在UserInternalDTO中不存在，使用空字符串
+                        "", // 邮箱字段在UserInternalDTO中不存在，使用空字符串
+                        // 商品地址快照字段
+                        commodityDTO.getAddressSnapshotProvince(),
+                        commodityDTO.getAddressSnapshotCity(),
+                        commodityDTO.getAddressSnapshotDistrict(),
+                        commodityDTO.getAddressSnapshotStreet(),
+                        commodityDTO.getAddressSnapshotDetail(),
+                        commodityDTO.getAddressSnapshotFull()
                     );
                 } catch (Exception e) {
                     log.error("转换User失败: sellerId={}, error={}", commodityDTO.getSellerId(), e.getMessage(), e);
@@ -847,6 +941,18 @@ public class OrderServiceImpl implements OrderService {
         dto.setPayAmount(order.getPayAmount());
         dto.setQuantity(order.getQuantity());
         dto.setShippingAddress(order.getShippingAddress());
+        dto.setShippingAddressId(order.getShippingAddressId());
+        
+        // 地址快照字段
+        dto.setShippingAddressSnapshotProvince(order.getShippingAddressSnapshotProvince());
+        dto.setShippingAddressSnapshotCity(order.getShippingAddressSnapshotCity());
+        dto.setShippingAddressSnapshotDistrict(order.getShippingAddressSnapshotDistrict());
+        dto.setShippingAddressSnapshotStreet(order.getShippingAddressSnapshotStreet());
+        dto.setShippingAddressSnapshotDetail(order.getShippingAddressSnapshotDetail());
+        dto.setShippingAddressSnapshotFull(order.getShippingAddressSnapshotFull());
+        dto.setShippingAddressSnapshotRecipientName(order.getShippingAddressSnapshotRecipientName());
+        dto.setShippingAddressSnapshotRecipientPhone(order.getShippingAddressSnapshotRecipientPhone());
+        
         dto.setTrackingNumber(order.getTrackingNumber());
         dto.setRemark(order.getRemark());
         dto.setCreateTime(order.getCreateTime() != null ? order.getCreateTime().toString() : null);
@@ -866,7 +972,16 @@ public class OrderServiceImpl implements OrderService {
         dto.setCommoditySnapshotTitle(order.getCommoditySnapshotTitle());
         dto.setCommoditySnapshotDescription(order.getCommoditySnapshotDescription());
         dto.setCommoditySnapshotPrice(order.getCommoditySnapshotPrice());
-        dto.setCommoditySnapshotLocation(order.getCommoditySnapshotLocation());
+        dto.setCommoditySnapshotLocation(order.getCommoditySnapshotLocation()); // 兼容字段
+        
+        // 商品地址快照字段
+        dto.setCommoditySnapshotAddressProvince(order.getCommoditySnapshotAddressProvince());
+        dto.setCommoditySnapshotAddressCity(order.getCommoditySnapshotAddressCity());
+        dto.setCommoditySnapshotAddressDistrict(order.getCommoditySnapshotAddressDistrict());
+        dto.setCommoditySnapshotAddressStreet(order.getCommoditySnapshotAddressStreet());
+        dto.setCommoditySnapshotAddressDetail(order.getCommoditySnapshotAddressDetail());
+        dto.setCommoditySnapshotAddressFull(order.getCommoditySnapshotAddressFull());
+        
         dto.setCommoditySnapshotCategory(order.getCommoditySnapshotCategory());
         dto.setCommoditySnapshotConditionLevel(order.getCommoditySnapshotConditionLevel());
         dto.setCommoditySnapshotImages(order.getCommoditySnapshotImages());
@@ -1400,18 +1515,30 @@ public class OrderServiceImpl implements OrderService {
                         new TypeReference<UserInternalDTO>() {}
                     );
                     // 直接使用DTO数据创建商品快照（不转换为实体）
+                    // 优先使用地址快照完整地址，如果没有则使用location字段
+                    String commodityLocation = StringUtils.hasText(lockedCommodityDTO.getAddressSnapshotFull()) 
+                        ? lockedCommodityDTO.getAddressSnapshotFull() 
+                        : lockedCommodityDTO.getLocation();
+                    
                     newOrder.createCommoditySnapshot(
                         lockedCommodityDTO.getTitle(),
                         lockedCommodityDTO.getDescription(),
                         lockedCommodityDTO.getPrice() != null ? lockedCommodityDTO.getPrice().doubleValue() : null,
-                        lockedCommodityDTO.getLocation(),
+                        commodityLocation, // 保留兼容字段
                         lockedCommodityDTO.getCategory(),
                         lockedCommodityDTO.getConditionLevel(),
                         lockedCommodityDTO.getImages(),
                         lockedCommodityDTO.getStatus(),
                         sellerDTO.getUsername() != null ? sellerDTO.getUsername() : "",
                         sellerDTO.getPrimaryPhone() != null ? sellerDTO.getPrimaryPhone() : "",
-                        "" // 邮箱字段在UserInternalDTO中不存在，使用空字符串
+                        "", // 邮箱字段在UserInternalDTO中不存在，使用空字符串
+                        // 商品地址快照字段
+                        lockedCommodityDTO.getAddressSnapshotProvince(),
+                        lockedCommodityDTO.getAddressSnapshotCity(),
+                        lockedCommodityDTO.getAddressSnapshotDistrict(),
+                        lockedCommodityDTO.getAddressSnapshotStreet(),
+                        lockedCommodityDTO.getAddressSnapshotDetail(),
+                        lockedCommodityDTO.getAddressSnapshotFull()
                     );
                 } catch (Exception e) {
                     log.error("转换User失败: sellerId={}, error={}", lockedCommodityDTO.getSellerId(), e.getMessage(), e);
@@ -1521,7 +1648,14 @@ public class OrderServiceImpl implements OrderService {
                 item.put("commoditySnapshotTitle", order.getCommoditySnapshotTitle());
                 item.put("commoditySnapshotDescription", order.getCommoditySnapshotDescription());
                 item.put("commoditySnapshotPrice", order.getCommoditySnapshotPrice());
-                item.put("commoditySnapshotLocation", order.getCommoditySnapshotLocation());
+                item.put("commoditySnapshotLocation", order.getCommoditySnapshotLocation()); // 兼容字段
+                // 商品地址快照字段
+                item.put("commoditySnapshotAddressProvince", order.getCommoditySnapshotAddressProvince());
+                item.put("commoditySnapshotAddressCity", order.getCommoditySnapshotAddressCity());
+                item.put("commoditySnapshotAddressDistrict", order.getCommoditySnapshotAddressDistrict());
+                item.put("commoditySnapshotAddressStreet", order.getCommoditySnapshotAddressStreet());
+                item.put("commoditySnapshotAddressDetail", order.getCommoditySnapshotAddressDetail());
+                item.put("commoditySnapshotAddressFull", order.getCommoditySnapshotAddressFull());
                 item.put("commoditySnapshotCategory", order.getCommoditySnapshotCategory());
                 item.put("commoditySnapshotConditionLevel", order.getCommoditySnapshotConditionLevel());
                 item.put("commoditySnapshotImages", order.getCommoditySnapshotImages());
@@ -1670,5 +1804,78 @@ public class OrderServiceImpl implements OrderService {
             orderDTO.setBuyer(buyerInfo);
         }
         return Result.ok("获取订单详情成功", orderDTO);
+    }
+    
+    /**
+     * 更新订单地址
+     * 
+     * 重要设计原则：
+     * 1. 地址快照字段（*_address_snapshot_*）是完全独立的，不依赖 address_id
+     * 2. 直接使用 DTO 中的地址信息更新快照字段，不依赖 address_id
+     * 3. address_id 只是作为可选的引用字段保存，不影响快照字段
+     * 4. 快照字段一旦设置，就完全独立，即使 address_id 对应的地址被删除或修改，快照也不受影响
+     * 
+     * @param orderId 订单ID
+     * @param addressDTO 地址DTO（包含地址快照字段和可选的addressId）
+     * @return 更新结果
+     */
+    @Override
+    @Transactional
+    public Result updateOrderShippingAddress(String orderId, com.njumarket.order.dto.UpdateOrderAddressDTO addressDTO) {
+        // 获取当前用户
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = (User) userObj;
+        
+        // 查找订单
+        Order order = OrderValidator.requireOrder(orderId, orderRepository);
+        
+        // 鉴权：只有买家或卖家本人可以修改地址
+        boolean isBuyer = order.getBuyerId().equals(currentUser.getUserId());
+        boolean isSeller = order.getSellerId().equals(currentUser.getUserId());
+        
+        if (!isBuyer && !isSeller) {
+            throw new BusinessException("无权限修改此订单的地址");
+        }
+        
+        // 检查订单状态：只有在未发货和未支付阶段（CREATED 或 PAID）才能修改地址
+        String orderStatus = order.getOrderStatus();
+        if (!"CREATED".equals(orderStatus) && !"PAID".equals(orderStatus)) {
+            throw new BusinessException("订单状态不允许修改地址，只能在未发货和未支付阶段修改");
+        }
+        
+        if (isBuyer) {
+            // ✅ 买家修改收货地址 -> 直接更新 shipping 快照字段（独立于 address_id）
+            order.setShippingAddressSnapshotProvince(addressDTO.getProvince());
+            order.setShippingAddressSnapshotCity(addressDTO.getCity());
+            order.setShippingAddressSnapshotDistrict(addressDTO.getDistrict());
+            order.setShippingAddressSnapshotStreet(addressDTO.getStreetAddress());
+            order.setShippingAddressSnapshotDetail(addressDTO.getDetailAddress());
+            order.setShippingAddressSnapshotFull(addressDTO.getFullAddress());
+            order.setShippingAddressSnapshotRecipientName(addressDTO.getRecipientName());
+            order.setShippingAddressSnapshotRecipientPhone(addressDTO.getRecipientPhone());
+            
+            // address_id 只是作为引用保存（可选）
+            if (StringUtils.hasText(addressDTO.getAddressId())) {
+                order.setShippingAddressId(addressDTO.getAddressId());
+            }
+            
+            order.setShippingAddress(addressDTO.getFullAddress());
+        } else if (isSeller) {
+            // ✅ 卖家修改发货地址 -> 直接更新商品地址快照字段（独立于 address_id）
+            order.setCommoditySnapshotAddressProvince(addressDTO.getProvince());
+            order.setCommoditySnapshotAddressCity(addressDTO.getCity());
+            order.setCommoditySnapshotAddressDistrict(addressDTO.getDistrict());
+            order.setCommoditySnapshotAddressStreet(addressDTO.getStreetAddress());
+            order.setCommoditySnapshotAddressDetail(addressDTO.getDetailAddress());
+            order.setCommoditySnapshotAddressFull(addressDTO.getFullAddress());
+        }
+        
+        // 保存订单
+        orderRepository.save(order);
+        
+        log.info("更新订单地址成功 - orderId: {}, userId: {}, role: {}", 
+                orderId, currentUser.getUserId(), isBuyer ? "buyer" : "seller");
+        
+        return Result.ok("订单地址更新成功");
     }
 }

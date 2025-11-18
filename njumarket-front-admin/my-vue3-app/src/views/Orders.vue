@@ -12,7 +12,13 @@
             <div class="expand-section">
               <h4>订单信息</h4>
               <p>数量：{{ row.quantity }}</p>
-              <p>地址：{{ row.shippingAddress || '-' }}</p>
+              <div class="address-block">
+                <p><strong>买家收货地址：</strong>{{ formatShippingAddress(row) }}</p>
+                <p v-if="row.shippingAddressSnapshotRecipientName || row.shippingAddressSnapshotRecipientPhone" class="address-sub">
+                  收货人：{{ row.shippingAddressSnapshotRecipientName || '-' }} / {{ row.shippingAddressSnapshotRecipientPhone || '-' }}
+                </p>
+                <p><strong>卖家发货地址：</strong>{{ formatCommodityAddress(row) }}</p>
+              </div>
               <p>备注：{{ row.remark || '-' }}</p>
               <p>可见性：卖家 {{ row.sellerVisibility || '-' }} / 买家 {{ row.buyerVisibility || '-' }}</p>
               <!-- ✅ 买家信息 -->
@@ -110,6 +116,20 @@
       </el-table-column>
       <el-table-column prop="createTime" label="创建时间" width="170" sortable="custom"/>
       <el-table-column prop="commoditySnapshotTitle" label="商品标题(快照)" min-width="160"/>
+      <el-table-column label="收货地址" min-width="180">
+        <template #default="{ row }">
+          <div style="font-size:13px;">
+            {{ formatShippingAddress(row) }}
+          </div>
+        </template>
+      </el-table-column>
+      <el-table-column label="发货地址" min-width="180">
+        <template #default="{ row }">
+          <div style="font-size:13px;">
+            {{ formatCommodityAddress(row) }}
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column
         prop="sellerVisibility"
         label="卖家可见"
@@ -225,6 +245,28 @@ export default {
     snapshotImages(row){
       if (!row || !row.commoditySnapshotImages) return []
       return row.commoditySnapshotImages.split(',').map(s => s.trim()).filter(Boolean)
+    },
+    formatShippingAddress(row){
+      if (!row) return '-'
+      if (row.shippingAddressSnapshotFull) return row.shippingAddressSnapshotFull
+      const parts = []
+      if (row.shippingAddressSnapshotProvince) parts.push(row.shippingAddressSnapshotProvince)
+      if (row.shippingAddressSnapshotCity) parts.push(row.shippingAddressSnapshotCity)
+      if (row.shippingAddressSnapshotDistrict) parts.push(row.shippingAddressSnapshotDistrict)
+      if (row.shippingAddressSnapshotStreet) parts.push(row.shippingAddressSnapshotStreet)
+      if (row.shippingAddressSnapshotDetail) parts.push(row.shippingAddressSnapshotDetail)
+      return parts.length ? parts.join('') : (row.shippingAddress || '-')
+    },
+    formatCommodityAddress(row){
+      if (!row) return '-'
+      if (row.commoditySnapshotAddressFull) return row.commoditySnapshotAddressFull
+      const parts = []
+      if (row.commoditySnapshotAddressProvince) parts.push(row.commoditySnapshotAddressProvince)
+      if (row.commoditySnapshotAddressCity) parts.push(row.commoditySnapshotAddressCity)
+      if (row.commoditySnapshotAddressDistrict) parts.push(row.commoditySnapshotAddressDistrict)
+      if (row.commoditySnapshotAddressStreet) parts.push(row.commoditySnapshotAddressStreet)
+      if (row.commoditySnapshotAddressDetail) parts.push(row.commoditySnapshotAddressDetail)
+      return parts.length ? parts.join('') : (row.commoditySnapshotLocation || '-')
     },
     visText(v){
       const map = { PUBLIC:'公开', PRIVATE:'私密', HIDDEN:'隐藏' }
@@ -357,6 +399,24 @@ export default {
   margin: 6px 0;
   font-size: 14px;
   color: #666;
+}
+
+.address-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.address-block strong {
+  font-weight: normal;
+  color: #333;
+}
+
+.address-sub {
+  font-size: 13px;
+  color: #888;
+  margin-left: 8px;
 }
 
 /* ✅ 用户信息显示 */

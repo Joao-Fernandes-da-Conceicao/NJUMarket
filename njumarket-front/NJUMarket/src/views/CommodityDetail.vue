@@ -73,7 +73,15 @@
               </div>
               <div class="meta-item">
                 <span class="label">位置：</span>
-                <span class="value">{{ commodity.location }}</span>
+                <!-- 如果有地址快照字段，使用标准格式（省市区-详细地址） -->
+                <div v-if="!shouldUseSingleLineAddress(commodity)" class="address-display">
+                  <div class="address-region">{{ formatCommodityAddressRegion(commodity) }}</div>
+                  <div v-if="formatCommodityAddressDetail(commodity)" class="address-detail">
+                    {{ formatCommodityAddressDetail(commodity) }}
+                  </div>
+                </div>
+                <!-- 如果是旧数据（只有location），使用单行显示（废物利用） -->
+                <span v-else class="address-single-line">{{ formatCommodityAddressRegion(commodity) }}</span>
               </div>
               <div class="meta-item">
                 <span class="label">库存：</span>
@@ -329,6 +337,77 @@ export default {
       router.back()
     }
     
+    // 获取商品地址（优先使用地址快照）
+    const getCommodityAddress = (commodity) => {
+      // 优先使用地址快照完整地址
+      if (commodity.addressSnapshotFull) {
+        return commodity.addressSnapshotFull
+      }
+      // 兼容旧字段
+      return commodity.location || '未设置位置'
+    }
+    
+    // 格式化商品地址的省市区部分
+    const formatCommodityAddressRegion = (commodity) => {
+      // 优先使用地址快照的省市区字段（结构化数据）
+      const parts = []
+      if (commodity.addressSnapshotProvince) {
+        parts.push(commodity.addressSnapshotProvince)
+      }
+      if (commodity.addressSnapshotCity) {
+        parts.push(commodity.addressSnapshotCity)
+      }
+      if (commodity.addressSnapshotDistrict) {
+        parts.push(commodity.addressSnapshotDistrict)
+      }
+      
+      if (parts.length > 0) {
+        return parts.join('')
+      }
+      
+      // 如果没有省市区字段，尝试从完整地址中提取
+      if (commodity.addressSnapshotFull) {
+        return commodity.addressSnapshotFull
+      }
+      
+      // 兼容旧字段：将 location 作为完整地址显示（废物利用）
+      // 注意：旧数据的 location 可能是自由文本，格式不统一，所以作为完整地址单行显示
+      return commodity.location || '未设置位置'
+    }
+    
+    // 格式化商品地址的详细地址部分
+    const formatCommodityAddressDetail = (commodity) => {
+      // 如果有地址快照的详细地址字段，使用结构化数据
+      const parts = []
+      if (commodity.addressSnapshotStreet) {
+        parts.push(commodity.addressSnapshotStreet)
+      }
+      if (commodity.addressSnapshotDetail) {
+        parts.push(commodity.addressSnapshotDetail)
+      }
+      
+      if (parts.length > 0) {
+        return parts.join('')
+      }
+      
+      // 如果没有详细地址字段，但有完整地址快照，说明是旧数据格式
+      // 这种情况下，详细地址部分为空，完整地址已经在省市区部分显示了
+      return ''
+    }
+    
+    // 检查是否应该使用单行显示（旧数据格式）
+    const shouldUseSingleLineAddress = (commodity) => {
+      // 如果有地址快照的省市区字段，使用标准格式（省市区-详细地址）
+      if (commodity.addressSnapshotProvince || commodity.addressSnapshotCity || commodity.addressSnapshotDistrict) {
+        return false
+      }
+      // 如果没有地址快照字段，但有 location，使用单行显示（废物利用）
+      if (commodity.location && !commodity.addressSnapshotFull) {
+        return true
+      }
+      return false
+    }
+    
     onMounted(() => {
       fetchCommodityDetail()
     })
@@ -348,7 +427,11 @@ export default {
       handleContact,
       viewSellerProfile,
       handleLogout,
-      handleBack
+      handleBack,
+      getCommodityAddress,
+      formatCommodityAddressRegion,
+      formatCommodityAddressDetail,
+      shouldUseSingleLineAddress
     }
   }
 }
@@ -503,6 +586,29 @@ export default {
 
 .value {
   color: #333;
+}
+
+.address-display {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.address-region {
+  color: #333;
+  font-weight: normal;
+}
+
+.address-detail {
+  color: #666;
+  font-size: 13px;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.address-single-line {
+  color: #333;
+  font-weight: normal;
 }
 
 .description-section {

@@ -50,6 +50,15 @@
               <el-form-item label="所在地区" prop="location">
                 <UnifiedInput v-model="editForm.location" placeholder="请输入所在地区" />
               </el-form-item>
+              
+              <el-form-item label="地址管理">
+                <UnifiedButton 
+                  type="default" 
+                  @click="$router.push('/addresses')"
+                >
+                  管理收货地址
+                </UnifiedButton>
+              </el-form-item>
             </div>
 
             <!-- 提交按钮 -->

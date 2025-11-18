@@ -69,6 +69,117 @@
         <UnifiedButton @click="$router.back()">返回</UnifiedButton>
       </el-form-item>
     </el-form>
+
+    <el-divider content-position="left">地址管理</el-divider>
+    <div class="address-panel">
+      <div class="address-panel__header">
+        <h3>用户地址</h3>
+        <UnifiedButton size="small" type="primary" @click="openAddressDialog()">新增地址</UnifiedButton>
+      </div>
+      <el-table
+        :data="addresses"
+        stripe
+        border
+        class="address-table"
+        v-loading="addressLoading"
+        empty-text="暂无地址信息"
+      >
+        <el-table-column prop="recipientName" label="收货人" width="120" />
+        <el-table-column prop="recipientPhone" label="手机号" width="140" />
+        <el-table-column label="地区" min-width="180">
+          <template #default="scope">
+            {{ formatRegion(scope.row) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="详细地址" min-width="220">
+          <template #default="scope">
+            {{ scope.row.streetAddress }} {{ scope.row.detailAddress || '' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="addressLabel" label="标签" width="90" />
+        <el-table-column label="状态" width="150">
+          <template #default="scope">
+            <el-tag size="small" type="success" v-if="scope.row.isDefault">默认</el-tag>
+            <el-tag size="small" :type="scope.row.isActive ? 'info' : 'danger'">
+              {{ scope.row.isActive ? '启用' : '停用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="240" fixed="right">
+          <template #default="scope">
+            <el-space wrap size="small">
+              <UnifiedButton size="small" @click="openAddressDialog(scope.row)">编辑</UnifiedButton>
+              <UnifiedButton
+                size="small"
+                type="primary"
+                :disabled="scope.row.isDefault"
+                @click="handleSetDefault(scope.row)"
+              >
+                设为默认
+              </UnifiedButton>
+              <UnifiedButton
+                size="small"
+                type="danger"
+                plain
+                @click="handleDeleteAddress(scope.row)"
+              >
+                删除
+              </UnifiedButton>
+            </el-space>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <el-dialog
+      v-model="addressDialogVisible"
+      :title="addressDialogTitle"
+      width="640px"
+      destroy-on-close
+    >
+      <el-form :model="addressForm" label-width="100px" class="address-form">
+        <el-form-item label="收货人">
+          <UnifiedInput v-model="addressForm.recipientName" placeholder="请输入收货人" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <UnifiedInput v-model="addressForm.recipientPhone" placeholder="请输入手机号" />
+        </el-form-item>
+        <el-form-item label="省份">
+          <UnifiedInput v-model="addressForm.province" placeholder="请输入省份" />
+        </el-form-item>
+        <el-form-item label="城市">
+          <UnifiedInput v-model="addressForm.city" placeholder="请输入城市" />
+        </el-form-item>
+        <el-form-item label="区/县">
+          <UnifiedInput v-model="addressForm.district" placeholder="请输入区/县" />
+        </el-form-item>
+        <el-form-item label="街道">
+          <UnifiedInput v-model="addressForm.streetAddress" placeholder="请输入街道" />
+        </el-form-item>
+        <el-form-item label="详细地址">
+          <UnifiedInput v-model="addressForm.detailAddress" placeholder="楼栋/门牌等" />
+        </el-form-item>
+        <el-form-item label="标签">
+          <UnifiedSelect
+            v-model="addressForm.addressLabel"
+            :options="addressLabelOptions"
+            placeholder="请选择标签"
+          />
+        </el-form-item>
+        <el-form-item label="默认地址">
+          <el-switch v-model="addressForm.isDefault" />
+        </el-form-item>
+        <el-form-item label="启用状态">
+          <el-switch v-model="addressForm.isActive" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-space>
+          <UnifiedButton @click="addressDialogVisible = false">取消</UnifiedButton>
+          <UnifiedButton type="primary" @click="saveAddress" :loading="addressSaving">保存</UnifiedButton>
+        </el-space>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -78,7 +189,7 @@ import UnifiedButton from '../components/common/UnifiedButton.vue'
 import UnifiedSelect from '../components/common/UnifiedSelect.vue'
 import { usersAPI } from '../api/admin/users'
 import { reviewUserPayload } from '../utils/userReview'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 export default {
   name: 'UserEdit',
@@ -106,7 +217,31 @@ export default {
       ],
       // 头像上传配置
       uploadUrl: 'http://localhost:8080/api/user/profile/avatar',
-      uploadHeaders: {}
+      uploadHeaders: {},
+      // 地址管理
+      addresses: [],
+      addressLoading: false,
+      addressDialogVisible: false,
+      addressSaving: false,
+      editingAddressId: '',
+      addressForm: {
+        recipientName: '',
+        recipientPhone: '',
+        province: '',
+        city: '',
+        district: '',
+        streetAddress: '',
+        detailAddress: '',
+        addressLabel: 'HOME',
+        isDefault: false,
+        isActive: true
+      },
+      addressLabelOptions: [
+        { label: '家庭', value: 'HOME' },
+        { label: '学校', value: 'SCHOOL' },
+        { label: '公司', value: 'COMPANY' },
+        { label: '其他', value: 'OTHER' }
+      ]
     }
   },
   async mounted(){
@@ -135,6 +270,13 @@ export default {
       this.form.totalSales = p.totalSales ?? ''
       this.form.totalPurchases = p.totalPurchases ?? ''
       this.form.vipLevel = p.vipLevel || ''
+    }
+
+    await this.loadAddresses()
+  },
+  computed: {
+    addressDialogTitle () {
+      return this.editingAddressId ? '编辑地址' : '新增地址'
     }
   },
   methods:{
@@ -178,6 +320,110 @@ export default {
     // 头像上传失败
     handleAvatarError() {
       ElMessage.error('头像上传失败')
+    },
+    async loadAddresses() {
+      this.addressLoading = true
+      try {
+        const res = await usersAPI.listAddresses(this.form.userId)
+        if (res && res.success) {
+          this.addresses = Array.isArray(res.data) ? res.data : []
+        }
+      } finally {
+        this.addressLoading = false
+      }
+    },
+    formatRegion(row) {
+      if (!row) return ''
+      return [row.province, row.city, row.district].filter(Boolean).join(' / ')
+    },
+    openAddressDialog(address) {
+      if (address) {
+        this.editingAddressId = address.addressId
+        this.addressForm = {
+          recipientName: address.recipientName || '',
+          recipientPhone: address.recipientPhone || '',
+          province: address.province || '',
+          city: address.city || '',
+          district: address.district || '',
+          streetAddress: address.streetAddress || '',
+          detailAddress: address.detailAddress || '',
+          addressLabel: address.addressLabel || 'HOME',
+          isDefault: Boolean(address.isDefault),
+          isActive: address.isActive !== false
+        }
+      } else {
+        this.editingAddressId = ''
+        this.addressForm = {
+          recipientName: '',
+          recipientPhone: '',
+          province: '',
+          city: '',
+          district: '',
+          streetAddress: '',
+          detailAddress: '',
+          addressLabel: 'HOME',
+          isDefault: false,
+          isActive: true
+        }
+      }
+      this.addressDialogVisible = true
+    },
+    async saveAddress() {
+      const requiredFields = ['recipientName', 'recipientPhone', 'province', 'city', 'district', 'streetAddress']
+      for (const field of requiredFields) {
+        if (!this.addressForm[field] || !this.addressForm[field].toString().trim()) {
+          this.$message.error('请完整填写地址必填项')
+          return
+        }
+      }
+      this.addressSaving = true
+      try {
+        let res
+        const payload = { ...this.addressForm }
+        if (this.editingAddressId) {
+          res = await usersAPI.updateAddress(this.form.userId, this.editingAddressId, payload)
+        } else {
+          res = await usersAPI.createAddress(this.form.userId, payload)
+        }
+        if (res && res.success) {
+          this.$message.success('保存成功')
+          this.addressDialogVisible = false
+          await this.loadAddresses()
+        } else {
+          this.$message.error(res?.message || '保存失败')
+        }
+      } finally {
+        this.addressSaving = false
+      }
+    },
+    async handleDeleteAddress(address) {
+      if (!address || !address.addressId) return
+      try {
+        await ElMessageBox.confirm('确认删除该地址吗？此操作不可撤销。', '提示', {
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+      } catch (err) {
+        return
+      }
+      const res = await usersAPI.deleteAddress(this.form.userId, address.addressId)
+      if (res && res.success) {
+        this.$message.success('删除成功')
+        await this.loadAddresses()
+      } else {
+        this.$message.error(res?.message || '删除失败')
+      }
+    },
+    async handleSetDefault(address) {
+      if (!address || !address.addressId) return
+      const res = await usersAPI.setDefaultAddress(this.form.userId, address.addressId)
+      if (res && res.success) {
+        this.$message.success('已设为默认地址')
+        await this.loadAddresses()
+      } else {
+        this.$message.error(res?.message || '操作失败')
+      }
     },
     async save(){
       const payload = { ...this.form }
@@ -225,6 +471,36 @@ export default {
   font-size: 12px;
   color: #999;
   line-height: 1.5;
+}
+
+.address-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.address-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.address-panel__header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.address-table {
+  width: 100%;
+}
+
+.address-form :deep(.unified-input),
+.address-form :deep(.custom-select) {
+  width: 100%;
 }
 
 @media (max-width: 600px) {

@@ -56,47 +56,65 @@
           </div>
         </div>
 
-        <!-- 商品状态筛选 -->
-        <div class="commodity-tabs">
+        <!-- 主标签页：商品和地址管理 -->
+        <div class="main-tabs" v-if="isOwnHome">
           <SafeTabs 
-            v-model="activeTab" 
-            @tab-change="handleTabChange"
+            v-model="mainActiveTab" 
+            @tab-change="handleMainTabChange"
           >
-            <el-tab-pane label="全部" name="all"></el-tab-pane>
-            <el-tab-pane v-if="isOwnHome" label="草稿" name="DRAFT"></el-tab-pane>
-            <el-tab-pane label="已发布" name="PUBLISHED"></el-tab-pane>
-            <el-tab-pane label="已上架" name="ON_SHELF"></el-tab-pane>
-            <el-tab-pane label="已下架" name="OFF_SHELF"></el-tab-pane>
+            <el-tab-pane label="我的商品" name="commodities"></el-tab-pane>
+            <el-tab-pane label="地址管理" name="addresses"></el-tab-pane>
           </SafeTabs>
         </div>
 
-        <!-- 商品列表 -->
-        <div class="commodities-list" v-loading="loading">
-          <div v-if="commodities.length === 0 && !loading" class="empty-state">
-            <el-empty :description="getEmptyDescription()">
-              <UnifiedButton v-if="isOwnHome" type="primary" @click="handleEmptyAction()">
-                {{ getEmptyActionText() }}
-              </UnifiedButton>
-            </el-empty>
-          </div>
-
-          <MyCommodityCard
-            v-for="commodity in commodities"
-            :key="commodity.commodityId"
-            :commodity="commodity"
-            :show-actions="isOwnHome"
-            @click="handleCommodityClick"
-            @publish="handlePublish"
-            @shelf="handleShelf"
-            @unshelf="handleUnshelf"
-            @republish="handleRepublish"
-            @edit="handleEdit"
-            @delete="handleDelete"
-          />
+        <!-- 地址管理内容 -->
+        <div v-if="isOwnHome && mainActiveTab === 'addresses'" class="address-management-section">
+          <AddressManager />
         </div>
 
-        <!-- 分页 -->
-        <div class="pagination-wrapper" v-if="total > 0">
+        <!-- 商品管理内容 -->
+        <div v-if="!isOwnHome || mainActiveTab === 'commodities'">
+          <!-- 商品状态筛选 -->
+          <div class="commodity-tabs">
+            <SafeTabs 
+              v-model="activeTab" 
+              @tab-change="handleTabChange"
+            >
+              <el-tab-pane label="全部" name="all"></el-tab-pane>
+              <el-tab-pane v-if="isOwnHome" label="草稿" name="DRAFT"></el-tab-pane>
+              <el-tab-pane label="已发布" name="PUBLISHED"></el-tab-pane>
+              <el-tab-pane label="已上架" name="ON_SHELF"></el-tab-pane>
+              <el-tab-pane label="已下架" name="OFF_SHELF"></el-tab-pane>
+            </SafeTabs>
+          </div>
+
+          <!-- 商品列表 -->
+          <div class="commodities-list" v-loading="loading">
+            <div v-if="commodities.length === 0 && !loading" class="empty-state">
+              <el-empty :description="getEmptyDescription()">
+                <UnifiedButton v-if="isOwnHome" type="primary" @click="handleEmptyAction()">
+                  {{ getEmptyActionText() }}
+                </UnifiedButton>
+              </el-empty>
+            </div>
+
+            <MyCommodityCard
+              v-for="commodity in commodities"
+              :key="commodity.commodityId"
+              :commodity="commodity"
+              :show-actions="isOwnHome"
+              @click="handleCommodityClick"
+              @publish="handlePublish"
+              @shelf="handleShelf"
+              @unshelf="handleUnshelf"
+              @republish="handleRepublish"
+              @edit="handleEdit"
+              @delete="handleDelete"
+            />
+          </div>
+
+          <!-- 分页 -->
+          <div class="pagination-wrapper" v-if="total > 0">
           <div class="pagination-content">
             <!-- 总数显示 -->
             <span class="pagination-total">共 {{ total }} 条</span>
@@ -163,6 +181,7 @@
             </div>
           </div>
         </div>
+        </div>
       </div>
     </div>
 
@@ -207,6 +226,7 @@ import { ArrowLeft, ArrowDown } from '@element-plus/icons-vue'
 import SafeTabs from '../components/SafeTabs.vue'
 import MyCommodityCard from '../components/commodity/MyCommodityCard.vue'
 import UnifiedButton from '../components/common/UnifiedButton.vue'
+import AddressManager from '../components/address/AddressManager.vue'
 import '../styles/pagination.css'
 
 export default {
@@ -215,6 +235,7 @@ export default {
     SafeTabs,
     MyCommodityCard,
     UnifiedButton,
+    AddressManager,
     ArrowLeft,
     ArrowDown
   },
@@ -231,6 +252,7 @@ export default {
     const currentPage = ref(1)
     const pageSize = ref(10)
     const activeTab = ref('all')
+    const mainActiveTab = ref('commodities') // 主标签页：商品或地址管理
     const showAvatarDialog = ref(false)
     
     // 弹出式选择器状态
@@ -319,7 +341,16 @@ export default {
       }
     }
     
-    // 标签页切换
+    // 主标签页切换（商品/地址管理）
+    const handleMainTabChange = (tabName) => {
+      mainActiveTab.value = tabName
+      // 切换到商品标签页时，重新加载商品列表
+      if (tabName === 'commodities') {
+        fetchCommodities()
+      }
+    }
+    
+    // 商品状态标签页切换
     const handleTabChange = (tabName) => {
       // 非本人主页不能查看草稿
       if (!isOwnHome.value && tabName === 'DRAFT') {
@@ -635,6 +666,7 @@ export default {
       currentPage,
       pageSize,
       activeTab,
+      mainActiveTab,
       showPageSizeSelect,
       jumpPage,
       showAvatarDialog,
@@ -643,6 +675,7 @@ export default {
       isOwnHome,
       uploadUrl,
       uploadHeaders,
+      handleMainTabChange,
       handleTabChange,
       handleCurrentChange,
       togglePageSizeSelect,
@@ -818,6 +851,72 @@ export default {
 .profile-action-btn {
   padding: 10px 30px !important;
   font-size: 16px !important;
+}
+
+/* 主标签页样式（商品/地址管理） */
+.main-tabs {
+  background: transparent;
+  border-radius: 16px;
+  padding: 0;
+  margin-bottom: 24px;
+  border: none;
+  box-shadow: none;
+}
+
+.main-tabs :deep(.el-tabs__header) {
+  background: white;
+  border-radius: 28.3px;
+  padding: 8px;
+  border: 1px solid var(--primary-color);
+  margin-bottom: 0;
+}
+
+.main-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none;
+}
+
+.main-tabs :deep(.el-tabs__item) {
+  border-radius: 20px;
+  font-weight: normal;
+  color: var(--primary-color);
+  border: none;
+  padding: 8px 20px !important;
+  margin: 0 5px;
+  transition: all 0.3s ease;
+}
+
+.main-tabs :deep(.el-tabs__item:first-child) {
+  padding: 8px 20px !important;
+  margin-left: 0;
+  margin-right: 5px;
+}
+
+.main-tabs :deep(.el-tabs__item:last-child) {
+  padding: 8px 20px !important;
+  margin-left: 5px;
+  margin-right: 0;
+}
+
+.main-tabs :deep(.el-tabs__item:hover) {
+  background-color: rgba(106, 1, 94, 0.1);
+}
+
+.main-tabs :deep(.el-tabs__item.is-active) {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.main-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+/* 地址管理区域样式 */
+.address-management-section {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* 商品标签页样式（复用 MyCommodities 的样式） */

@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const Dashboard = () => import('../views/Dashboard.vue')
 const Users = () => import('../views/Users.vue')
 const UserEdit = () => import('../views/UserEdit.vue')
+const UserAddressManagement = () => import('../views/UserAddressManagement.vue')
 const Commodities = () => import('../views/Commodities.vue')
 const CommodityEdit = () => import('../views/CommodityEdit.vue')
 const Orders = () => import('../views/Orders.vue')
@@ -20,6 +21,7 @@ const routes = [
   { path: '/', name: 'Dashboard', component: Dashboard },
   { path: '/users', name: 'Users', component: Users },
   { path: '/users/:userId/edit', name: 'UserEdit', component: UserEdit },
+  { path: '/users/:userId/addresses', name: 'UserAddressManagement', component: UserAddressManagement },
   { path: '/commodities', name: 'Commodities', component: Commodities },
   { path: '/commodities/:commodityId/edit', name: 'CommodityEdit', component: CommodityEdit },
   { path: '/orders', name: 'Orders', component: Orders },

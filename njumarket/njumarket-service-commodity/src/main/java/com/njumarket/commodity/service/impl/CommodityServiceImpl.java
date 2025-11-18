@@ -11,10 +11,12 @@ import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.commodity.repository.CommodityRepository;
 import com.njumarket.commodity.service.CommodityService;
 import com.njumarket.commodity.service.CommodityQueryService;
+import com.njumarket.commodity.client.AuthClient;
 import com.njumarket.commodity.client.ImageClient;
 import com.njumarket.commodity.client.MessageClient;
 import com.njumarket.commodity.client.NotificationClient;
 import com.njumarket.commodity.client.OrderClient;
+import com.njumarket.njumarket.dto.internal.AddressInternalDTO;
 import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.utils.CacheUtil;
@@ -48,6 +50,7 @@ import java.util.stream.Collectors;
 public class CommodityServiceImpl implements CommodityService {
 
     private final CommodityRepository commodityRepository;
+    private final AuthClient authClient;
     private final OrderClient orderClient;
     private final ImageClient imageClient;
     private final MessageClient messageClient;
@@ -93,6 +96,9 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setClickCount(0);
         commodity.setPublishTime(LocalDateTime.now());
         
+        // ✅ 创建地址快照 - 获取地址信息（使用Feign Client）
+        setCommodityAddress(commodity, commodityDTO, currentUser.getUserId());
+        
         // 保存商品
         Commodity savedCommodity = commodityRepository.save(commodity);
         
@@ -122,6 +128,9 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setBuyerVisibility("PUBLIC");
         commodity.setClickCount(0);
         commodity.setPublishTime(LocalDateTime.now());
+        
+        // ✅ 创建地址快照 - 获取地址信息（使用Feign Client）
+        setCommodityAddress(commodity, commodityDTO, currentUser.getUserId());
         
         // 保存商品
         Commodity savedCommodity = commodityRepository.save(commodity);
@@ -163,6 +172,9 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setCategory(commodityDTO.getCategory());
         commodity.setConditionLevel(commodityDTO.getConditionLevel());
         commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
+        
+        // ✅ 更新地址快照 - 获取地址信息（使用Feign Client）
+        setCommodityAddress(commodity, commodityDTO, currentUser.getUserId());
         
         // 保存更新
         LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
@@ -646,6 +658,20 @@ public class CommodityServiceImpl implements CommodityService {
         dto.setPrice(commodity.getPrice());
         dto.setStock(commodity.getStock());
         dto.setLocation(commodity.getLocation());
+        dto.setAddressId(commodity.getAddressId());
+        
+        // 地址快照字段
+        dto.setAddressSnapshotProvince(commodity.getAddressSnapshotProvince());
+        dto.setAddressSnapshotCity(commodity.getAddressSnapshotCity());
+        dto.setAddressSnapshotDistrict(commodity.getAddressSnapshotDistrict());
+        dto.setAddressSnapshotStreet(commodity.getAddressSnapshotStreet());
+        dto.setAddressSnapshotDetail(commodity.getAddressSnapshotDetail());
+        dto.setAddressSnapshotFull(commodity.getAddressSnapshotFull());
+        
+        // 地理位置字段
+        dto.setLongitude(commodity.getLongitude());
+        dto.setLatitude(commodity.getLatitude());
+        
         dto.setPublishTime(commodity.getPublishTime());
         dto.setCommodityStatus(commodity.getCommodityStatus());
         dto.setSellerVisibility(commodity.getSellerVisibility());
@@ -663,6 +689,118 @@ public class CommodityServiceImpl implements CommodityService {
         dto.setClickCount(commodity.getClickCount());
         
         return dto;
+    }
+    
+    /**
+     * 设置商品地址信息
+     * 
+     * 重要设计原则：
+     * 1. 地址快照字段（address_snapshot_*）是完全独立的，不依赖 address_id
+     * 2. 如果 DTO 中已经提供了快照字段，优先使用这些字段（快照字段已独立设置）
+     * 3. 只有在快照字段为空时，才从 address_id 获取地址信息并填充到快照字段
+     * 4. address_id 只是用于"填充"快照字段的数据来源，一旦快照字段设置完成，就完全独立
+     * 5. 快照字段一旦设置，就完全独立，即使 address_id 对应的地址被删除或修改，快照也不受影响
+     * 
+     * @param commodity 商品实体
+     * @param commodityDTO 商品DTO（可能包含addressId或快照字段）
+     * @param userId 用户ID
+     */
+    private void setCommodityAddress(Commodity commodity, CommodityDTO commodityDTO, String userId) {
+        try {
+            // ✅ 优先检查：如果 DTO 中已经提供了快照字段，直接使用（快照字段已独立设置）
+            boolean hasSnapshotFields = StringUtils.hasText(commodityDTO.getAddressSnapshotProvince()) ||
+                                       StringUtils.hasText(commodityDTO.getAddressSnapshotCity()) ||
+                                       StringUtils.hasText(commodityDTO.getAddressSnapshotFull());
+            
+            if (hasSnapshotFields) {
+                // 快照字段已独立提供，直接使用
+                commodity.setAddressSnapshotProvince(commodityDTO.getAddressSnapshotProvince());
+                commodity.setAddressSnapshotCity(commodityDTO.getAddressSnapshotCity());
+                commodity.setAddressSnapshotDistrict(commodityDTO.getAddressSnapshotDistrict());
+                commodity.setAddressSnapshotStreet(commodityDTO.getAddressSnapshotStreet());
+                commodity.setAddressSnapshotDetail(commodityDTO.getAddressSnapshotDetail());
+                commodity.setAddressSnapshotFull(commodityDTO.getAddressSnapshotFull());
+                
+                // 如果提供了经纬度，也直接使用
+                if (commodityDTO.getLongitude() != null && commodityDTO.getLatitude() != null) {
+                    commodity.setLongitude(commodityDTO.getLongitude());
+                    commodity.setLatitude(commodityDTO.getLatitude());
+                    commodity.setLocationGeography(
+                        String.format("POINT(%s %s)", commodityDTO.getLongitude(), commodityDTO.getLatitude())
+                    );
+                }
+                
+                // address_id 只是作为引用保存（如果提供了）
+                if (StringUtils.hasText(commodityDTO.getAddressId())) {
+                    commodity.setAddressId(commodityDTO.getAddressId());
+                }
+                
+                return; // 快照字段已独立设置，不需要从 address_id 获取
+            }
+            
+            // ✅ 只有在快照字段为空时，才从 address_id 获取地址信息并填充到快照字段
+            AddressInternalDTO addressDTO = null;
+            
+            // 如果传了地址ID，则根据ID获取地址
+            if (StringUtils.hasText(commodityDTO.getAddressId())) {
+                Result addressResult = authClient.getAddressById(commodityDTO.getAddressId());
+                if (addressResult.getSuccess() && addressResult.getData() != null) {
+                    addressDTO = objectMapper.convertValue(
+                        addressResult.getData(),
+                        new TypeReference<AddressInternalDTO>() {}
+                    );
+                    commodity.setAddressId(commodityDTO.getAddressId());
+                }
+            }
+            
+            // 如果没有传地址ID或获取失败，则使用默认地址
+            if (addressDTO == null) {
+                Result defaultAddressResult = authClient.getDefaultAddress(userId);
+                if (defaultAddressResult.getSuccess() && defaultAddressResult.getData() != null) {
+                    addressDTO = objectMapper.convertValue(
+                        defaultAddressResult.getData(),
+                        new TypeReference<AddressInternalDTO>() {}
+                    );
+                    if (addressDTO != null && StringUtils.hasText(addressDTO.getAddressId())) {
+                        commodity.setAddressId(addressDTO.getAddressId());
+                    }
+                }
+            }
+            
+            // 如果获取到地址信息，写入地址快照和地理位置
+            if (addressDTO != null) {
+                // 写入地址快照（从 address_id 填充）
+                commodity.setAddressSnapshotProvince(addressDTO.getProvince());
+                commodity.setAddressSnapshotCity(addressDTO.getCity());
+                commodity.setAddressSnapshotDistrict(addressDTO.getDistrict());
+                commodity.setAddressSnapshotStreet(addressDTO.getStreetAddress());
+                commodity.setAddressSnapshotDetail(addressDTO.getDetailAddress());
+                commodity.setAddressSnapshotFull(addressDTO.getFullAddress());
+                
+                // 写入地理位置（用于地理搜索和距离计算）
+                if (addressDTO.getLongitude() != null && addressDTO.getLatitude() != null) {
+                    commodity.setLongitude(addressDTO.getLongitude());
+                    commodity.setLatitude(addressDTO.getLatitude());
+                    // 构建 PostGIS WKT 格式：POINT(longitude latitude)
+                    commodity.setLocationGeography(
+                        String.format("POINT(%s %s)", addressDTO.getLongitude(), addressDTO.getLatitude())
+                    );
+                }
+            } else {
+                // 如果无法获取地址信息，使用原有location字段作为快照
+                log.warn("创建/更新商品警告 - userId={}, 无法获取地址信息，使用原有location字段", userId);
+                if (StringUtils.hasText(commodityDTO.getLocation())) {
+                    commodity.setAddressSnapshotFull(commodityDTO.getLocation());
+                }
+            }
+        } catch (Exception e) {
+            log.error("获取地址信息失败: userId={}, error={}", userId, e.getMessage(), e);
+            log.warn("创建/更新商品警告 - userId={}, 地址信息获取失败，使用原有location字段", userId);
+            // 地址获取失败不影响商品创建/更新，使用原有字段
+            if (StringUtils.hasText(commodityDTO.getLocation())) {
+                commodity.setAddressSnapshotFull(commodityDTO.getLocation());
+            }
+        }
     }
 }
 

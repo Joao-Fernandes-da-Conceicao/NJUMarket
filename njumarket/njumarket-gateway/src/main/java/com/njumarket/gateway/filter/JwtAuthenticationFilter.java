@@ -36,10 +36,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String requestURI = request.getURI().getPath();
 
-        // 只处理用户相关路径（前端直接调用 /api/user/**、/api/contact/** 和 /api/ws/**）
+        // 只处理用户相关路径（前端直接调用 /api/user/**、/api/contact/**、/api/auth/** 和 /api/ws/**）
         // ✅ 添加WebSocket路径，因为WebSocket连接也需要JWT验证和X-User-Id传递
+        // ✅ 添加 /api/auth/** 路径，因为地址管理等接口需要JWT验证
         if (!requestURI.startsWith("/api/user/") && 
             !requestURI.startsWith("/api/contact/") &&
+            !requestURI.startsWith("/api/auth/") &&
             !requestURI.startsWith("/api/ws/")) {
             return chain.filter(exchange);
         }

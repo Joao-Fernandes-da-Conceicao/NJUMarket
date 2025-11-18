@@ -841,8 +841,14 @@ export default {
   }
   
   .commodity-grid {
-    grid-template-columns: repeat(2, 1fr); /* 移动端强制每行2个卡片 */
-    gap: calc(15px * var(--mobile-scale, 1));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  
+  .commodity-card {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
   }
   
   .list-header {

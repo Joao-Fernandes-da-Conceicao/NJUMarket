@@ -271,5 +271,19 @@ public class UserOrderController {
     public Result getOrdersBatchStatus(@RequestBody List<String> orderIds) {
         return orderService.getOrdersBatchStatus(orderIds);
     }
+    
+    @Operation(summary = "更新订单收货地址", description = "买家或卖家更新订单收货地址（只能更新订单快照，不影响商品）。只有本人，且订单在未发货和未支付阶段，可以更改地址")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "更新成功"),
+        @ApiResponse(responseCode = "400", description = "订单状态不允许修改地址"),
+        @ApiResponse(responseCode = "403", description = "无权限修改此订单的地址"),
+        @ApiResponse(responseCode = "404", description = "订单不存在")
+    })
+    @PutMapping("/{orderId}/shipping-address")
+    public Result updateOrderShippingAddress(
+            @Parameter(description = "订单ID", required = true) @PathVariable String orderId,
+            @Valid @RequestBody com.njumarket.order.dto.UpdateOrderAddressDTO addressDTO) {
+        return orderService.updateOrderShippingAddress(orderId, addressDTO);
+    }
 }
 

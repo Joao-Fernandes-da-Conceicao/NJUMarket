@@ -13,7 +13,7 @@
 
 ## 概述
 
-NJUMarket 项目已完全容器化，使用 Docker Compose 一键启动所有服务。所有服务（MySQL、Redis、Eureka、Gateway 和 7 个微服务）都可以通过 `docker-compose` 命令统一管理。
+NJUMarket 项目已完全容器化，使用 Docker Compose 一键启动所有服务。所有服务（PostgreSQL、Redis、Eureka、Gateway 和 7 个微服务）都可以通过 `docker-compose` 命令统一管理。
 
 ## 前置要求
 
@@ -160,8 +160,8 @@ docker-compose down -v
 ### 进入容器
 
 ```bash
-# 进入 MySQL 容器
-docker-compose exec mysql bash
+# 进入 PostgreSQL 容器
+docker-compose exec postgres bash
 
 # 进入 Redis 容器
 docker-compose exec redis sh
@@ -195,23 +195,17 @@ docker-compose up -d
 
 ## 数据持久化
 
-### MySQL 数据
+### PostgreSQL 数据
 
-MySQL 数据存储在 Docker 卷 `njumarket_mysql_data` 中，即使删除容器，数据也会保留。
+PostgreSQL 数据存储在 Docker 卷 `postgres_data` 中，即使删除容器，数据也会保留。
 
 **备份数据**：
 ```bash
-# 备份 MySQL 数据
-docker-compose exec mysql mysqldump -u root -pHqz20050316 nju_market > backup.sql
+# 备份 PostgreSQL 数据
+docker-compose exec postgres pg_dump -U postgres -d njumarket > backup.sql
 
-# 恢复 MySQL 数据
-docker-compose exec -T mysql mysql -u root -pHqz20050316 nju_market < backup.sql
-```
-
-**导入数据库**：
-```bash
-# 如果数据库未初始化，手动导入 schema.sql
-Get-Content database\schema.sql -Encoding UTF8 | docker exec -i njumarket-mysql mysql -uroot -pHqz20050316 nju_market
+# 恢复 PostgreSQL 数据
+docker-compose exec -T postgres psql -U postgres -d njumarket < backup.sql
 ```
 
 ### Redis 数据
@@ -225,7 +219,7 @@ Redis 数据存储在 Docker 卷 `njumarket_redis_data` 中。
 docker volume ls
 
 # 查看数据卷详情
-docker volume inspect njumarket_mysql_data
+docker volume inspect njumarket_postgres_data
 ```
 
 ## 故障排查
@@ -297,10 +291,10 @@ ports are not available: exposing port TCP 0.0.0.0:3306 -> ...: bind: Only one u
 # 查看端口占用情况
 netstat -ano | findstr :3306
 
-# 停止 MySQL 服务（如果是 MySQL 占用）
-net stop MySQL80
+# 停止 PostgreSQL 服务（如果是 PostgreSQL 占用）
+net stop postgresql-x64-16
 # 或者
-net stop MySQL
+net stop postgresql-x64-15
 
 # 停止其他服务（根据进程名称）
 tasklist | findstr <PID>
@@ -312,9 +306,9 @@ net stop <服务名称>
 如果不想停止本地服务，可以修改 `docker-compose.yml` 使用不同的端口：
 
 ```yaml
-mysql:
+postgres:
   ports:
-    - "3307:3306"  # 改为 3307，本地访问时使用 3307
+    - "5433:5432"  # 改为 5433，本地访问时使用 5433
 ```
 
 **注意**：修改端口后，需要同步更新所有服务的数据库连接配置。
@@ -323,42 +317,41 @@ mysql:
 
 | 端口 | 常见占用服务 | 解决方法 |
 |------|------------|---------|
-| 3306 | MySQL | `net stop MySQL80` 或修改 Docker 端口映射 |
+| 5432 | PostgreSQL | 停止本地 PostgreSQL 服务或修改 Docker 端口映射 |
 | 6379 | Redis | `net stop Redis` 或修改 Docker 端口映射 |
 | 8080 | Tomcat/其他 Web 服务 | 停止服务或修改 Docker 端口映射 |
 | 8761 | Eureka | 通常不会冲突，如果冲突则修改端口 |
 
-### 问题 3：MySQL 容器启动失败
+### 问题 3：PostgreSQL 容器启动失败
 
 **错误信息**：
 ```
 ERROR: ASCII '\0' appeared in the statement, but this is not allowed unless option --binary-mode is enabled
 ```
 
-**问题原因**：`schema.sql` 文件包含二进制字符（编码问题）
+**常见原因**：数据目录损坏或端口被占用
 
 **解决方法**：
 
-1. **清理旧的 MySQL 数据卷**：
+1. **清理旧的 PostgreSQL 数据卷**：
    ```powershell
    docker-compose down -v
    ```
 
-2. **重新启动 MySQL**：
+2. **重新启动 PostgreSQL**：
    ```powershell
-   docker-compose up -d mysql
+   docker-compose up -d postgres
    ```
 
-3. **等待 MySQL 启动完成**：
+3. **等待 PostgreSQL 启动完成**：
    ```powershell
-   docker-compose ps mysql
+   docker-compose ps postgres
    # 应该显示为 Up (healthy)
    ```
 
-4. **手动导入 schema.sql**：
+4. **检查日志**：
    ```powershell
-   # 使用 UTF-8 编码导入
-   Get-Content database\schema.sql -Encoding UTF8 | docker exec -i njumarket-mysql mysql -uroot -pHqz20050316 nju_market
+   docker-compose logs postgres
    ```
 
 ### 问题 4：服务启动失败
@@ -373,14 +366,14 @@ docker-compose ps
 ```
 
 **常见原因**：
-- MySQL 未启动：等待 MySQL 健康检查通过
+- PostgreSQL 未启动：等待 PostgreSQL 健康检查通过
 - Redis 未启动：等待 Redis 健康检查通过
 - Eureka 未启动：等待 Eureka 启动完成
 
 **解决方法**：
 ```bash
-# 查看 MySQL 日志
-docker-compose logs mysql
+# 查看 PostgreSQL 日志
+docker-compose logs postgres
 
 # 查看 Redis 日志
 docker-compose logs redis
@@ -391,21 +384,16 @@ docker-compose ps
 
 ### 问题 5：服务无法连接数据库
 
-**检查 MySQL 是否运行**：
+**检查 PostgreSQL 是否运行**：
 ```bash
-docker-compose exec mysql mysqladmin ping -h localhost -u root -pHqz20050316
+docker-compose exec postgres pg_isready -U postgres -d njumarket
 ```
 
 **检查数据库是否已初始化**：
 ```bash
-docker-compose exec mysql mysql -u root -pHqz20050316 -e "SHOW DATABASES;"
+docker-compose exec postgres psql -U postgres -d njumarket -c "\dt nju_market.*"
 ```
 
-**如果数据库未初始化**：
-```bash
-# 手动导入 schema.sql
-Get-Content database\schema.sql -Encoding UTF8 | docker exec -i njumarket-mysql mysql -uroot -pHqz20050316 nju_market
-```
 
 ### 问题 6：服务无法注册到 Eureka
 
@@ -434,7 +422,7 @@ Get-Content database\schema.sql -Encoding UTF8 | docker exec -i njumarket-mysql 
 2. **减少并发启动的服务数量**：
    ```bash
    # 分批启动
-   docker-compose up -d mysql redis discovery
+   docker-compose up -d postgres redis discovery
    docker-compose up -d gateway auth-service
    # ...
    ```
@@ -455,11 +443,11 @@ error during connect: This error may indicate that the docker daemon is not runn
 
 ### 混合模式（推荐用于开发）
 
-只启动基础设施（MySQL、Redis），本地运行服务：
+只启动基础设施（PostgreSQL、Redis），本地运行服务：
 
 ```bash
 # 只启动基础设施
-docker-compose up -d mysql redis
+docker-compose up -d postgres redis
 ```
 
 然后修改本地 `application.yml` 中的连接地址为 `localhost`，在 IDE 中运行服务。
@@ -558,8 +546,8 @@ docker-compose exec auth-service sh
 
 1. **首次构建**：需要 10-20 分钟（下载依赖）
 2. **内存要求**：建议至少 8GB 可用内存
-3. **端口占用**：确保端口 3306、6379、8080、8761、8091-8097 未被占用
-4. **数据备份**：定期备份 MySQL 数据卷
+3. **端口占用**：确保端口 5432、6379、8080、8761、8091-8097 未被占用
+4. **数据备份**：定期备份 PostgreSQL 数据卷
 
 ## 下一步
 

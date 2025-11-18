@@ -13,6 +13,8 @@ import com.njumarket.admin.entity.User;
 import com.njumarket.admin.entity.UserProfile;
 import com.njumarket.admin.entity.Commodity;
 import com.njumarket.admin.entity.Order;
+import com.njumarket.admin.entity.UserAddress;
+import com.njumarket.admin.repository.UserAddressRepository;
 import com.njumarket.admin.entity.Conversation;
 import com.njumarket.admin.entity.Message;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +39,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
@@ -57,6 +60,7 @@ public class AdminServiceImpl implements AdminService {
     private final OrderRepository orderRepository;
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
+    private final UserAddressRepository userAddressRepository;
     private final PasswordService passwordService;
     private final JwtUtils jwtUtils;
     private final ObjectMapper objectMapper;
@@ -628,11 +632,16 @@ public class AdminServiceImpl implements AdminService {
 
             if (payload.containsKey("permissions")) {
                 Object perms = payload.get("permissions");
-                if (perms instanceof List) {
-                    String permissionsJson = String.join(",", (List<String>) perms);
+                if (perms instanceof List<?>) {
+                    @SuppressWarnings("unchecked")
+                    List<Object> permList = (List<Object>) perms;
+                    String permissionsJson = permList.stream()
+                            .map(obj -> obj == null ? "" : obj.toString().trim())
+                            .filter(str -> !str.isEmpty())
+                            .collect(java.util.stream.Collectors.joining(","));
                     admin.setPermissions(permissionsJson);
                 } else if (perms instanceof String) {
-                    admin.setPermissions((String) perms);
+                    admin.setPermissions(((String) perms).trim());
                 }
             }
 
@@ -1391,8 +1400,9 @@ public class AdminServiceImpl implements AdminService {
         }
     }
     
-    // ✅ 新增：更新订单完整字段（包括状态和可见性）
+    // ✅ 新增：更新订单完整字段（包括状态、可见性和地址快照）
     @Override
+    @Transactional
     public Result updateOrderFull(String orderId, Map<String, Object> payload) {
         try {
             Optional<Order> opt = orderRepository.findById(orderId);
@@ -1440,6 +1450,13 @@ public class AdminServiceImpl implements AdminService {
                 }
                 order.setBuyerVisibility(vis);
             }
+            
+            // ✅ 管理员可以修改订单地址快照字段
+            // 收货地址快照（买家地址）
+            applyOrderShippingAddress(order, payload);
+            
+            // 发货地址快照（商品地址）
+            applyOrderCommodityAddress(order, payload);
             
             orderRepository.save(order);
             return Result.ok("订单更新成功", toSimpleOrder(order));
@@ -1912,6 +1929,16 @@ public class AdminServiceImpl implements AdminService {
         m.put("price", c.getPrice());
         m.put("stock", c.getStock());
         m.put("location", c.getLocation());
+        m.put("addressId", c.getAddressId());
+        m.put("addressSnapshotProvince", c.getAddressSnapshotProvince());
+        m.put("addressSnapshotCity", c.getAddressSnapshotCity());
+        m.put("addressSnapshotDistrict", c.getAddressSnapshotDistrict());
+        m.put("addressSnapshotStreet", c.getAddressSnapshotStreet());
+        m.put("addressSnapshotDetail", c.getAddressSnapshotDetail());
+        m.put("addressSnapshotFull", c.getAddressSnapshotFull());
+        m.put("longitude", c.getLongitude());
+        m.put("latitude", c.getLatitude());
+        m.put("locationGeography", c.getLocationGeography());
         m.put("commodityStatus", c.getCommodityStatus());
         m.put("publishTime", c.getPublishTime());
         m.put("category", c.getCategory());
@@ -1936,6 +1963,7 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    @Transactional
     public Result updateCommodityFull(String commodityId, Map<String, Object> payload) {
         try {
             Optional<Commodity> opt = commodityRepository.findById(commodityId);
@@ -1989,6 +2017,8 @@ public class AdminServiceImpl implements AdminService {
             if (location instanceof String && StringUtils.hasText((String) location)) {
                 commodity.setLocation(((String) location).trim());
             }
+            
+            applyCommodityAddress(commodity, payload);
             
             Object category = payload.get("category");
             if (category instanceof String && StringUtils.hasText((String) category)) {
@@ -2086,6 +2116,208 @@ public class AdminServiceImpl implements AdminService {
         }
     }
 
+    /**
+     * 应用商品地址信息
+     * 
+     * 重要设计原则：
+     * 1. 地址快照字段（address_snapshot_*）是完全独立的，不依赖 address_id
+     * 2. address_id 只是一个可选的引用字段，用于记录数据来源，但不影响快照字段
+     * 3. 管理端不会从 address_id 填充快照（因为没有 Feign Client），快照字段必须独立编辑
+     * 4. 快照字段一旦设置，就完全独立，即使 address_id 对应的地址被删除或修改，快照也不受影响
+     */
+    private void applyCommodityAddress(Commodity commodity, Map<String, Object> payload) {
+        boolean snapshotChanged = false;
+
+        // ✅ address_id 只是作为引用保存，不影响快照字段
+        // 注意：管理端不会从 address_id 填充快照，快照字段必须独立提供
+        if (payload.containsKey("addressId")) {
+            commodity.setAddressId(trimToNull(payload.get("addressId")));
+        }
+
+        // ✅ 快照字段独立更新，不依赖 address_id
+        snapshotChanged |= setAddressPart(payload, "addressSnapshotProvince", commodity::setAddressSnapshotProvince);
+        snapshotChanged |= setAddressPart(payload, "addressSnapshotCity", commodity::setAddressSnapshotCity);
+        snapshotChanged |= setAddressPart(payload, "addressSnapshotDistrict", commodity::setAddressSnapshotDistrict);
+        snapshotChanged |= setAddressPart(payload, "addressSnapshotStreet", commodity::setAddressSnapshotStreet);
+        snapshotChanged |= setAddressPart(payload, "addressSnapshotDetail", commodity::setAddressSnapshotDetail);
+
+        if (payload.containsKey("addressSnapshotFull")) {
+            commodity.setAddressSnapshotFull(trimToNull(payload.get("addressSnapshotFull")));
+        } else if (snapshotChanged) {
+            commodity.setAddressSnapshotFull(buildFullAddress(commodity));
+        }
+
+        if (!StringUtils.hasText(commodity.getLocation()) && StringUtils.hasText(commodity.getAddressSnapshotFull())) {
+            commodity.setLocation(commodity.getAddressSnapshotFull());
+        }
+
+        boolean longitudeProvided = payload.containsKey("longitude");
+        boolean latitudeProvided = payload.containsKey("latitude");
+        Double longitude = commodity.getLongitude();
+        Double latitude = commodity.getLatitude();
+
+        if (longitudeProvided) {
+            longitude = parseDouble(payload.get("longitude"));
+            commodity.setLongitude(longitude);
+        }
+        if (latitudeProvided) {
+            latitude = parseDouble(payload.get("latitude"));
+            commodity.setLatitude(latitude);
+        }
+
+        if (longitude != null && latitude != null) {
+            commodity.setLocationGeography(String.format("POINT(%s %s)", longitude, latitude));
+        } else if (longitudeProvided || latitudeProvided) {
+            commodity.setLocationGeography(null);
+        }
+    }
+
+    private boolean setAddressPart(Map<String, Object> payload, String key, java.util.function.Consumer<String> setter) {
+        if (!payload.containsKey(key)) {
+            return false;
+        }
+        setter.accept(trimToNull(payload.get(key)));
+        return true;
+    }
+
+    private String trimToNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = value.toString().trim();
+        return str.isEmpty() ? null : str;
+    }
+
+    private Double parseDouble(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        String str = value.toString().trim();
+        if (str.isEmpty()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(str);
+        } catch (NumberFormatException ex) {
+            throw new BusinessException("经纬度格式不正确");
+        }
+    }
+
+    private String buildFullAddress(Commodity commodity) {
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.hasText(commodity.getAddressSnapshotProvince())) {
+            sb.append(commodity.getAddressSnapshotProvince().trim());
+        }
+        if (StringUtils.hasText(commodity.getAddressSnapshotCity())) {
+            sb.append(commodity.getAddressSnapshotCity().trim());
+        }
+        if (StringUtils.hasText(commodity.getAddressSnapshotDistrict())) {
+            sb.append(commodity.getAddressSnapshotDistrict().trim());
+        }
+        if (StringUtils.hasText(commodity.getAddressSnapshotStreet())) {
+            sb.append(commodity.getAddressSnapshotStreet().trim());
+        }
+        if (StringUtils.hasText(commodity.getAddressSnapshotDetail())) {
+            sb.append(commodity.getAddressSnapshotDetail().trim());
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /**
+     * 应用订单收货地址快照（管理员修改）
+     * 地址快照字段完全独立，不依赖 address_id
+     */
+    private void applyOrderShippingAddress(Order order, Map<String, Object> payload) {
+        boolean snapshotChanged = false;
+
+        snapshotChanged |= setAddressPart(payload, "shippingAddressSnapshotProvince", order::setShippingAddressSnapshotProvince);
+        snapshotChanged |= setAddressPart(payload, "shippingAddressSnapshotCity", order::setShippingAddressSnapshotCity);
+        snapshotChanged |= setAddressPart(payload, "shippingAddressSnapshotDistrict", order::setShippingAddressSnapshotDistrict);
+        snapshotChanged |= setAddressPart(payload, "shippingAddressSnapshotStreet", order::setShippingAddressSnapshotStreet);
+        snapshotChanged |= setAddressPart(payload, "shippingAddressSnapshotDetail", order::setShippingAddressSnapshotDetail);
+        snapshotChanged |= setAddressPart(payload, "shippingAddressSnapshotRecipientName", order::setShippingAddressSnapshotRecipientName);
+        snapshotChanged |= setAddressPart(payload, "shippingAddressSnapshotRecipientPhone", order::setShippingAddressSnapshotRecipientPhone);
+
+        if (payload.containsKey("shippingAddressSnapshotFull")) {
+            order.setShippingAddressSnapshotFull(trimToNull(payload.get("shippingAddressSnapshotFull")));
+        } else if (snapshotChanged) {
+            order.setShippingAddressSnapshotFull(buildOrderShippingAddressFull(order));
+        }
+
+        // 更新兼容字段
+        if (StringUtils.hasText(order.getShippingAddressSnapshotFull())) {
+            order.setShippingAddress(order.getShippingAddressSnapshotFull());
+        }
+
+        // address_id 只是作为引用保存（可选）
+        if (payload.containsKey("shippingAddressId")) {
+            order.setShippingAddressId(trimToNull(payload.get("shippingAddressId")));
+        }
+    }
+
+    /**
+     * 应用订单发货地址快照（管理员修改）
+     * 地址快照字段完全独立，不依赖 address_id
+     */
+    private void applyOrderCommodityAddress(Order order, Map<String, Object> payload) {
+        boolean snapshotChanged = false;
+
+        snapshotChanged |= setAddressPart(payload, "commoditySnapshotAddressProvince", order::setCommoditySnapshotAddressProvince);
+        snapshotChanged |= setAddressPart(payload, "commoditySnapshotAddressCity", order::setCommoditySnapshotAddressCity);
+        snapshotChanged |= setAddressPart(payload, "commoditySnapshotAddressDistrict", order::setCommoditySnapshotAddressDistrict);
+        snapshotChanged |= setAddressPart(payload, "commoditySnapshotAddressStreet", order::setCommoditySnapshotAddressStreet);
+        snapshotChanged |= setAddressPart(payload, "commoditySnapshotAddressDetail", order::setCommoditySnapshotAddressDetail);
+
+        if (payload.containsKey("commoditySnapshotAddressFull")) {
+            order.setCommoditySnapshotAddressFull(trimToNull(payload.get("commoditySnapshotAddressFull")));
+        } else if (snapshotChanged) {
+            order.setCommoditySnapshotAddressFull(buildOrderCommodityAddressFull(order));
+        }
+    }
+
+    private String buildOrderShippingAddressFull(Order order) {
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.hasText(order.getShippingAddressSnapshotProvince())) {
+            sb.append(order.getShippingAddressSnapshotProvince().trim());
+        }
+        if (StringUtils.hasText(order.getShippingAddressSnapshotCity())) {
+            sb.append(order.getShippingAddressSnapshotCity().trim());
+        }
+        if (StringUtils.hasText(order.getShippingAddressSnapshotDistrict())) {
+            sb.append(order.getShippingAddressSnapshotDistrict().trim());
+        }
+        if (StringUtils.hasText(order.getShippingAddressSnapshotStreet())) {
+            sb.append(order.getShippingAddressSnapshotStreet().trim());
+        }
+        if (StringUtils.hasText(order.getShippingAddressSnapshotDetail())) {
+            sb.append(order.getShippingAddressSnapshotDetail().trim());
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    private String buildOrderCommodityAddressFull(Order order) {
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.hasText(order.getCommoditySnapshotAddressProvince())) {
+            sb.append(order.getCommoditySnapshotAddressProvince().trim());
+        }
+        if (StringUtils.hasText(order.getCommoditySnapshotAddressCity())) {
+            sb.append(order.getCommoditySnapshotAddressCity().trim());
+        }
+        if (StringUtils.hasText(order.getCommoditySnapshotAddressDistrict())) {
+            sb.append(order.getCommoditySnapshotAddressDistrict().trim());
+        }
+        if (StringUtils.hasText(order.getCommoditySnapshotAddressStreet())) {
+            sb.append(order.getCommoditySnapshotAddressStreet().trim());
+        }
+        if (StringUtils.hasText(order.getCommoditySnapshotAddressDetail())) {
+            sb.append(order.getCommoditySnapshotAddressDetail().trim());
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
     private Map<String, Object> toSimpleOrder(Order o) {
         return toSimpleOrderWithUsers(o, null, null);
     }
@@ -2116,6 +2348,24 @@ public class AdminServiceImpl implements AdminService {
         m.put("sellerVisibility", o.getSellerVisibility());
         m.put("buyerVisibility", o.getBuyerVisibility());
         m.put("shippingAddress", o.getShippingAddress());
+        m.put("shippingAddressId", o.getShippingAddressId());
+        m.put("shippingAddressSnapshotProvince", o.getShippingAddressSnapshotProvince());
+        m.put("shippingAddressSnapshotCity", o.getShippingAddressSnapshotCity());
+        m.put("shippingAddressSnapshotDistrict", o.getShippingAddressSnapshotDistrict());
+        m.put("shippingAddressSnapshotStreet", o.getShippingAddressSnapshotStreet());
+        m.put("shippingAddressSnapshotDetail", o.getShippingAddressSnapshotDetail());
+        m.put("shippingAddressSnapshotFull", o.getShippingAddressSnapshotFull());
+        m.put("shippingAddressSnapshotRecipientName", o.getShippingAddressSnapshotRecipientName());
+        m.put("shippingAddressSnapshotRecipientPhone", o.getShippingAddressSnapshotRecipientPhone());
+        m.put("shippingAddressId", o.getShippingAddressId());
+        m.put("shippingAddressSnapshotProvince", o.getShippingAddressSnapshotProvince());
+        m.put("shippingAddressSnapshotCity", o.getShippingAddressSnapshotCity());
+        m.put("shippingAddressSnapshotDistrict", o.getShippingAddressSnapshotDistrict());
+        m.put("shippingAddressSnapshotStreet", o.getShippingAddressSnapshotStreet());
+        m.put("shippingAddressSnapshotDetail", o.getShippingAddressSnapshotDetail());
+        m.put("shippingAddressSnapshotFull", o.getShippingAddressSnapshotFull());
+        m.put("shippingAddressSnapshotRecipientName", o.getShippingAddressSnapshotRecipientName());
+        m.put("shippingAddressSnapshotRecipientPhone", o.getShippingAddressSnapshotRecipientPhone());
         m.put("remark", o.getRemark());
         // 退货/退款相关
         m.put("returnReason", o.getReturnReason());
@@ -2130,7 +2380,14 @@ public class AdminServiceImpl implements AdminService {
         m.put("commoditySnapshotTitle", o.getCommoditySnapshotTitle());
         m.put("commoditySnapshotDescription", o.getCommoditySnapshotDescription());
         m.put("commoditySnapshotPrice", o.getCommoditySnapshotPrice());
-        m.put("commoditySnapshotLocation", o.getCommoditySnapshotLocation());
+        m.put("commoditySnapshotLocation", o.getCommoditySnapshotLocation()); // 兼容字段
+        // 商品地址快照字段
+        m.put("commoditySnapshotAddressProvince", o.getCommoditySnapshotAddressProvince());
+        m.put("commoditySnapshotAddressCity", o.getCommoditySnapshotAddressCity());
+        m.put("commoditySnapshotAddressDistrict", o.getCommoditySnapshotAddressDistrict());
+        m.put("commoditySnapshotAddressStreet", o.getCommoditySnapshotAddressStreet());
+        m.put("commoditySnapshotAddressDetail", o.getCommoditySnapshotAddressDetail());
+        m.put("commoditySnapshotAddressFull", o.getCommoditySnapshotAddressFull());
         m.put("commoditySnapshotCategory", o.getCommoditySnapshotCategory());
         m.put("commoditySnapshotConditionLevel", o.getCommoditySnapshotConditionLevel());
         m.put("commoditySnapshotImages", o.getCommoditySnapshotImages());
@@ -2621,6 +2878,165 @@ public class AdminServiceImpl implements AdminService {
         } catch (Exception e) {
             log.error("删除消息异常: messageId={}, error={}", messageId, e.getMessage(), e);
             throw new BusinessException("删除消息失败: " + e.getMessage());
+        }
+    }
+
+    // ===================== 用户地址管理 =====================
+
+    @Override
+    public Result listUserAddresses(String userId) {
+        List<UserAddress> addresses = userAddressRepository.findByUserId(userId);
+        List<Map<String, Object>> list = addresses.stream()
+                .map(this::toSimpleAddress)
+                .collect(java.util.stream.Collectors.toList());
+        return Result.ok(list);
+    }
+
+    @Override
+    @Transactional
+    public Result createUserAddress(String userId, Map<String, Object> payload) {
+        UserAddress address = new UserAddress();
+        address.setAddressId("ADDR" + userId + "_" + System.currentTimeMillis());
+        address.setUserId(userId);
+        fillAddressFields(address, payload);
+        if (Boolean.TRUE.equals(address.getIsDefault())) {
+            userAddressRepository.clearDefaultAddress(userId);
+        }
+        userAddressRepository.save(address);
+        return Result.ok("创建成功", toSimpleAddress(address));
+    }
+
+    @Override
+    @Transactional
+    public Result updateUserAddress(String userId, String addressId, Map<String, Object> payload) {
+        UserAddress address = userAddressRepository.findByAddressIdAndUserId(addressId, userId)
+                .orElseThrow(() -> new BusinessException("地址不存在"));
+        fillAddressFields(address, payload);
+        if (Boolean.TRUE.equals(address.getIsDefault())) {
+            userAddressRepository.clearDefaultAddress(userId);
+            address.setIsDefault(true);
+        }
+        userAddressRepository.save(address);
+        return Result.ok("更新成功", toSimpleAddress(address));
+    }
+
+    @Override
+    @Transactional
+    public Result deleteUserAddress(String userId, String addressId) {
+        UserAddress address = userAddressRepository.findByAddressIdAndUserId(addressId, userId)
+                .orElseThrow(() -> new BusinessException("地址不存在"));
+        userAddressRepository.delete(address);
+        return Result.ok("删除成功");
+    }
+
+    @Override
+    @Transactional
+    public Result setUserAddressDefault(String userId, String addressId) {
+        UserAddress address = userAddressRepository.findByAddressIdAndUserId(addressId, userId)
+                .orElseThrow(() -> new BusinessException("地址不存在"));
+        userAddressRepository.clearDefaultAddress(userId);
+        address.setIsDefault(true);
+        userAddressRepository.save(address);
+        return Result.ok("设置默认地址成功");
+    }
+
+    private Map<String, Object> toSimpleAddress(UserAddress address) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("addressId", address.getAddressId());
+        m.put("userId", address.getUserId());
+        m.put("recipientName", address.getRecipientName());
+        m.put("recipientPhone", address.getRecipientPhone());
+        m.put("province", address.getProvince());
+        m.put("city", address.getCity());
+        m.put("district", address.getDistrict());
+        m.put("streetAddress", address.getStreetAddress());
+        m.put("detailAddress", address.getDetailAddress());
+        m.put("fullAddress", address.getFullAddress());
+        m.put("longitude", address.getLongitude());
+        m.put("latitude", address.getLatitude());
+        m.put("addressLabel", address.getAddressLabel());
+        m.put("isDefault", address.getIsDefault());
+        m.put("isActive", address.getIsActive());
+        m.put("createTime", address.getCreateTime());
+        m.put("updateTime", address.getUpdateTime());
+        return m;
+    }
+
+    private void fillAddressFields(UserAddress address, Map<String, Object> payload) {
+        Object recipientName = payload.get("recipientName");
+        if (recipientName instanceof String && !((String) recipientName).trim().isEmpty()) {
+            address.setRecipientName(((String) recipientName).trim());
+        }
+        Object recipientPhone = payload.get("recipientPhone");
+        if (recipientPhone instanceof String && !((String) recipientPhone).trim().isEmpty()) {
+            address.setRecipientPhone(((String) recipientPhone).trim());
+        }
+        Object province = payload.get("province");
+        if (province instanceof String && !((String) province).trim().isEmpty()) {
+            address.setProvince(((String) province).trim());
+        }
+        Object city = payload.get("city");
+        if (city instanceof String && !((String) city).trim().isEmpty()) {
+            address.setCity(((String) city).trim());
+        }
+        Object district = payload.get("district");
+        if (district instanceof String && !((String) district).trim().isEmpty()) {
+            address.setDistrict(((String) district).trim());
+        }
+        Object street = payload.get("streetAddress");
+        if (street instanceof String && !((String) street).trim().isEmpty()) {
+            address.setStreetAddress(((String) street).trim());
+        }
+        Object detail = payload.get("detailAddress");
+        if (detail instanceof String) {
+            address.setDetailAddress(((String) detail).trim());
+        }
+        Object full = payload.get("fullAddress");
+        if (full instanceof String && !((String) full).trim().isEmpty()) {
+            address.setFullAddress(((String) full).trim());
+        } else {
+            address.setFullAddress(
+                    (address.getProvince() != null ? address.getProvince() : "") +
+                    (address.getCity() != null ? address.getCity() : "") +
+                    (address.getDistrict() != null ? address.getDistrict() : "") +
+                    (address.getStreetAddress() != null ? address.getStreetAddress() : "") +
+                    (address.getDetailAddress() != null ? address.getDetailAddress() : "")
+            );
+        }
+        Object label = payload.get("addressLabel");
+        if (label instanceof String) {
+            address.setAddressLabel(((String) label).trim());
+        }
+        Object isDefault = payload.get("isDefault");
+        if (isDefault instanceof Boolean) {
+            address.setIsDefault((Boolean) isDefault);
+        } else if (isDefault instanceof String && !((String) isDefault).trim().isEmpty()) {
+            address.setIsDefault(Boolean.parseBoolean(((String) isDefault).trim()));
+        }
+        Object isActive = payload.get("isActive");
+        if (isActive instanceof Boolean) {
+            address.setIsActive((Boolean) isActive);
+        } else if (isActive instanceof String && !((String) isActive).trim().isEmpty()) {
+            address.setIsActive(Boolean.parseBoolean(((String) isActive).trim()));
+        }
+        Object longitude = payload.get("longitude");
+        Object latitude = payload.get("latitude");
+        Double lon = null;
+        Double lat = null;
+        if (longitude != null) {
+            try {
+                lon = longitude instanceof Number ? ((Number) longitude).doubleValue()
+                        : Double.parseDouble(longitude.toString().trim());
+            } catch (NumberFormatException ignore) {}
+        }
+        if (latitude != null) {
+            try {
+                lat = latitude instanceof Number ? ((Number) latitude).doubleValue()
+                        : Double.parseDouble(latitude.toString().trim());
+            } catch (NumberFormatException ignore) {}
+        }
+        if (lon != null && lat != null) {
+            address.setLocation(lon, lat);
         }
     }
 }

@@ -683,6 +683,20 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         dto.setPrice(commodity.getPrice());
         dto.setStock(commodity.getStock());
         dto.setLocation(commodity.getLocation());
+        dto.setAddressId(commodity.getAddressId());
+        
+        // 地址快照字段
+        dto.setAddressSnapshotProvince(commodity.getAddressSnapshotProvince());
+        dto.setAddressSnapshotCity(commodity.getAddressSnapshotCity());
+        dto.setAddressSnapshotDistrict(commodity.getAddressSnapshotDistrict());
+        dto.setAddressSnapshotStreet(commodity.getAddressSnapshotStreet());
+        dto.setAddressSnapshotDetail(commodity.getAddressSnapshotDetail());
+        dto.setAddressSnapshotFull(commodity.getAddressSnapshotFull());
+        
+        // 地理位置字段
+        dto.setLongitude(commodity.getLongitude());
+        dto.setLatitude(commodity.getLatitude());
+        
         dto.setPublishTime(commodity.getPublishTime());
         dto.setCommodityStatus(commodity.getCommodityStatus());
         dto.setSellerVisibility(commodity.getSellerVisibility());

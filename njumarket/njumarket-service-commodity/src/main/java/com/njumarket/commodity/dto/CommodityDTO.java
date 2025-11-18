@@ -31,7 +31,23 @@ public class CommodityDTO {
     private Integer stock;
 
     @NotBlank(message = "商品位置不能为空")
-    private String location;
+    private String location; // 保留原有字段，用于兼容
+    
+    // 地址相关字段
+    private String addressId; // 地址ID（可选，如果不传则使用默认地址）
+    
+    // 地址快照字段（保存发布时的地址信息）
+    private String addressSnapshotProvince;
+    private String addressSnapshotCity;
+    private String addressSnapshotDistrict;
+    private String addressSnapshotStreet;
+    private String addressSnapshotDetail;
+    private String addressSnapshotFull;
+    
+    // 地理位置字段
+    private Double longitude;
+    private Double latitude;
+    
     private LocalDateTime publishTime;
     private String commodityStatus;
     private String sellerVisibility;

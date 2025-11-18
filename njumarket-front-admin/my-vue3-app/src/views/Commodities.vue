@@ -55,6 +55,13 @@
           </div>
         </template>
       </el-table-column>
+      <el-table-column label="地址" min-width="180">
+        <template #default="{ row }">
+          <div style="font-size:13px;">
+            {{ formatCommodityAddress(row) }}
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column prop="publishTime" label="上架时间" width="170" sortable="custom"/>
       <el-table-column
         prop="sellerVisibility"
@@ -225,6 +232,19 @@ export default {
       if (!row || !row.images) return ''
       const arr = row.images.split(',').map(s => s.trim()).filter(Boolean)
       return arr[0] || ''
+    },
+    formatCommodityAddress(row){
+      if (!row) return '-'
+      // 优先使用地址快照字段：省+市
+      if (row.addressSnapshotProvince && row.addressSnapshotCity) {
+        return `${row.addressSnapshotProvince}${row.addressSnapshotCity}`
+      }
+      // 其次使用完整地址快照
+      if (row.addressSnapshotFull) {
+        return row.addressSnapshotFull
+      }
+      // 最后使用旧字段
+      return row.location || '-'
     },
     async shelf(row){
       const { commoditiesAPI } = await import('../api/admin/commodities')

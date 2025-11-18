@@ -33,15 +33,15 @@ echo ""
 echo "⏳ 步骤 3/3: 等待服务启动..."
 echo "   正在检查服务健康状态..."
 
-# 等待 MySQL 启动
-echo "   等待 MySQL 启动..."
+# 等待 PostgreSQL 启动
+echo "   等待 PostgreSQL 启动..."
 timeout=60
 counter=0
-while ! docker-compose exec -T mysql mysqladmin ping -h localhost -u root -pHqz20050316 --silent > /dev/null 2>&1; do
+while ! docker-compose exec -T postgres pg_isready -U postgres -d njumarket > /dev/null 2>&1; do
     sleep 2
     counter=$((counter + 2))
     if [ $counter -ge $timeout ]; then
-        echo "   ⚠️  MySQL 启动超时"
+        echo "   ⚠️  PostgreSQL 启动超时"
         break
     fi
 done

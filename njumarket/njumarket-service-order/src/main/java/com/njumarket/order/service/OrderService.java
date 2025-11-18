@@ -150,5 +150,15 @@ public interface OrderService {
      * @return 订单基本信息列表
      */
     Result getOrdersBatchStatus(List<String> orderIds);
+    
+    /**
+     * 更新订单收货地址（买家功能）
+     * 只能更新订单快照，不影响商品
+     * 只有买家本人，且订单在未发货和未支付阶段，可以更改地址
+     * @param orderId 订单ID
+     * @param addressDTO 地址信息
+     * @return 更新结果
+     */
+    Result updateOrderShippingAddress(String orderId, com.njumarket.order.dto.UpdateOrderAddressDTO addressDTO);
 }
 
