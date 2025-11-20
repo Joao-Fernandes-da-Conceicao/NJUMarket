@@ -5,6 +5,7 @@ import com.njumarket.auth.dto.UserDTO;
 import com.njumarket.auth.dto.LoginFormDTO;
 import com.njumarket.auth.dto.PasswordDTO;
 import com.njumarket.auth.dto.RegisterDTO;
+import com.njumarket.auth.dto.UpdatePhoneDTO;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserService;
 import jakarta.validation.Valid;
@@ -135,6 +136,17 @@ public class UserAuthController {
         }
         
         return userService.resetPassword(passwordDTO.getPhone(), passwordDTO.getCode(), passwordDTO.getNewPassword());
+    }
+
+    @Operation(summary = "修改手机号", description = "用户修改自己的手机号（需要新手机号的验证码）")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "手机号修改成功"),
+        @ApiResponse(responseCode = "400", description = "验证码错误或手机号已被使用"),
+        @ApiResponse(responseCode = "401", description = "用户未登录")
+    })
+    @PostMapping("/update-phone")
+    public Result updatePhone(@Valid @RequestBody UpdatePhoneDTO updatePhoneDTO) {
+        return userService.updatePhone(updatePhoneDTO.getNewPhone(), updatePhoneDTO.getCode());
     }
 }
 

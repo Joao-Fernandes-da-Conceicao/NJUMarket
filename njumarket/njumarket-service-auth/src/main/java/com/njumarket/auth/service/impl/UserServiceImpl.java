@@ -17,6 +17,7 @@ import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.njumarket.utils.RegexUtils;
+import com.njumarket.njumarket.utils.CacheUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -43,6 +44,7 @@ public class UserServiceImpl implements UserService {
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate stringRedisTemplate;
     private final UserProfileService userProfileService;
+    private final CacheUtil cacheUtil;
 
     // ========== 认证相关 ==========
     @Override
@@ -466,8 +468,57 @@ public class UserServiceImpl implements UserService {
         // 7. 删除验证码
         stringRedisTemplate.delete(codeKey);
         
+        // ✅ 删除用户信息缓存（密码变更后需要清除缓存）
+        if (cacheUtil != null) {
+            String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + user.getUserId();
+            cacheUtil.delete(cacheKey);
+            log.info("已删除用户信息缓存: userId={}, cacheKey={}", user.getUserId(), cacheKey);
+        }
+        
         log.info("用户密码重置成功: phone={}, userId={}", phone, user.getUserId());
         return Result.ok("密码重置成功");
+    }
+
+    @Override
+    public Result updatePhone(String newPhone, String code) {
+        // 1. 获取当前登录用户
+        Object userObj = SecurityUtils.requireCurrentUser();
+        User currentUser = userObj instanceof User ? (User) userObj : null;
+        if (currentUser == null) {
+            throw new BusinessException("用户未登录");
+        }
+        
+        // 2. 校验新手机号格式
+        if (RegexUtils.isPhoneInvalid(newPhone)) {
+            throw new BusinessException("手机号格式错误");
+        }
+        
+        // 3. 检查新手机号是否已被其他用户使用
+        if (userRepository.existsByPrimaryPhone(newPhone)) {
+            throw new BusinessException("该手机号已被其他用户使用");
+        }
+        
+        // 4. 从Redis中获取验证码（验证码应该发送到新手机号）
+        String codeKey = RedisConstants.LOGIN_CODE_KEY + newPhone;
+        String cachedCode = stringRedisTemplate.opsForValue().get(codeKey);
+        if (cachedCode == null) {
+            throw new BusinessException("验证码已过期，请重新获取");
+        }
+        
+        // 5. 验证验证码
+        if (!cachedCode.equals(code.trim())) {
+            throw new BusinessException("验证码错误");
+        }
+        
+        // 6. 更新手机号（调用 bindPhoneToUniqueUser，已包含缓存删除逻辑）
+        bindPhoneToUniqueUser(currentUser.getUserId(), newPhone.trim());
+        
+        // 7. 删除验证码
+        stringRedisTemplate.delete(codeKey);
+        
+        log.info("用户手机号修改成功: userId={}, oldPhone={}, newPhone={}", 
+            currentUser.getUserId(), currentUser.getPrimaryPhone(), newPhone);
+        return Result.ok("手机号修改成功");
     }
 
     // ========== 用户档案相关 ==========
@@ -548,7 +599,44 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Boolean bindPhoneToUniqueUser(String userId, String phone) {
-        // 绑定手机号到用户
+        // 绑定手机号到用户（用户自己修改手机号）
+        // ⚠️ 注意：此方法目前未完全实现，如果未来需要实现，需要：
+        // 1. 验证手机号格式
+        // 2. 检查手机号是否已被其他用户使用
+        // 3. 验证新手机号的验证码（安全考虑）
+        // 4. 更新用户的primaryPhone
+        // 5. 删除用户信息缓存（Cache Aside模式）
+        
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new BusinessException("手机号不能为空");
+        }
+        
+        // 验证手机号格式
+        if (RegexUtils.isPhoneInvalid(phone)) {
+            throw new BusinessException("手机号格式错误");
+        }
+        
+        // 检查手机号是否已被其他用户使用
+        if (userRepository.existsByPrimaryPhone(phone)) {
+            throw new BusinessException("该手机号已被其他用户使用");
+        }
+        
+        // 查找用户
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        
+        // 更新手机号
+        user.setPrimaryPhone(phone.trim());
+        userRepository.save(user);
+        
+        // ✅ Cache Aside模式：先更新数据库，再删除缓存
+        // 删除用户信息缓存（primaryPhone变更后需要清除缓存）
+        if (cacheUtil != null) {
+            String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+            cacheUtil.delete(cacheKey);
+            log.info("已删除用户信息缓存（Cache Aside模式）: userId={}, reason=primaryPhone变更, cacheKey={}", userId, cacheKey);
+        }
+        
         return true;
     }
     
@@ -670,6 +758,14 @@ public class UserServiceImpl implements UserService {
         user.setPassword(encodedPassword);
         
         userRepository.save(user);
+        
+        // ✅ 删除用户信息缓存（密码变更后需要清除缓存）
+        if (cacheUtil != null) {
+            String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+            cacheUtil.delete(cacheKey);
+            log.info("已删除用户信息缓存: userId={}, cacheKey={}", userId, cacheKey);
+        }
+        
         log.info("用户密码修改成功: userId={}", userId);
         return Result.ok("密码修改成功");
     }
@@ -692,6 +788,14 @@ public class UserServiceImpl implements UserService {
         user.setPassword(encodedPassword);
         
         userRepository.save(user);
+        
+        // ✅ 删除用户信息缓存（密码变更后需要清除缓存）
+        if (cacheUtil != null) {
+            String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+            cacheUtil.delete(cacheKey);
+            log.info("已删除用户信息缓存: userId={}, cacheKey={}", userId, cacheKey);
+        }
+        
         log.info("管理员重置用户密码: userId={}", userId);
         return Result.ok("密码重置成功");
     }

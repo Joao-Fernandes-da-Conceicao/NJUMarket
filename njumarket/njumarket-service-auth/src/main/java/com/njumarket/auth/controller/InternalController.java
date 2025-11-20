@@ -148,13 +148,18 @@ public class InternalController {
             .orElseThrow(() -> new BusinessException("用户不存在"));
             
             // 更新基本字段
+            // ✅ 标记是否修改了用户基本信息（用于缓存删除）
+            boolean userInfoChanged = false;
+            
             Object username = payload.get("username");
             if (username instanceof String && StringUtils.hasText((String) username)) {
                 user.setUsername(((String) username).trim());
+                userInfoChanged = true; // username变更需要删除缓存
             }
             Object primaryPhone = payload.get("primaryPhone");
             if (primaryPhone instanceof String && StringUtils.hasText((String) primaryPhone)) {
                 user.setPrimaryPhone(((String) primaryPhone).trim());
+                userInfoChanged = true; // primaryPhone变更需要删除缓存
             }
             Object accountStatus = payload.get("accountStatus");
             if (accountStatus instanceof String && StringUtils.hasText((String) accountStatus)) {
@@ -162,6 +167,7 @@ public class InternalController {
                 java.util.Set<String> allowed = new java.util.HashSet<>(java.util.Arrays.asList("ACTIVE","SUSPENDED","BANNED"));
                 if (allowed.contains(newStatus)) {
                     user.setAccountStatus(newStatus);
+                    userInfoChanged = true; // accountStatus变更需要删除缓存
                 }
             }
             
@@ -197,6 +203,14 @@ public class InternalController {
             userRepository.save(user);
             userProfileRepository.save(profile);
             
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // 删除用户信息和档案缓存（username、primaryPhone、accountStatus或档案信息变更后需要清除缓存）
+            String userInfoCacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+            String userProfileCacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+            cacheUtil.delete(userInfoCacheKey);
+            cacheUtil.delete(userProfileCacheKey);
+            log.info("已删除用户信息和档案缓存（Cache Aside模式）: userId={}, userInfoChanged={}", userId, userInfoChanged);
+            
             return Result.ok("更新成功");
     }
     
@@ -209,6 +223,14 @@ public class InternalController {
             .orElseThrow(() -> new BusinessException("用户不存在"));
             user.setAccountStatus("DELETED");
             userRepository.save(user);
+            
+            // ✅ 删除用户信息和档案缓存（用户删除后需要清除缓存）
+            String userInfoCacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+            String userProfileCacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+            cacheUtil.delete(userInfoCacheKey);
+            cacheUtil.delete(userProfileCacheKey);
+            log.info("已删除用户信息和档案缓存: userId={}", userId);
+            
             return Result.ok("删除成功");
     }
     

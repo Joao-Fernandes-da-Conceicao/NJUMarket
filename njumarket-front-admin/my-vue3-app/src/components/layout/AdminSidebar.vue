@@ -40,7 +40,9 @@ export default {
         { path: '/orders', label: '订单管理' },
         { path: '/messages', label: '消息管理' },
         // ✅ 管理员管理：只对system权限显示
-        { path: '/admins', label: '管理员管理', requiresSystem: true }
+        { path: '/admins', label: '管理员管理', requiresSystem: true },
+        // ✅ Elasticsearch 管理：只对system权限显示
+        { path: '/elasticsearch', label: 'ES 索引管理', requiresSystem: true }
       ]
     }
   },

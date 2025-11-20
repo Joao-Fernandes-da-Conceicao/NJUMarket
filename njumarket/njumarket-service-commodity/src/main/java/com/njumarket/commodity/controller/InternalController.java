@@ -6,6 +6,9 @@ import com.njumarket.commodity.dto.internal.CommodityInternalDTOConverter;
 import com.njumarket.commodity.entity.Commodity;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.commodity.repository.CommodityRepository;
+import com.njumarket.njumarket.utils.CacheUtil;
+import com.njumarket.njumarket.utils.RedisConstants;
+import com.njumarket.commodity.search.CommoditySearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +29,8 @@ public class InternalController {
     
     private final CommodityRepository commodityRepository;
     private final CommodityInternalDTOConverter commodityInternalDTOConverter;
+    private final CacheUtil cacheUtil;
+    private final CommoditySearchService commoditySearchService;
     
     /**
      * 根据ID查询商品详情（管理端内部接口）
@@ -228,6 +233,39 @@ public class InternalController {
             }
             
             commodityRepository.save(c);
+            commoditySearchService.syncCommodity(c);
+            
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // 判断是否需要删除列表缓存（状态、可见性、点击量变更会影响列表）
+            boolean evictListCache = payload.containsKey("commodityStatus") 
+                    || payload.containsKey("sellerVisibility") 
+                    || payload.containsKey("buyerVisibility")
+                    || payload.containsKey("clickCount"); // 点击量影响热门商品排序
+            
+            if (cacheUtil != null) {
+                try {
+                    // 清除商品详情缓存（所有操作都需要删除）
+                    cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
+                    
+                    // 只有在影响列表的操作时才删除列表缓存
+                    if (evictListCache) {
+                        // 清除热门商品和最新商品缓存（使用通配符删除所有limit的缓存）
+                        cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_HOT_KEY + ":*");
+                        cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LATEST_KEY + ":*");
+                        
+                        // 清除商品列表缓存（使用通配符删除所有列表缓存）
+                        cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LIST_KEY + "*");
+                        
+                        log.debug("商品缓存已清除（包括列表缓存）: commodityId={}", commodityId);
+                    } else {
+                        log.debug("商品详情缓存已清除: commodityId={}", commodityId);
+                    }
+                } catch (Exception e) {
+                    log.error("清除商品缓存失败: commodityId={}, error={}", commodityId, e.getMessage(), e);
+                    // 缓存清除失败不影响主流程
+                }
+            }
+            
             return Result.ok("更新成功", c);
     }
     
@@ -239,7 +277,50 @@ public class InternalController {
         Commodity commodity = commodityRepository.findById(commodityId)
             .orElseThrow(() -> new BusinessException("商品不存在"));
         commodityRepository.delete(commodity);
-            return Result.ok("删除成功");
+        commoditySearchService.removeCommodity(commodityId);
+        
+        // ✅ Cache Aside模式：先删除数据库，再删除缓存
+        // 清除商品相关缓存（商品删除后需要清除缓存）
+        if (cacheUtil != null) {
+            try {
+                // 清除商品详情缓存
+                cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
+                
+                // 清除热门商品和最新商品缓存（使用通配符删除所有limit的缓存）
+                cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_HOT_KEY + ":*");
+                cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LATEST_KEY + ":*");
+                
+                // 清除商品列表缓存（使用通配符删除所有列表缓存）
+                cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LIST_KEY + "*");
+                
+                log.debug("商品缓存已清除: commodityId={}", commodityId);
+            } catch (Exception e) {
+                log.error("清除商品缓存失败: commodityId={}, error={}", commodityId, e.getMessage(), e);
+                // 缓存清除失败不影响主流程
+            }
+        }
+        
+        return Result.ok("删除成功");
+    }
+    
+    /**
+     * 手动重建商品搜索索引
+     */
+    @PostMapping("/commodity/search/reindex")
+    public Result rebuildCommoditySearchIndex() {
+        long total = commoditySearchService.rebuildIndex();
+        return Result.ok("搜索索引重建成功", Map.of("indexed", total));
+    }
+
+    /**
+     * 同步指定商品到搜索索引
+     */
+    @PostMapping("/commodity/{commodityId}/search-sync")
+    public Result syncCommoditySearch(@PathVariable String commodityId) {
+        Commodity commodity = commodityRepository.findById(commodityId)
+            .orElseThrow(() -> new BusinessException("商品不存在"));
+        commoditySearchService.syncCommodity(commodity);
+        return Result.ok("搜索索引同步成功");
     }
     
     /**

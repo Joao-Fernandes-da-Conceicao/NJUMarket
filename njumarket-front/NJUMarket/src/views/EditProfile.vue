@@ -51,6 +51,19 @@
                 <UnifiedInput v-model="editForm.location" placeholder="请输入所在地区" />
               </el-form-item>
               
+              <el-form-item label="手机号">
+                <div class="phone-display">
+                  <span class="phone-value">{{ currentPhone || '未设置' }}</span>
+                  <UnifiedButton 
+                    type="default" 
+                    size="small"
+                    @click="showPhoneDialog = true"
+                  >
+                    修改手机号
+                  </UnifiedButton>
+                </div>
+              </el-form-item>
+              
               <el-form-item label="地址管理">
                 <UnifiedButton 
                   type="default" 
@@ -60,6 +73,60 @@
                 </UnifiedButton>
               </el-form-item>
             </div>
+            
+            <!-- 修改手机号对话框 -->
+            <el-dialog
+              v-model="showPhoneDialog"
+              title="修改手机号"
+              width="500px"
+              :close-on-click-modal="false"
+            >
+              <el-form
+                ref="phoneFormRef"
+                :model="phoneForm"
+                :rules="phoneRules"
+                label-width="100px"
+              >
+                <el-form-item label="新手机号" prop="newPhone">
+                  <el-input
+                    v-model="phoneForm.newPhone"
+                    placeholder="请输入新手机号"
+                    class="pill-input"
+                  />
+                </el-form-item>
+                
+                <el-form-item label="验证码" prop="code">
+                  <div class="code-input-group">
+                    <el-input
+                      v-model="phoneForm.code"
+                      placeholder="请输入验证码"
+                      class="pill-input"
+                      maxlength="6"
+                    />
+                    <UnifiedButton
+                      type="default"
+                      :disabled="phoneCodeCountdown > 0"
+                      @click="sendPhoneCode"
+                    >
+                      {{ phoneCodeCountdown > 0 ? `${phoneCodeCountdown}s` : '发送验证码' }}
+                    </UnifiedButton>
+                  </div>
+                </el-form-item>
+              </el-form>
+              
+              <template #footer>
+                <div class="dialog-footer">
+                  <UnifiedButton @click="showPhoneDialog = false">取消</UnifiedButton>
+                  <UnifiedButton
+                    type="primary"
+                    :loading="updatePhoneLoading"
+                    @click="handleUpdatePhone"
+                  >
+                    确认修改
+                  </UnifiedButton>
+                </div>
+              </template>
+            </el-dialog>
 
             <!-- 提交按钮 -->
             <div class="form-actions">
@@ -86,7 +153,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { profileAPI } from '../api'
+import { profileAPI, authAPI } from '../api'
 import { ElMessage } from 'element-plus'
 import UnifiedButton from '../components/common/UnifiedButton.vue'
 import UnifiedInput from '../components/common/UnifiedInput.vue'
@@ -102,8 +169,13 @@ export default {
     const userStore = useUserStore()
     
     const editFormRef = ref()
+    const phoneFormRef = ref()
     const editLoading = ref(false)
     const loading = ref(false)
+    const updatePhoneLoading = ref(false)
+    const showPhoneDialog = ref(false)
+    const phoneCodeCountdown = ref(0)
+    const currentPhone = ref('')
     
     const editForm = reactive({
       nickname: '',
@@ -112,10 +184,26 @@ export default {
       location: ''
     })
     
+    const phoneForm = reactive({
+      newPhone: '',
+      code: ''
+    })
+    
     const editRules = {
       nickname: [
         { required: true, message: '请输入昵称', trigger: 'blur' },
         { min: 1, max: 20, message: '昵称长度在 1 到 20 个字符', trigger: 'blur' }
+      ]
+    }
+    
+    const phoneRules = {
+      newPhone: [
+        { required: true, message: '请输入新手机号', trigger: 'blur' },
+        { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
+      ],
+      code: [
+        { required: true, message: '请输入验证码', trigger: 'blur' },
+        { len: 6, message: '验证码为6位数字', trigger: 'blur' }
       ]
     }
     
@@ -134,6 +222,8 @@ export default {
           editForm.bio = profileData.bio || ''
           editForm.contact = profileData.contact || ''
           editForm.location = profileData.location || ''
+          // 获取当前手机号
+          currentPhone.value = profileData.userInfo?.primaryPhone || profileData.primaryPhone || ''
           
           console.log('用户资料已自动填充:', editForm)
         } else {
@@ -177,18 +267,88 @@ export default {
       router.go(-1)
     }
     
+    // 发送手机号验证码
+    const sendPhoneCode = async () => {
+      if (!phoneForm.newPhone) {
+        ElMessage.warning('请先输入新手机号')
+        return
+      }
+      
+      if (!/^1[3-9]\d{9}$/.test(phoneForm.newPhone)) {
+        ElMessage.error('请输入正确的手机号')
+        return
+      }
+      
+      try {
+        await authAPI.sendCode(phoneForm.newPhone)
+        ElMessage.success('验证码已发送')
+        // 开始倒计时
+        phoneCodeCountdown.value = 60
+        const timer = setInterval(() => {
+          phoneCodeCountdown.value--
+          if (phoneCodeCountdown.value <= 0) {
+            clearInterval(timer)
+          }
+        }, 1000)
+      } catch (error) {
+        ElMessage.error(error.message || '发送验证码失败')
+      }
+    }
+    
+    // 修改手机号
+    const handleUpdatePhone = async () => {
+      if (!phoneFormRef.value) return
+      
+      await phoneFormRef.value.validate(async (valid) => {
+        if (valid) {
+          updatePhoneLoading.value = true
+          try {
+            const response = await authAPI.updatePhone({
+              newPhone: phoneForm.newPhone,
+              code: phoneForm.code
+            })
+            if (response.success) {
+              ElMessage.success('手机号修改成功')
+              currentPhone.value = phoneForm.newPhone
+              showPhoneDialog.value = false
+              // 重置表单
+              phoneForm.newPhone = ''
+              phoneForm.code = ''
+              // 刷新用户信息
+              await fetchProfile()
+            } else {
+              ElMessage.error(response.errorMsg || '修改失败')
+            }
+          } catch (error) {
+            ElMessage.error(error.message || '修改失败')
+          } finally {
+            updatePhoneLoading.value = false
+          }
+        }
+      })
+    }
+    
     onMounted(() => {
       fetchProfile()
     })
     
     return {
       editFormRef,
+      phoneFormRef,
       editForm,
+      phoneForm,
       editRules,
+      phoneRules,
       editLoading,
       loading,
+      updatePhoneLoading,
+      showPhoneDialog,
+      phoneCodeCountdown,
+      currentPhone,
       handleSave,
-      handleCancel
+      handleCancel,
+      sendPhoneCode,
+      handleUpdatePhone
     }
   }
 }
@@ -332,6 +492,47 @@ export default {
   .form-actions .el-button {
     min-width: 130px;
   }
+}
+
+/* 手机号显示样式 */
+.phone-display {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  width: 100%;
+}
+
+.phone-value {
+  flex: 1;
+  color: #333;
+  font-size: 14px;
+}
+
+/* 验证码输入组样式 */
+.code-input-group {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.code-input-group .el-input {
+  flex: 1;
+}
+
+.code-input-group .el-button {
+  min-width: 120px;
+  border-radius: 20px;
+}
+
+/* 对话框底部按钮样式 */
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 15px;
+}
+
+.dialog-footer .el-button {
+  border-radius: 20px;
 }
 </style>
 

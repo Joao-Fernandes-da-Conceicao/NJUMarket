@@ -81,7 +81,8 @@ public class Commodity {
     private Double latitude;
     
     @CreationTimestamp
-    @Column(name = "publish_time", nullable = false)
+    @Column(name = "publish_time", nullable = false, columnDefinition = "timestamp with time zone")
+    @jakarta.persistence.Convert(converter = com.njumarket.commodity.config.LocalDateTimeSecondsConverter.class)
     private LocalDateTime publishTime;
     
     @Column(name = "commodity_status", length = 20, nullable = false)

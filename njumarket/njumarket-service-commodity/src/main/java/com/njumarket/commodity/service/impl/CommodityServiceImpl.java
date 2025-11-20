@@ -3,7 +3,6 @@ package com.njumarket.commodity.service.impl;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.commodity.dto.CommodityDTO;
 import com.njumarket.commodity.vo.CommodityPageResultVO;
-import com.njumarket.commodity.vo.CommodityDetailVO;
 import com.njumarket.njumarket.vo.BatchOperationResultVO;
 import com.njumarket.commodity.entity.Commodity;
 import com.njumarket.commodity.entity.User; // User 实体（Commodity Service专用）
@@ -13,15 +12,14 @@ import com.njumarket.commodity.service.CommodityService;
 import com.njumarket.commodity.service.CommodityQueryService;
 import com.njumarket.commodity.client.AuthClient;
 import com.njumarket.commodity.client.ImageClient;
-import com.njumarket.commodity.client.MessageClient;
 import com.njumarket.commodity.client.NotificationClient;
 import com.njumarket.commodity.client.OrderClient;
 import com.njumarket.njumarket.dto.internal.AddressInternalDTO;
-import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.commodity.utils.CommodityValidator;
+import com.njumarket.commodity.search.CommoditySearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -53,14 +51,16 @@ public class CommodityServiceImpl implements CommodityService {
     private final AuthClient authClient;
     private final OrderClient orderClient;
     private final ImageClient imageClient;
-    private final MessageClient messageClient;
     private final CommodityQueryService commodityQueryService;
     private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper;
     private final CacheUtil cacheUtil;
+    private final CommoditySearchService commoditySearchService;
     
     // ✅ 统一使用GMT+8时区（中国大陆时区）
     private static final ZoneId GMT_PLUS_8_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final TypeReference<List<CommodityDTO>> COMMODITY_DTO_LIST_TYPE =
+            new TypeReference<List<CommodityDTO>>() {};
     
     /**
      * 获取GMT+8时区的当前时间
@@ -101,6 +101,8 @@ public class CommodityServiceImpl implements CommodityService {
         
         // 保存商品
         Commodity savedCommodity = commodityRepository.save(commodity);
+        syncCommoditySearchIndex(savedCommodity);
+        appendCommodityToLatestCaches(savedCommodity);
         
         return Result.ok("商品发布成功", convertToDTO(savedCommodity));
     }
@@ -134,6 +136,8 @@ public class CommodityServiceImpl implements CommodityService {
         
         // 保存商品
         Commodity savedCommodity = commodityRepository.save(commodity);
+        syncCommoditySearchIndex(savedCommodity);
+        appendCommodityToLatestCaches(savedCommodity);
         
         return Result.ok("草稿商品创建成功", convertToDTO(savedCommodity));
     }
@@ -151,6 +155,8 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setCommodityStatus("PUBLISHED");
         commodity.setPublishTime(LocalDateTime.now());
         commodityRepository.save(commodity);
+        syncCommoditySearchIndex(commodity);
+        appendCommodityToLatestCaches(commodity);
         
         return Result.ok("草稿商品发布成功");
     }
@@ -177,15 +183,17 @@ public class CommodityServiceImpl implements CommodityService {
         setCommodityAddress(commodity, commodityDTO, currentUser.getUserId());
         
         // 保存更新
-        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         Commodity updatedCommodity = commodityRepository.save(commodity);
+        syncCommoditySearchIndex(updatedCommodity);
         
         // ✅ 注意：商品更新不发送事件到通知服务
         // 原因：库存变化通过订单事件体现（库存减少=下单，库存增加=退货/取消订单）
         // 商品的其他变更（如价格、描述等）不需要通知
         
         // ✅ 清除商品相关缓存（最终一致性：写入时删除缓存）
-        evictCommodityCache(commodityId);
+        // 注意：商品详情更新（价格、描述、图片、地址等）不影响列表组成，只删除详情缓存
+        // 列表缓存中的商品信息会通过TTL自然过期，或在下一次列表查询时重新加载
+        evictCommodityCache(commodityId, false);
         
         return Result.ok("商品更新成功", convertToDTO(updatedCommodity));
     }
@@ -206,6 +214,7 @@ public class CommodityServiceImpl implements CommodityService {
         
         // 删除商品
         commodityRepository.delete(commodity);
+        removeCommodityFromSearchIndex(commodityId);
         
         // ✅ 清除商品相关缓存
         evictCommodityCache(commodityId);
@@ -228,12 +237,15 @@ public class CommodityServiceImpl implements CommodityService {
         LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodity.setPublishTime(now);
         Commodity savedCommodity = commodityRepository.save(commodity);
+        syncCommoditySearchIndex(savedCommodity);
+        syncCommoditySearchIndex(savedCommodity);
         
         // ✅ 注意：商品上架不发送事件到通知服务
         // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
         
         // ✅ 清除商品相关缓存
         evictCommodityCache(commodityId);
+        appendCommodityToLatestCaches(savedCommodity);
         
         return Result.ok("商品上架成功");
     }
@@ -247,8 +259,8 @@ public class CommodityServiceImpl implements CommodityService {
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         commodity.setCommodityStatus("OFF_SHELF");
-        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         Commodity savedCommodity = commodityRepository.save(commodity);
+        syncCommoditySearchIndex(savedCommodity);
         
         // ✅ 注意：商品下架不发送事件到通知服务
         // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
@@ -273,6 +285,7 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setCommodityStatus("DRAFT");
         LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodityRepository.save(commodity);
+        syncCommoditySearchIndex(commodity);
         
         // ✅ 只有当商品之前是已上架状态（ON_SHELF）时才记录变更
         // 原因：只有已上架的商品才会出现在聊天界面中，设为草稿后需要更新卡片状态
@@ -284,6 +297,9 @@ public class CommodityServiceImpl implements CommodityService {
                 log.warn("记录商品变更失败（不影响商品保存为草稿）: commodityId={}, error={}", commodityId, e.getMessage());
             }
         }
+        
+        // ✅ 清除商品相关缓存（商品状态变更后需要清除缓存）
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品设为草稿成功");
     }
@@ -306,6 +322,7 @@ public class CommodityServiceImpl implements CommodityService {
         
         // ✅ 清除商品相关缓存
         evictCommodityCache(commodityId);
+        appendCommodityToLatestCaches(savedCommodity);
         
         return Result.ok("商品重新上架成功");
     }
@@ -328,6 +345,10 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setSellerVisibility(visibility);
         commodity.setBuyerVisibility(visibility);
         commodityRepository.save(commodity);
+        syncCommoditySearchIndex(commodity);
+        
+        // ✅ 清除商品相关缓存（可见性变更后需要清除缓存）
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品可见性修改成功");
     }
@@ -347,6 +368,10 @@ public class CommodityServiceImpl implements CommodityService {
         
         commodity.setSellerVisibility(sellerVisibility);
         commodityRepository.save(commodity);
+        syncCommoditySearchIndex(commodity);
+        
+        // ✅ 清除商品相关缓存（可见性变更后需要清除缓存）
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品卖家可见性修改成功");
     }
@@ -366,6 +391,10 @@ public class CommodityServiceImpl implements CommodityService {
         
         commodity.setBuyerVisibility(buyerVisibility);
         commodityRepository.save(commodity);
+        syncCommoditySearchIndex(commodity);
+        
+        // ✅ 清除商品相关缓存（可见性变更后需要清除缓存）
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品买家可见性修改成功");
     }
@@ -574,6 +603,7 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setCommodityStatus("OFF_SHELF");
         LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodityRepository.save(commodity);
+        syncCommoditySearchIndex(commodity);
         
         // ✅ 记录商品变更（用于增量轮询）- 管理端强制下架也需要更新聊天界面
         try {
@@ -606,7 +636,6 @@ public class CommodityServiceImpl implements CommodityService {
         }
         
         // ✅ 清除商品详情缓存（库存变化需要更新缓存）
-        // 注意：下单时的库存更新使用强一致性，这里不处理下单场景的缓存
         cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
         
         return Result.ok("库存更新成功");
@@ -619,23 +648,162 @@ public class CommodityServiceImpl implements CommodityService {
      * 当商品更新、删除、上架、下架等操作时调用
      * 
      * @param commodityId 商品ID
+     * @param evictListCache 是否删除列表缓存（热门商品、最新商品、商品列表）
+     *                       true: 删除所有缓存（用于状态、可见性变更等影响列表的操作）
+     *                       false: 只删除商品详情缓存（用于价格、描述等详情变更）
      */
-    private void evictCommodityCache(String commodityId) {
+    private void evictCommodityCache(String commodityId, boolean evictListCache) {
         try {
-            // 清除商品详情缓存
+            // 清除商品详情缓存（所有操作都需要删除）
             cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
             
-            // 清除热门商品和最新商品缓存（使用通配符删除所有limit的缓存）
-            cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_HOT_KEY + ":*");
-            cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LATEST_KEY + ":*");
-            
-            // 清除商品列表缓存（使用通配符删除所有列表缓存）
-            cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LIST_KEY + "*");
-            
-            log.debug("商品缓存已清除: commodityId={}", commodityId);
+            // 只有在影响列表的操作时才删除列表缓存
+            if (evictListCache) {
+            // 根据缓存内容精准清除热门/最新缓存
+            evictHotCachesContainingCommodity(commodityId);
+            evictLatestCachesContainingCommodity(commodityId);
+                // 清除商品列表缓存（使用通配符删除所有列表缓存）
+                cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LIST_KEY + "*");
+                
+                log.debug("商品缓存已清除（包括列表缓存）: commodityId={}", commodityId);
+            } else {
+                log.debug("商品详情缓存已清除: commodityId={}", commodityId);
+            }
         } catch (Exception e) {
             log.error("清除商品缓存失败: commodityId={}, error={}", commodityId, e.getMessage(), e);
             // 缓存清除失败不影响主流程
+        }
+    }
+    
+    /**
+     * 清除商品相关缓存（兼容旧方法，默认删除所有缓存）
+     * 
+     * @param commodityId 商品ID
+     */
+    private void evictCommodityCache(String commodityId) {
+        evictCommodityCache(commodityId, true);
+    }
+
+    private void syncCommoditySearchIndex(Commodity commodity) {
+        try {
+            commoditySearchService.syncCommodity(commodity);
+        } catch (Exception e) {
+            log.warn("同步商品搜索索引失败: commodityId={}, error={}", commodity.getCommodityId(), e.getMessage());
+        }
+    }
+
+    private void removeCommodityFromSearchIndex(String commodityId) {
+        try {
+            commoditySearchService.removeCommodity(commodityId);
+        } catch (Exception e) {
+            log.warn("从搜索索引删除商品失败: commodityId={}, error={}", commodityId, e.getMessage());
+        }
+    }
+    
+    private void evictHotCachesContainingCommodity(String commodityId) {
+        try {
+            Set<String> cacheKeys = cacheUtil.getCacheKeySet(RedisConstants.CACHE_COMMODITY_HOT_KEY_REGISTRY);
+            if (cacheKeys.isEmpty()) {
+                return;
+            }
+            for (String cacheKey : cacheKeys) {
+                List<CommodityDTO> cachedList = cacheUtil.get(cacheKey, COMMODITY_DTO_LIST_TYPE);
+                if (cachedList == null) {
+                    cacheUtil.removeCacheKeyFromSet(RedisConstants.CACHE_COMMODITY_HOT_KEY_REGISTRY, cacheKey);
+                    continue;
+                }
+                boolean contains = cachedList.stream()
+                        .filter(Objects::nonNull)
+                        .anyMatch(dto -> commodityId.equals(dto.getCommodityId()));
+                if (contains) {
+                    cacheUtil.delete(cacheKey);
+                    cacheUtil.removeCacheKeyFromSet(RedisConstants.CACHE_COMMODITY_HOT_KEY_REGISTRY, cacheKey);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("清除热门商品缓存失败: commodityId={}, error={}", commodityId, e.getMessage());
+        }
+    }
+    
+    private void evictLatestCachesContainingCommodity(String commodityId) {
+        try {
+            Set<String> cacheKeys = cacheUtil.getCacheKeySet(RedisConstants.CACHE_COMMODITY_LATEST_KEY_REGISTRY);
+            if (cacheKeys.isEmpty()) {
+                return;
+            }
+            for (String cacheKey : cacheKeys) {
+                List<CommodityDTO> cachedList = cacheUtil.get(cacheKey, COMMODITY_DTO_LIST_TYPE);
+                if (cachedList == null) {
+                    cacheUtil.removeCacheKeyFromSet(RedisConstants.CACHE_COMMODITY_LATEST_KEY_REGISTRY, cacheKey);
+                    continue;
+                }
+                boolean contains = cachedList.stream()
+                        .filter(Objects::nonNull)
+                        .anyMatch(dto -> commodityId.equals(dto.getCommodityId()));
+                if (contains) {
+                    cacheUtil.delete(cacheKey);
+                    cacheUtil.removeCacheKeyFromSet(RedisConstants.CACHE_COMMODITY_LATEST_KEY_REGISTRY, cacheKey);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("清除最新商品缓存失败: commodityId={}, error={}", commodityId, e.getMessage());
+        }
+    }
+    
+    private void appendCommodityToLatestCaches(Commodity commodity) {
+        if (commodity == null || !shouldAppearInLatestCaches(commodity)) {
+            return;
+        }
+        try {
+            Set<String> cacheKeys = cacheUtil.getCacheKeySet(RedisConstants.CACHE_COMMODITY_LATEST_KEY_REGISTRY);
+            if (cacheKeys.isEmpty()) {
+                return;
+            }
+            CommodityDTO dto = convertToDTO(commodity);
+            for (String cacheKey : cacheKeys) {
+                List<CommodityDTO> cachedList = cacheUtil.get(cacheKey, COMMODITY_DTO_LIST_TYPE);
+                if (cachedList == null) {
+                    cacheUtil.removeCacheKeyFromSet(RedisConstants.CACHE_COMMODITY_LATEST_KEY_REGISTRY, cacheKey);
+                    continue;
+                }
+                int limit = parseLimitFromLatestCacheKey(cacheKey);
+                if (limit <= 0) {
+                    continue;
+                }
+                LinkedList<CommodityDTO> updated = new LinkedList<>(cachedList);
+                updated.removeIf(item -> item != null && commodity.getCommodityId().equals(item.getCommodityId()));
+                updated.addFirst(dto);
+                while (updated.size() > limit) {
+                    updated.removeLast();
+                }
+                cacheUtil.set(cacheKey, updated, RedisConstants.CACHE_COMMODITY_LATEST_TTL * 60);
+            }
+        } catch (Exception e) {
+            log.warn("更新最新商品缓存失败: commodityId={}, error={}", commodity.getCommodityId(), e.getMessage());
+        }
+    }
+    
+    private boolean shouldAppearInLatestCaches(Commodity commodity) {
+        if (commodity == null || !StringUtils.hasText(commodity.getCommodityStatus())) {
+            return false;
+        }
+        String status = commodity.getCommodityStatus();
+        return "PUBLISHED".equalsIgnoreCase(status) || "ON_SHELF".equalsIgnoreCase(status);
+    }
+    
+    private int parseLimitFromLatestCacheKey(String cacheKey) {
+        if (!StringUtils.hasText(cacheKey)) {
+            return -1;
+        }
+        int lastColon = cacheKey.lastIndexOf(':');
+        if (lastColon < 0 || lastColon == cacheKey.length() - 1) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(cacheKey.substring(lastColon + 1));
+        } catch (NumberFormatException e) {
+            log.warn("最新商品缓存key无法解析limit: cacheKey={}", cacheKey);
+            return -1;
         }
     }
     

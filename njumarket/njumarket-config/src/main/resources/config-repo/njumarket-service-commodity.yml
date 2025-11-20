@@ -25,6 +25,10 @@ spring:
     publisher-returns: true
     template:
       mandatory: true
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://elasticsearch:9200}
+    username: ${ELASTICSEARCH_USERNAME:elastic}
+    password: ${ELASTICSEARCH_PASSWORD:changeme}
 
 # Feign Client 配置
 feign:
@@ -157,4 +161,17 @@ logging:
     com.njumarket.commodity.service: INFO
     com.njumarket.commodity.controller: INFO
     com.njumarket.njumarket.resolver: INFO
+    com.njumarket.commodity.search: DEBUG
+    org.springframework.data.elasticsearch: DEBUG
+
+commodity:
+  search:
+    enabled: ${COMMODITY_SEARCH_ENABLED:true}
+    elasticsearch:
+      enabled: ${COMMODITY_SEARCH_ES_ENABLED:true}
+      highlight-enabled: ${COMMODITY_SEARCH_HIGHLIGHT:true}
+      index: ${COMMODITY_SEARCH_INDEX:commodities}
+    sync:
+      auto-reindex-on-startup: ${COMMODITY_SEARCH_AUTO_REINDEX:false}
+      page-size: ${COMMODITY_SEARCH_SYNC_PAGE_SIZE:500}
 

@@ -14,6 +14,7 @@ const ConversationEdit = () => import('../views/ConversationEdit.vue')
 const Admins = () => import('../views/Admins.vue')
 const AdminEdit = () => import('../views/AdminEdit.vue')
 const AdminCreate = () => import('../views/AdminCreate.vue')
+const Elasticsearch = () => import('../views/Elasticsearch.vue')
 const Login = () => import('../views/Login.vue')
 
 const routes = [
@@ -31,7 +32,8 @@ const routes = [
   { path: '/messages/:conversationId/edit', name: 'ConversationEdit', component: ConversationEdit },
   { path: '/admins', name: 'Admins', component: Admins },
   { path: '/admins/create', name: 'AdminCreate', component: AdminCreate },
-  { path: '/admins/:adminId/edit', name: 'AdminEdit', component: AdminEdit }
+  { path: '/admins/:adminId/edit', name: 'AdminEdit', component: AdminEdit },
+  { path: '/elasticsearch', name: 'Elasticsearch', component: Elasticsearch }
 ]
 
 const router = createRouter({

@@ -25,7 +25,9 @@ public class RedisConstants {
     public static final String CACHE_COMMODITY_DETAIL_KEY = "cache:commodity:detail:";
     public static final String CACHE_COMMODITY_LIST_KEY = "cache:commodity:list:";
     public static final String CACHE_COMMODITY_HOT_KEY = "cache:commodity:hot";
+    public static final String CACHE_COMMODITY_HOT_KEY_REGISTRY = "cache:commodity:hot:registry";
     public static final String CACHE_COMMODITY_LATEST_KEY = "cache:commodity:latest";
+    public static final String CACHE_COMMODITY_LATEST_KEY_REGISTRY = "cache:commodity:latest:registry";
     public static final String CACHE_COMMODITY_CATEGORIES_KEY = "cache:commodity:categories";
     public static final Long CACHE_COMMODITY_TTL = 30L; // 30分钟
     public static final Long CACHE_COMMODITY_DETAIL_TTL = 10L; // 10分钟
@@ -36,6 +38,7 @@ public class RedisConstants {
     
     // 用户信息缓存（最终一致性）
     public static final String CACHE_USER_PROFILE_KEY = "cache:user:profile:";
+    public static final String CACHE_USER_PROFILE_DETAIL_KEY = "cache:user:profile:detail:"; // 单条查询缓存（UserProfileDTO）
     public static final Long CACHE_USER_PROFILE_TTL = 30L; // 30分钟
     
     // 用户基本信息缓存（包含accountStatus，用于getUserById）

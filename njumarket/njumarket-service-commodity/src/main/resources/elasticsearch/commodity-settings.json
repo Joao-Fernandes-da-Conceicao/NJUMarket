@@ -1,0 +1,23 @@
+{
+  "analysis": {
+    "analyzer": {
+      "zh_smart": {
+        "type": "custom",
+        "tokenizer": "ik_smart",
+        "filter": [
+          "lowercase",
+          "asciifolding"
+        ]
+      },
+      "zh_max": {
+        "type": "custom",
+        "tokenizer": "ik_max_word",
+        "filter": [
+          "lowercase",
+          "asciifolding"
+        ]
+      }
+    }
+  }
+}
+

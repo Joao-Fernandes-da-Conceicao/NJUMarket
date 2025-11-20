@@ -268,8 +268,8 @@ python batch_create_users_simple.py
 - ✅ **数据统计**：用户总数、商品总数、订单总数实时查询
 
 **管理端访问**：
-- 前端地址：`http://localhost:5173`（管理端前端）
-- API地址：`http://localhost:8080/api/admin/**`（通过Gateway）
+- 前端地址：`http://localhost:8082`（管理端前端）
+- API地址：`http://localhost:8080/api/admin/**`（通过Gateway，前端代理自动转发）
 
 ## 📚 相关文档
 

@@ -29,11 +29,14 @@ import com.njumarket.admin.service.AdminService;
 import com.njumarket.admin.service.PasswordService;
 import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.SecurityUtils;
+import com.njumarket.njumarket.utils.CacheUtil;
+import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.njumarket.model.IAdmin;
 import com.njumarket.njumarket.exception.BusinessException;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -64,6 +67,10 @@ public class AdminServiceImpl implements AdminService {
     private final PasswordService passwordService;
     private final JwtUtils jwtUtils;
     private final ObjectMapper objectMapper;
+    
+    // ✅ CacheUtil 可选注入（如果 Redis 未配置，则为 null）
+    @Autowired(required = false)
+    private CacheUtil cacheUtil;
 
     @Override
     public Result login(AdminLoginDTO loginDTO, HttpSession session) {
@@ -842,6 +849,14 @@ public class AdminServiceImpl implements AdminService {
             user.setAccountStatus(status);
             userRepository.save(user);
             
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // 删除用户信息缓存（账户状态变更后需要清除缓存）
+            if (cacheUtil != null) {
+                String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+                cacheUtil.delete(cacheKey);
+                log.info("已删除用户信息缓存（Cache Aside模式）: userId={}, reason=accountStatus变更, cacheKey={}", userId, cacheKey);
+            }
+            
             // ✅ 设置Profile到User实体（确保toSimpleUser能正确获取Profile）
             Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
             if (profileOpt.isPresent()) {
@@ -865,19 +880,42 @@ public class AdminServiceImpl implements AdminService {
             User user = userOpt.get();
             
             // 更新用户基本信息
-            if (phone != null) user.setPrimaryPhone(phone);
+            boolean userInfoChanged = false;
+            if (phone != null) {
+                user.setPrimaryPhone(phone);
+                userInfoChanged = true; // primaryPhone变更需要删除缓存
+            }
             
             // 更新UserProfile
             Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
             UserProfile profile = null;
+            boolean profileChanged = false;
             if (profileOpt.isPresent()) {
                 profile = profileOpt.get();
-                if (nickname != null) profile.setNickname(nickname);
+                if (nickname != null) {
+                    profile.setNickname(nickname);
+                    profileChanged = true; // nickname变更需要删除档案缓存
+                }
                 // email通常存储在UserProfile中，但User实体中没有email字段，这里暂时跳过
                 userProfileRepository.save(profile);
             }
             
             userRepository.save(user);
+            
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // 删除用户信息和档案缓存（primaryPhone或nickname变更后需要清除缓存）
+            if (cacheUtil != null) {
+                if (userInfoChanged) {
+                    String userInfoCacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+                    cacheUtil.delete(userInfoCacheKey);
+                    log.info("已删除用户信息缓存（Cache Aside模式）: userId={}, reason=primaryPhone变更", userId);
+                }
+                if (profileChanged) {
+                    String userProfileCacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+                    cacheUtil.delete(userProfileCacheKey);
+                    log.info("已删除用户档案缓存（Cache Aside模式）: userId={}, reason=nickname变更", userId);
+                }
+            }
             
             // ✅ 设置Profile到User实体（确保toSimpleUser能正确获取Profile）
             if (profile != null) {
@@ -915,14 +953,19 @@ public class AdminServiceImpl implements AdminService {
             User user = userOpt.get();
             
             // 基本字段
+            // ✅ 标记是否修改了用户基本信息（用于缓存删除）
+            boolean userInfoChanged = false;
+            
             Object username = payload.get("username");
             if (username instanceof String && StringUtils.hasText((String) username)) {
                 user.setUsername(((String) username).trim());
+                userInfoChanged = true; // username变更需要删除缓存
             }
             
             Object primaryPhone = payload.get("primaryPhone");
             if (primaryPhone instanceof String && StringUtils.hasText((String) primaryPhone)) {
                 user.setPrimaryPhone(((String) primaryPhone).trim());
+                userInfoChanged = true; // primaryPhone变更需要删除缓存
             }
             
             Object accountStatus = payload.get("accountStatus");
@@ -933,6 +976,7 @@ public class AdminServiceImpl implements AdminService {
                     throw new BusinessException("非法的账户状态");
                 }
                 user.setAccountStatus(newStatus);
+                userInfoChanged = true; // accountStatus变更需要删除缓存
             }
 
             // 档案字段
@@ -1052,6 +1096,16 @@ public class AdminServiceImpl implements AdminService {
 
             userRepository.save(user);
             userProfileRepository.save(profile);
+            
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // 删除用户信息和档案缓存（username、primaryPhone、accountStatus或档案信息变更后需要清除缓存）
+            if (cacheUtil != null) {
+                String userInfoCacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+                String userProfileCacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+                cacheUtil.delete(userInfoCacheKey);
+                cacheUtil.delete(userProfileCacheKey);
+                log.info("已删除用户信息和档案缓存（Cache Aside模式）: userId={}, userInfoChanged={}", userId, userInfoChanged);
+            }
 
             return Result.ok("更新成功", toSimpleUser(user));
         } catch (Exception e) {
@@ -2109,6 +2163,28 @@ public class AdminServiceImpl implements AdminService {
             // 不允许编辑：publishTime、reportCount、sellerId、commodityId
             
             commodityRepository.save(commodity);
+            
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // 清除商品相关缓存（商品信息变更后需要清除缓存，包括地址修改）
+            if (cacheUtil != null) {
+                try {
+                    // 清除商品详情缓存
+                    cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
+                    
+                    // 清除热门商品和最新商品缓存（使用通配符删除所有limit的缓存）
+                    cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_HOT_KEY + ":*");
+                    cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LATEST_KEY + ":*");
+                    
+                    // 清除商品列表缓存（使用通配符删除所有列表缓存）
+                    cacheUtil.deleteByPattern(RedisConstants.CACHE_COMMODITY_LIST_KEY + "*");
+                    
+                    log.debug("商品缓存已清除: commodityId={}", commodityId);
+                } catch (Exception e) {
+                    log.error("清除商品缓存失败: commodityId={}, error={}", commodityId, e.getMessage(), e);
+                    // 缓存清除失败不影响主流程
+                }
+            }
+            
             return Result.ok("更新成功", toSimpleCommodity(commodity));
         } catch (Exception e) {
             log.error("完整更新商品异常: commodityId={}, error={}", commodityId, e.getMessage(), e);

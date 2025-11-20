@@ -424,6 +424,27 @@ services:
       start_period: 60s
 
   # Zipkin 分布式链路追踪服务
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: njumarket-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g -Des.insecure_network_trace_enabled=true
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+      - es_logs:/usr/share/elasticsearch/logs
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   zipkin:
     image: openzipkin/zipkin:latest
     container_name: njumarket-zipkin
@@ -592,6 +613,8 @@ volumes:
   grafana_data:
   rabbitmq_data:
   postgres_data:
+  es_data:
+  es_logs:
 
 networks:
   njumarket-network:

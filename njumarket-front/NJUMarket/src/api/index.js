@@ -177,7 +177,10 @@ export const authAPI = {
   getCurrentUser: () => api.get('/user/auth/me'),
   
   // ✅ 刷新Token
-  refreshToken: (refreshToken) => api.post('/user/auth/refresh-token', { refreshToken })
+  refreshToken: (refreshToken) => api.post('/user/auth/refresh-token', { refreshToken }),
+  
+  // 修改手机号
+  updatePhone: (data) => api.post('/user/auth/update-phone', data)
 }
 
 // 商品相关API

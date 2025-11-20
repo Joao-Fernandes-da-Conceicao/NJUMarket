@@ -58,6 +58,11 @@ public interface UserService {
      */
     Result resetPassword(String phone, String code, String newPassword);
     
+    /**
+     * 修改手机号
+     */
+    Result updatePhone(String newPhone, String code);
+    
     // ========== 用户档案相关 ==========
     /**
      * 获取当前用户信息

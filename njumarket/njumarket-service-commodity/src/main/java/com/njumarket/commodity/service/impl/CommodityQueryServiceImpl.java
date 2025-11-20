@@ -16,6 +16,8 @@ import com.njumarket.commodity.client.AuthClient;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
+import com.njumarket.commodity.search.CommoditySearchResult;
+import com.njumarket.commodity.search.CommoditySearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -30,8 +32,10 @@ import java.util.stream.Collectors;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Arrays;
+import java.util.function.Function;
 
 /**
  * 商品查询服务实现类
@@ -46,6 +50,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     private final AuthClient authClient;
     private final ObjectMapper objectMapper;
     private final CacheUtil cacheUtil;
+    private final CommoditySearchService commoditySearchService;
     
     // ========== 公开商品查询实现 ==========
     
@@ -54,6 +59,12 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         try {
             log.info("搜索商品 - keyword: {}, page: {}, size: {}, location: {}, minPrice: {}, maxPrice: {}, category: {}, sortBy: {}", 
                     keyword, page, size, location, minPrice, maxPrice, category, sortBy);
+
+            CommodityPageResultVO elasticResult = trySearchCommoditiesWithElastic(keyword, page, size, location, minPrice, maxPrice, category, sortBy);
+            if (elasticResult != null) {
+                log.info("ElasticSearch 搜索命中 {} 条数据", elasticResult.getTotal());
+                return Result.ok("搜索商品成功", elasticResult);
+            }
                 
             // 根据排序参数创建Pageable
             Pageable pageable = createPageable(page, size, sortBy);
@@ -181,8 +192,6 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                     if (commodity != null) {
                         commodity.setClickCount(commodity.getClickCount() + 1);
                         commodityRepository.save(commodity);
-                        // 删除缓存，下次读取时重新加载
-                        cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
                     }
                 } catch (Exception e) {
                     log.error("异步更新点击量失败: commodityId={}, error={}", commodityId, e.getMessage());
@@ -212,6 +221,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                     return convertCommoditiesToDTOWithBatchProfile(commodities);
                 }
             );
+            cacheUtil.addCacheKeyToSet(RedisConstants.CACHE_COMMODITY_HOT_KEY_REGISTRY, cacheKey);
             
             return Result.ok("获取热门商品成功", commodityDTOs);
             
@@ -240,6 +250,7 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                     return convertCommoditiesToDTOWithBatchProfile(commodities);
                 }
             );
+            cacheUtil.addCacheKeyToSet(RedisConstants.CACHE_COMMODITY_LATEST_KEY_REGISTRY, cacheKey);
             
             return Result.ok("获取最新商品成功", commodityDTOs);
             
@@ -621,6 +632,74 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     
     // ========== 私有辅助方法 ==========
     
+    private CommodityPageResultVO trySearchCommoditiesWithElastic(String keyword,
+                                                                  Integer page,
+                                                                  Integer size,
+                                                                  String location,
+                                                                  Double minPrice,
+                                                                  Double maxPrice,
+                                                                  String category,
+                                                                  String sortBy) {
+        if (!commoditySearchService.shouldUseElasticSearch(keyword, location, minPrice, maxPrice, category)) {
+            return null;
+        }
+        int safePage = page == null || page < 1 ? 1 : page;
+        int safeSize = size == null || size < 1 ? 10 : size;
+        Optional<CommoditySearchResult> searchResultOptional = commoditySearchService.search(
+                keyword, safePage, safeSize, location, minPrice, maxPrice, category, sortBy);
+        if (searchResultOptional.isEmpty()) {
+            return null;
+        }
+        CommoditySearchResult searchResult = searchResultOptional.get();
+        List<String> commodityIds = searchResult.commodityIds();
+        if (commodityIds == null || commodityIds.isEmpty()) {
+            return buildEmptyPageResult(searchResult.totalHits(), safePage, safeSize);
+        }
+        List<Commodity> commodities = fetchCommoditiesByOrderedIds(commodityIds);
+        if (commodities.isEmpty() && searchResult.totalHits() > 0) {
+            return null;
+        }
+        List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
+        CommodityPageResultVO result = new CommodityPageResultVO();
+        result.setCommodities(commodityDTOs);
+        result.setTotal(searchResult.totalHits());
+        result.setPages(calculatePages(searchResult.totalHits(), safeSize));
+        result.setCurrent(safePage);
+        result.setSize(safeSize);
+        return result;
+    }
+
+    private List<Commodity> fetchCommoditiesByOrderedIds(List<String> commodityIds) {
+        if (commodityIds == null || commodityIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> uniqueIds = new ArrayList<>(new LinkedHashSet<>(commodityIds));
+        List<Commodity> found = commodityRepository.findAllById(uniqueIds);
+        Map<String, Commodity> commodityMap = found.stream()
+                .collect(Collectors.toMap(Commodity::getCommodityId, Function.identity()));
+        return commodityIds.stream()
+                .map(commodityMap::get)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private CommodityPageResultVO buildEmptyPageResult(long totalHits, int page, int size) {
+        CommodityPageResultVO result = new CommodityPageResultVO();
+        result.setCommodities(Collections.emptyList());
+        result.setTotal(totalHits);
+        result.setPages(calculatePages(totalHits, size));
+        result.setCurrent(page);
+        result.setSize(size);
+        return result;
+    }
+
+    private int calculatePages(long total, int size) {
+        if (size <= 0) {
+            return 0;
+        }
+        return (int) Math.ceil((double) total / size);
+    }
+
     /**
      * 批量转换Commodity实体为CommodityDTO（优化 N+1 查询）
      * 批量查询所有商品的卖家 Profile，然后填充到 DTO

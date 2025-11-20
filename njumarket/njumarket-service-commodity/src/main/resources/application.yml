@@ -13,4 +13,19 @@ spring:
   config:
     import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
     fail-fast: false  # Config Server 不可用时，使用本地配置（需要时可在本地添加完整配置）
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+    username: ${ELASTICSEARCH_USERNAME:elastic}
+    password: ${ELASTICSEARCH_PASSWORD:changeme}
+
+commodity:
+  search:
+    enabled: ${COMMODITY_SEARCH_ENABLED:true}
+    elasticsearch:
+      enabled: ${COMMODITY_SEARCH_ES_ENABLED:true}
+      highlight-enabled: ${COMMODITY_SEARCH_HIGHLIGHT:true}
+      index: ${COMMODITY_SEARCH_INDEX:commodities}
+    sync:
+      auto-reindex-on-startup: ${COMMODITY_SEARCH_AUTO_REINDEX:false}
+      page-size: ${COMMODITY_SEARCH_SYNC_PAGE_SIZE:500}
 

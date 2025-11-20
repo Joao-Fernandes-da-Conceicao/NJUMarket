@@ -15,12 +15,12 @@ import com.njumarket.auth.client.ImageClient;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
+import com.njumarket.njumarket.utils.CacheUtil;
+import com.njumarket.njumarket.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,27 +36,38 @@ public class UserProfileServiceImpl implements UserProfileService {
     private final UserProfileRepository userProfileRepository;
     private final UserRepository userRepository;
     private final ImageClient imageClient;
-    private final ObjectMapper objectMapper;
+    private final CacheUtil cacheUtil;
 
     @Override
     public Result getUserProfile(String userId) {
         BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
-
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
 
         // 检查是否是查看自己的资料（使用 SecurityUtils）
         Object userObj = SecurityUtils.getCurrentUser();
         User currentUser = userObj instanceof User ? (User) userObj : null;
         boolean isSelf = currentUser != null && currentUser.getUserId().equals(userId);
         
+        // ✅ 使用缓存（Cache Aside模式）
+        // 缓存完整的 UserProfileDTO，根据是否是自己的资料决定返回完整信息还是公开信息
+        String cacheKey = RedisConstants.CACHE_USER_PROFILE_DETAIL_KEY + userId;
+        UserProfileDTO profileDTO = cacheUtil.getWithFallback(
+            cacheKey,
+            RedisConstants.CACHE_USER_PROFILE_TTL * 60, // 转换为秒
+            UserProfileDTO.class,
+            () -> {
+                // 缓存未命中，从数据库加载
+                UserProfile profile = userProfileRepository.findByUserId(userId)
+                    .orElseThrow(() -> new BusinessException("用户档案不存在"));
+                return convertToDTO(profile);
+            }
+        );
+        
         if (isSelf) {
             // 查看自己的资料，返回完整信息
-            UserProfileDTO profileDTO = convertToDTO(profile);
             return Result.ok(profileDTO);
         } else {
             // 查看他人资料，返回公开信息（不含敏感数据）
-            PublicUserProfileDTO publicDTO = convertToPublicDTO(profile);
+            PublicUserProfileDTO publicDTO = convertToPublicDTO(profileDTO);
             return Result.ok(publicDTO);
         }
     }
@@ -65,10 +76,23 @@ public class UserProfileServiceImpl implements UserProfileService {
     public Result getPublicUserProfile(String userId) {
         BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
 
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
-
-        PublicUserProfileDTO publicDTO = convertToPublicDTO(profile);
+        // ✅ 使用缓存（Cache Aside模式）
+        // 优先从缓存获取完整的 UserProfileDTO，然后转换为公开信息
+        String cacheKey = RedisConstants.CACHE_USER_PROFILE_DETAIL_KEY + userId;
+        UserProfileDTO profileDTO = cacheUtil.getWithFallback(
+            cacheKey,
+            RedisConstants.CACHE_USER_PROFILE_TTL * 60, // 转换为秒
+            UserProfileDTO.class,
+            () -> {
+                // 缓存未命中，从数据库加载
+                UserProfile profile = userProfileRepository.findByUserId(userId)
+                    .orElseThrow(() -> new BusinessException("用户档案不存在"));
+                return convertToDTO(profile);
+            }
+        );
+        
+        // 转换为公开信息（不含敏感数据）
+        PublicUserProfileDTO publicDTO = convertToPublicDTO(profileDTO);
         return Result.ok(publicDTO);
     }
 
@@ -100,6 +124,18 @@ public class UserProfileServiceImpl implements UserProfileService {
         }
 
         userProfileRepository.save(profile);
+        
+        // ✅ Cache Aside模式：先更新数据库，再删除缓存
+        // 删除用户档案缓存（档案信息变更后需要清除缓存）
+        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+        if (cacheUtil != null) {
+            String cacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+            String detailCacheKey = RedisConstants.CACHE_USER_PROFILE_DETAIL_KEY + userId;
+            cacheUtil.delete(cacheKey);
+            cacheUtil.delete(detailCacheKey);
+            log.info("已删除用户档案缓存（Cache Aside模式）: userId={}, reason=档案信息变更, cacheKeys=[{}, {}]", userId, cacheKey, detailCacheKey);
+        }
+        
         return Result.ok(convertToDTO(profile));
     }
 
@@ -171,6 +207,10 @@ public class UserProfileServiceImpl implements UserProfileService {
             profile.setAvatar(imageUrl);
             userProfileRepository.save(profile);
             
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+            evictUserProfileCache(userId, "头像变更");
+            
             // 返回上传结果（只包含必要的字段，不依赖 ImageUploadDTO）
             Map<String, Object> uploadResponse = new HashMap<>();
             uploadResponse.put("imageUrl", imageUrl);
@@ -211,6 +251,10 @@ public class UserProfileServiceImpl implements UserProfileService {
         profile.setAvatar(null);
         userProfileRepository.save(profile);
         
+        // ✅ Cache Aside模式：先更新数据库，再删除缓存
+        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+        evictUserProfileCache(userId, "头像删除");
+        
         return Result.ok("头像删除成功");
     }
 
@@ -234,6 +278,11 @@ public class UserProfileServiceImpl implements UserProfileService {
         }
 
         userProfileRepository.save(profile);
+        
+        // ✅ Cache Aside模式：先更新数据库，再删除缓存
+        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+        evictUserProfileCache(userId, "评分变更");
+        
         return Result.ok("评分更新成功");
     }
 
@@ -256,6 +305,10 @@ public class UserProfileServiceImpl implements UserProfileService {
         
         profile.setCreditScore(newScore);
         userProfileRepository.save(profile);
+        
+        // ✅ Cache Aside模式：先更新数据库，再删除缓存
+        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+        evictUserProfileCache(userId, "信用分变更");
         
         return Result.ok("信用分更新成功，当前分数：" + newScore);
     }
@@ -284,6 +337,10 @@ public class UserProfileServiceImpl implements UserProfileService {
         // 检查是否需要升级VIP
         checkAndUpgradeVip(profile);
         
+        // ✅ Cache Aside模式：先更新数据库，再删除缓存
+        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+        evictUserProfileCache(userId, "交易统计变更");
+        
         return Result.ok("交易统计更新成功");
     }
 
@@ -299,6 +356,11 @@ public class UserProfileServiceImpl implements UserProfileService {
         if (!newLevel.equals(profile.getVipLevel())) {
             profile.setVipLevel(newLevel);
             userProfileRepository.save(profile);
+            
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+            evictUserProfileCache(userId, "VIP等级变更");
+            
             return Result.ok("VIP等级升级为：" + newLevel);
         }
         
@@ -416,6 +478,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     
     /**
      * 转换为公开DTO（不包含敏感信息）
+     * 从 UserProfile 实体转换
      */
     private PublicUserProfileDTO convertToPublicDTO(UserProfile profile) {
         PublicUserProfileDTO dto = new PublicUserProfileDTO();
@@ -444,6 +507,47 @@ public class UserProfileServiceImpl implements UserProfileService {
             publicUserDTO.setBuyerRating(profile.getBuyerRating());
             publicUserDTO.setSellerRating(profile.getSellerRating());
             publicUserDTO.setVipLevel(profile.getVipLevel());
+            dto.setUserInfo(publicUserDTO);
+        }
+        
+        return dto;
+    }
+    
+    /**
+     * 转换为公开DTO（不包含敏感信息）
+     * 从 UserProfileDTO 转换（用于缓存场景）
+     */
+    private PublicUserProfileDTO convertToPublicDTO(UserProfileDTO profileDTO) {
+        if (profileDTO == null) {
+            return null;
+        }
+        
+        PublicUserProfileDTO dto = new PublicUserProfileDTO();
+        dto.setProfileId(profileDTO.getProfileId());
+        dto.setUserId(profileDTO.getUserId());
+        dto.setNickname(profileDTO.getNickname());
+        dto.setAvatar(profileDTO.getAvatar());
+        dto.setCreditScore(profileDTO.getCreditScore());
+        dto.setBuyerRating(profileDTO.getBuyerRating());
+        dto.setSellerRating(profileDTO.getSellerRating());
+        dto.setTotalSales(profileDTO.getTotalSales());
+        dto.setTotalPurchases(profileDTO.getTotalPurchases());
+        dto.setVipLevel(profileDTO.getVipLevel());
+        
+        // 转换用户基本信息（不含敏感数据）
+        if (profileDTO.getUserInfo() != null) {
+            UserDTO userInfo = profileDTO.getUserInfo();
+            PublicUserDTO publicUserDTO = new PublicUserDTO();
+            publicUserDTO.setUserId(userInfo.getUserId());
+            publicUserDTO.setAccountStatus(userInfo.getAccountStatus());
+            publicUserDTO.setRegisterTime(userInfo.getRegisterTime());
+            // 从 profileDTO 中获取公开信息（不包含 primaryPhone 等敏感信息）
+            publicUserDTO.setNickname(profileDTO.getNickname());
+            publicUserDTO.setAvatar(profileDTO.getAvatar());
+            publicUserDTO.setCreditScore(profileDTO.getCreditScore());
+            publicUserDTO.setBuyerRating(profileDTO.getBuyerRating());
+            publicUserDTO.setSellerRating(profileDTO.getSellerRating());
+            publicUserDTO.setVipLevel(profileDTO.getVipLevel());
             dto.setUserInfo(publicUserDTO);
         }
         
@@ -487,6 +591,31 @@ public class UserProfileServiceImpl implements UserProfileService {
             profile.setVipLevel(newLevel);
             userProfileRepository.save(profile);
             log.info("用户VIP等级自动升级: userId={}, newLevel={}", profile.getUserId(), newLevel);
+            
+            // ✅ Cache Aside模式：先更新数据库，再删除缓存
+            // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+            // 注意：此方法在 updateTradeStatistics 中被调用，但 updateTradeStatistics 已经删除了缓存
+            // 这里也删除一次，确保即使单独调用此方法也能清除缓存
+            evictUserProfileCache(profile.getUserId(), "VIP等级自动升级");
+        }
+    }
+    
+    /**
+     * 清除用户档案缓存（Cache Aside模式）
+     * ⚠️ 注意：只删除指定用户的缓存，不会误删别人的缓存
+     * 
+     * @param userId 用户ID
+     * @param reason 清除原因（用于日志）
+     */
+    private void evictUserProfileCache(String userId, String reason) {
+        if (cacheUtil != null) {
+            // 删除批量查询缓存（UserProfileInternalDTO）
+            String cacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+            // 删除单条查询缓存（UserProfileDTO）
+            String detailCacheKey = RedisConstants.CACHE_USER_PROFILE_DETAIL_KEY + userId;
+            cacheUtil.delete(cacheKey);
+            cacheUtil.delete(detailCacheKey);
+            log.info("已删除用户档案缓存（Cache Aside模式）: userId={}, reason={}, cacheKeys=[{}, {}]", userId, reason, cacheKey, detailCacheKey);
         }
     }
     
