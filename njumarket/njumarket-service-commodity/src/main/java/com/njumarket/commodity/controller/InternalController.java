@@ -9,11 +9,17 @@ import com.njumarket.commodity.repository.CommodityRepository;
 import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.commodity.search.CommoditySearchService;
+import com.njumarket.commodity.service.CommodityQueryService;
+import com.njumarket.commodity.vector.CommodityVectorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,6 +37,10 @@ public class InternalController {
     private final CommodityInternalDTOConverter commodityInternalDTOConverter;
     private final CacheUtil cacheUtil;
     private final CommoditySearchService commoditySearchService;
+    private final CommodityVectorService commodityVectorService;
+    private final CommodityQueryService commodityQueryService;
+    private final com.njumarket.commodity.vector.ConversationVectorService conversationVectorService;
+    private final JdbcTemplate jdbcTemplate;
     
     /**
      * 根据ID查询商品详情（管理端内部接口）
@@ -324,6 +334,56 @@ public class InternalController {
     }
     
     /**
+     * 获取用户发布的商品列表（内部接口）
+     * 用于用户画像生成
+     */
+    @GetMapping("/commodity/seller/{sellerId}")
+    public Result getUserCommodities(@PathVariable String sellerId,
+                                    @RequestParam(defaultValue = "1") Integer page,
+                                    @RequestParam(defaultValue = "100") Integer size,
+                                    @RequestParam(required = false) String status) {
+        try {
+            // 调用 CommodityQueryService，传入 null 作为 user（内部接口不需要权限检查）
+            return commodityQueryService.getUserCommodities(null, sellerId, status, page, size);
+        } catch (Exception e) {
+            log.error("获取用户商品失败: sellerId={}, error={}", sellerId, e.getMessage(), e);
+            return Result.fail("获取用户商品失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取用户的AI聊天记录（内部接口）
+     * 用于用户画像生成
+     * 从 conversation_vectors 表中获取用户的所有AI聊天记录（按时间倒序）
+     */
+    @GetMapping("/commodity/ai-chat-history/{userId}")
+    public Result getAIChatHistory(@PathVariable String userId,
+                                  @RequestParam(defaultValue = "50") Integer limit) {
+        try {
+            // 从 conversation_vectors 表中获取用户的AI聊天记录
+            List<com.njumarket.commodity.vector.ConversationVectorService.ConversationMessage> messages = 
+                conversationVectorService.getUserAIChatHistory(userId, limit);
+            
+            // 转换为Map列表，方便序列化
+            List<Map<String, Object>> resultList = new ArrayList<>();
+            for (com.njumarket.commodity.vector.ConversationVectorService.ConversationMessage msg : messages) {
+                Map<String, Object> msgMap = new HashMap<>();
+                msgMap.put("conversationId", msg.getConversationId());
+                msgMap.put("messageId", msg.getMessageId());
+                msgMap.put("content", msg.getContent());
+                msgMap.put("role", msg.getRole());
+                resultList.add(msgMap);
+            }
+            
+            log.debug("获取用户AI聊天记录成功: userId={}, count={}", userId, resultList.size());
+            return Result.ok("查询成功", resultList);
+        } catch (Exception e) {
+            log.error("获取AI聊天记录失败: userId={}, error={}", userId, e.getMessage(), e);
+            return Result.fail("获取AI聊天记录失败: " + e.getMessage());
+        }
+    }
+    
+    /**
      * 查询商品列表（管理端内部接口）
      */
     @GetMapping("/commodities")
@@ -411,6 +471,144 @@ public class InternalController {
             result.put("size", commodityPage.getSize());
             
             return Result.ok("查询成功", result);
+    }
+    
+    /**
+     * 批量生成商品向量（用于历史数据迁移）
+     */
+    @PostMapping("/commodity/vector/batch-generate")
+    public Result batchGenerateVectors(@RequestParam(defaultValue = "50") Integer batchSize) {
+        try {
+            commodityVectorService.batchGenerateVectors(batchSize);
+            return Result.ok("批量向量化任务已启动");
+        } catch (Exception e) {
+            log.error("批量向量化失败: error={}", e.getMessage(), e);
+            return Result.fail("批量向量化失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 诊断数据库连接和 pgvector 扩展状态
+     */
+    @GetMapping("/debug/database")
+    public Result debugDatabase() {
+        try {
+            Map<String, Object> info = new HashMap<>();
+            
+            // 获取数据库连接信息
+            try (Connection conn = jdbcTemplate.getDataSource().getConnection()) {
+                String url = conn.getMetaData().getURL();
+                String catalog = conn.getCatalog();
+                String schema = conn.getSchema();
+                
+                info.put("url", url);
+                info.put("catalog", catalog);
+                info.put("schema", schema);
+                
+                // 检查扩展是否存在
+                try {
+                    Integer extCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM pg_extension WHERE extname = 'vector'", 
+                        Integer.class
+                    );
+                    info.put("vector_extension_exists", extCount > 0);
+                    info.put("vector_extension_count", extCount);
+                } catch (Exception e) {
+                    info.put("vector_extension_check_error", e.getMessage());
+                }
+                
+                // 检查类型是否存在
+                try {
+                    Integer typeCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM pg_type WHERE typname = 'vector'", 
+                        Integer.class
+                    );
+                    info.put("vector_type_exists", typeCount > 0);
+                    info.put("vector_type_count", typeCount);
+                } catch (Exception e) {
+                    info.put("vector_type_check_error", e.getMessage());
+                }
+                
+                // 检查操作符是否存在
+                // 注意：操作符可能在 public schema 中，需要检查所有 schema
+                try {
+                    // 方法1：检查操作符（更精确的查询）
+                    Integer opCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM pg_operator o " +
+                        "JOIN pg_type t1 ON o.oprleft = t1.oid " +
+                        "JOIN pg_type t2 ON o.oprright = t2.oid " +
+                        "WHERE o.oprname = '<=>' " +
+                        "AND (t1.typname = 'vector' OR t2.typname = 'vector')", 
+                        Integer.class
+                    );
+                    info.put("vector_operator_exists", opCount > 0);
+                    info.put("vector_operator_count", opCount);
+                    
+                    // 方法2：尝试直接测试操作符（更可靠）
+                    // 注意：可能需要指定 schema 或使用不同的语法
+                    try {
+                        // 尝试使用 CAST 而不是 ::
+                        Double distance = jdbcTemplate.queryForObject(
+                            "SELECT CAST('[1,2,3]' AS vector) <=> CAST('[4,5,6]' AS vector)", 
+                            Double.class
+                        );
+                        info.put("vector_operator_test", "success");
+                        info.put("vector_operator_test_distance", distance);
+                    } catch (Exception testEx1) {
+                        try {
+                            // 如果 CAST 不行，尝试使用 public schema
+                            Double distance = jdbcTemplate.queryForObject(
+                                "SELECT public.vector('[1,2,3]') <=> public.vector('[4,5,6]')", 
+                                Double.class
+                            );
+                            info.put("vector_operator_test", "success (with public schema)");
+                            info.put("vector_operator_test_distance", distance);
+                        } catch (Exception testEx2) {
+                            info.put("vector_operator_test", "failed: " + testEx2.getMessage());
+                            info.put("vector_operator_test_error_detail", testEx2.getClass().getName());
+                        }
+                    }
+                    
+                    // 方法3：列出所有 vector 相关操作符
+                    List<Map<String, Object>> operators = jdbcTemplate.queryForList(
+                        "SELECT o.oprname, " +
+                        "       t1.typname AS left_type, " +
+                        "       t2.typname AS right_type, " +
+                        "       t3.typname AS result_type " +
+                        "FROM pg_operator o " +
+                        "LEFT JOIN pg_type t1 ON o.oprleft = t1.oid " +
+                        "LEFT JOIN pg_type t2 ON o.oprright = t2.oid " +
+                        "LEFT JOIN pg_type t3 ON o.oprresult = t3.oid " +
+                        "WHERE o.oprname IN ('<=>', '<->', '<#>') " +
+                        "AND (t1.typname = 'vector' OR t2.typname = 'vector') " +
+                        "ORDER BY o.oprname"
+                    );
+                    info.put("vector_operators_detail", operators);
+                    
+                } catch (Exception e) {
+                    info.put("vector_operator_check_error", e.getMessage());
+                    log.error("检查操作符失败: {}", e.getMessage(), e);
+                }
+                
+                // 检查向量表
+                try {
+                    Integer tableCount = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM pg_tables " +
+                        "WHERE schemaname = 'nju_market' " +
+                        "AND tablename IN ('commodity_vectors', 'user_profile_vectors', 'conversation_vectors')", 
+                        Integer.class
+                    );
+                    info.put("vector_tables_count", tableCount);
+                } catch (Exception e) {
+                    info.put("vector_tables_check_error", e.getMessage());
+                }
+            }
+            
+            return Result.ok("数据库诊断信息", info);
+        } catch (Exception e) {
+            log.error("获取数据库信息失败: error={}", e.getMessage(), e);
+            return Result.fail("获取数据库信息失败: " + e.getMessage());
+        }
     }
     
 }

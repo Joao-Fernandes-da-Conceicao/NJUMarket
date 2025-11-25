@@ -13,6 +13,7 @@
           v-model:keyword="searchKeyword"
           placeholder="搜索商品..."
           @search="handleSearch"
+          @ai-search="handleAISearch"
         />
         
         <!-- 筛选区域 -->
@@ -58,7 +59,11 @@
     <div class="commodity-list-section">
       <div class="container">
         <div class="list-header">
-          <h2 v-if="displayedSearchKeyword">搜索结果：{{ displayedSearchKeyword }}</h2>
+          <h2 v-if="displayedSearchKeyword">
+            <span v-if="useAISearch" style="color: #FFD700;">✨ AI搜索结果：</span>
+            <span v-else>搜索结果：</span>
+            {{ displayedSearchKeyword }}
+          </h2>
           <h2 v-else-if="selectedCategory">分类：{{ selectedCategory }}</h2>
           <h2 v-else>所有商品</h2>
           <span class="total-count">共 {{ total }} 件商品</span>
@@ -132,6 +137,7 @@ export default {
     const minPrice = ref('')
     const maxPrice = ref('')
     const sortBy = ref('')
+    const useAISearch = ref(false) // 是否使用AI搜索
     
     // 统一化：组件化选择器的选项
     const categoryOptions = computed(() => {
@@ -171,36 +177,49 @@ export default {
     const fetchCommodities = async () => {
       loading.value = true
       try {
-        const params = {
-          page: currentPage.value,
-          size: pageSize.value
-        }
-        
-        if (searchKeyword.value) {
-          params.keyword = searchKeyword.value
-        }
-        if (selectedCategory.value) {
-          params.category = selectedCategory.value
-        }
-        if (minPrice.value) {
-          params.minPrice = parseFloat(minPrice.value)
-        }
-        if (maxPrice.value) {
-          params.maxPrice = parseFloat(maxPrice.value)
-        }
-        if (sortBy.value) {
-          params.sortBy = sortBy.value
-        }
-        
-        const response = await commodityAPI.search(params)
-        if (response.success) {
-          // 修复：正确映射后端返回的数据结构
-          commodities.value = response.data.commodities || []
-          total.value = response.data.total || 0
-          currentPage.value = response.data.current || 1
-          pageSize.value = response.data.size || 20
+        let response
+        if (useAISearch.value && searchKeyword.value) {
+          // 使用AI搜索
+          response = await commodityAPI.aiSearch(searchKeyword.value, null)
+          if (response.success) {
+            commodities.value = response.data.commodities || []
+            total.value = response.data.total || 0
+            currentPage.value = response.data.current || 1
+            pageSize.value = response.data.size || 20
+          }
+        } else {
+          // 使用普通搜索
+          const params = {
+            page: currentPage.value,
+            size: pageSize.value
+          }
           
-          // ✅ 优化：后端已批量返回卖家信息，无需前端逐个查询
+          if (searchKeyword.value) {
+            params.keyword = searchKeyword.value
+          }
+          if (selectedCategory.value) {
+            params.category = selectedCategory.value
+          }
+          if (minPrice.value) {
+            params.minPrice = parseFloat(minPrice.value)
+          }
+          if (maxPrice.value) {
+            params.maxPrice = parseFloat(maxPrice.value)
+          }
+          if (sortBy.value) {
+            params.sortBy = sortBy.value
+          }
+          
+          response = await commodityAPI.search(params)
+          if (response.success) {
+            // 修复：正确映射后端返回的数据结构
+            commodities.value = response.data.commodities || []
+            total.value = response.data.total || 0
+            currentPage.value = response.data.current || 1
+            pageSize.value = response.data.size || 20
+            
+            // ✅ 优化：后端已批量返回卖家信息，无需前端逐个查询
+          }
         }
       } catch (error) {
         ElMessage.error('获取商品列表失败')
@@ -224,6 +243,15 @@ export default {
     // 搜索
     const handleSearch = () => {
       displayedSearchKeyword.value = searchKeyword.value // 点击搜索后才更新显示的关键字
+      useAISearch.value = false // 使用普通搜索
+      currentPage.value = 1
+      fetchCommodities()
+    }
+    
+    // AI搜索
+    const handleAISearch = () => {
+      displayedSearchKeyword.value = searchKeyword.value // 点击搜索后才更新显示的关键字
+      useAISearch.value = true // 使用AI搜索
       currentPage.value = 1
       fetchCommodities()
     }
@@ -323,6 +351,8 @@ export default {
       if (newQuery.category) {
         selectedCategory.value = newQuery.category
       }
+      // 检查是否使用AI搜索
+      useAISearch.value = newQuery.aiSearch === 'true'
       fetchCommodities()
     }, { immediate: true })
     
@@ -348,6 +378,7 @@ export default {
       user,
       getUserDisplayName,
       handleSearch,
+      handleAISearch,
       handleFilter,
       getSortLabel,
       getCategoryLabel,

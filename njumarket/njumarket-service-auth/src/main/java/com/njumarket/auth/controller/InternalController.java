@@ -14,6 +14,7 @@ import com.njumarket.auth.repository.UserAddressRepository;
 import com.njumarket.auth.service.UserProfileService;
 import com.njumarket.auth.service.UserAddressService;
 import com.njumarket.auth.entity.UserAddress;
+import com.njumarket.auth.vector.UserProfileVectorService;
 import com.njumarket.njumarket.dto.internal.AddressInternalDTO;
 import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
@@ -45,6 +46,7 @@ public class InternalController {
     private final UserInternalDTOConverter userInternalDTOConverter;
     private final UserProfileInternalDTOConverter userProfileInternalDTOConverter;
     private final CacheUtil cacheUtil;
+    private final UserProfileVectorService userProfileVectorService;
     
     /**
      * 根据ID查询用户（内部接口）
@@ -327,6 +329,82 @@ public class InternalController {
         
         AddressInternalDTO dto = convertToAddressInternalDTO(address);
         return Result.ok("查询成功", dto);
+    }
+    
+    /**
+     * 生成用户画像向量（内部接口）
+     * 单次 curl 即可生成画像，整合多个数据源
+     * @param userId 用户ID
+     * @return 生成结果
+     */
+    @PostMapping("/user/{userId}/generate-profile-vector")
+    public Result generateUserProfileVector(@PathVariable String userId) {
+        try {
+            log.info("开始生成用户画像向量: userId={}", userId);
+            userProfileVectorService.generateAndStoreUserProfileVector(userId);
+            return Result.ok("用户画像向量生成成功（异步处理中）");
+        } catch (Exception e) {
+            log.error("生成用户画像向量失败: userId={}, error={}", userId, e.getMessage(), e);
+            return Result.fail("生成用户画像向量失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取用户画像向量（内部接口）
+     * 用于商品推荐和搜索
+     */
+    @GetMapping("/user/{userId}/profile-vector")
+    public Result getUserProfileVector(@PathVariable String userId) {
+        try {
+            java.util.List<Double> vector = userProfileVectorService.getUserProfileVector(userId);
+            if (vector == null || vector.isEmpty()) {
+                return Result.ok("用户画像向量不存在", null);
+            }
+            return Result.ok("查询成功", vector);
+        } catch (Exception e) {
+            log.error("获取用户画像向量失败: userId={}, error={}", userId, e.getMessage(), e);
+            return Result.fail("获取用户画像向量失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 删除用户画像向量（内部接口）
+     * 用于管理端删除用户画像
+     */
+    @DeleteMapping("/user/{userId}/profile-vector")
+    public Result deleteUserProfileVector(@PathVariable String userId) {
+        try {
+            log.info("删除用户画像向量: userId={}", userId);
+            userProfileVectorService.deleteUserProfileVector(userId);
+            return Result.ok("用户画像向量删除成功");
+        } catch (Exception e) {
+            log.error("删除用户画像向量失败: userId={}, error={}", userId, e.getMessage(), e);
+            return Result.fail("删除用户画像向量失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 搜索相似用户（基于用户画像向量）
+     * @param queryVector 查询向量（逗号分隔的浮点数）
+     * @param limit 返回数量限制
+     * @return 相似用户ID列表
+     */
+    @GetMapping("/user/search-similar")
+    public Result searchSimilarUsers(@RequestParam String queryVector, 
+                                    @RequestParam(defaultValue = "10") Integer limit) {
+        try {
+            // 解析向量字符串
+            java.util.List<Double> vector = java.util.Arrays.stream(queryVector.split(","))
+                .map(String::trim)
+                .map(Double::parseDouble)
+                .collect(java.util.stream.Collectors.toList());
+            
+            java.util.List<String> similarUserIds = userProfileVectorService.searchSimilarUsers(vector, limit);
+            return Result.ok("搜索成功", similarUserIds);
+        } catch (Exception e) {
+            log.error("搜索相似用户失败: error={}", e.getMessage(), e);
+            return Result.fail("搜索相似用户失败: " + e.getMessage());
+        }
     }
     
     /**

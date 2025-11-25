@@ -68,6 +68,34 @@ docker-compose up -d
 docker-compose ps
 ```
 
+### 额外准备：Elasticsearch IK 插件 & PostgreSQL pgvector
+
+容器启动后，需要在 **Elasticsearch** 与 **PostgreSQL** 内安装以下扩展，确保中文搜索和向量检索功能可用。
+
+#### 1) Elasticsearch 安装 IK 分词器（8.13.4）
+
+```bash
+# 安装 IK 插件（国内镜像地址）
+docker-compose exec elasticsearch \
+  bash -c "bin/elasticsearch-plugin install https://get.infini.cloud/elasticsearch/analysis-ik/8.13.4"
+
+# 安装完成后重启 ES
+docker-compose restart elasticsearch
+```
+
+> 如果提示需要确认，输入 `y`；可通过 `curl http://localhost:9200/_cat/plugins` 检查插件列表。
+
+#### 2) PostgreSQL 安装 pgvector 扩展
+
+```bash
+docker-compose exec postgres bash -c "
+  apt update &&
+  apt install -y postgresql-16-pgvector &&
+  psql -U postgres -d njumarket -c \"CREATE EXTENSION IF NOT EXISTS vector;\""
+```
+
+> `pgvector` 仅需安装一次，安装后即可写入/查询商品、用户画像等向量数据。
+
 ### 方式三：使用 Makefile
 
 ```bash

@@ -76,7 +76,7 @@ management:
   tracing:
     enabled: true  # ✅ 启用追踪功能
     sampling:
-      probability: 1.0  # 100% 采样率（生产环境建议降低到 0.1）
+      probability: 0.05  # 降低采样率，缓解 Zipkin 压力
     propagation:
       type: B3  # ✅ 使用 B3 传播格式（Zipkin 标准格式，确保追踪上下文正确传播）
   # ✅ 正确的配置路径：management.zipkin.tracing.endpoint（不是 management.tracing.export.zipkin.endpoint）

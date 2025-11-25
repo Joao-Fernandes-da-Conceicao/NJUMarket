@@ -18,6 +18,10 @@ import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.commodity.search.CommoditySearchResult;
 import com.njumarket.commodity.search.CommoditySearchService;
+import com.njumarket.commodity.vector.AISearchService;
+import com.njumarket.commodity.vector.AIAgentService;
+import com.njumarket.commodity.vector.ConversationVectorService;
+import com.njumarket.commodity.service.AIConversationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -28,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.HashMap;
 import java.util.Map;
@@ -51,6 +56,10 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     private final ObjectMapper objectMapper;
     private final CacheUtil cacheUtil;
     private final CommoditySearchService commoditySearchService;
+    private final AISearchService aiSearchService;
+    private final AIAgentService aiAgentService;
+    private final ConversationVectorService conversationVectorService;
+    private final AIConversationService aiConversationService;
     
     // ========== 公开商品查询实现 ==========
     
@@ -329,12 +338,288 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         try {
             log.info("AI语义搜索 - query: {}, location: {}", query, location);
             
-            // 简单的AI搜索实现：基于关键词搜索
-            return searchCommodities(query, 1, 10, location, null, null, null, null);
+            // 获取当前用户ID（如果已登录）
+            String userId = SecurityUtils.getCurrentUserId();
+            
+            // 使用向量相似度搜索
+            List<Commodity> commodities = aiSearchService.search(query, location, 20, userId);
+            
+            // 转换为DTO
+            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
+            
+            // 构建分页结果
+            CommodityPageResultVO result = new CommodityPageResultVO();
+            result.setCommodities(commodityDTOs);
+            result.setTotal((long) commodityDTOs.size());
+            result.setPages(1);
+            result.setCurrent(1);
+            result.setSize(commodityDTOs.size());
+            
+            return Result.ok("AI搜索成功", result);
             
         } catch (Exception e) {
             log.error("AI语义搜索失败: {}", e.getMessage(), e);
-            throw new BusinessException("AI搜索失败");
+            throw new BusinessException("AI搜索失败: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public Result aiAgentChat(String message, String conversationId) {
+        try {
+            // 获取当前用户
+            Object userObj = SecurityUtils.requireCurrentUser();
+            User currentUser = (User) userObj;
+            
+            log.info("AI Agent 对话 - userId: {}, conversationId: {}, message: {}", 
+                currentUser.getUserId(), conversationId, message);
+            
+            // 如果没有 conversationId，生成一个新的
+            if (conversationId == null || conversationId.trim().isEmpty()) {
+                conversationId = UUID.randomUUID().toString();
+            }
+            
+            // 创建或获取会话记录（如果不存在则创建）
+            String title = message.length() > 50 ? message.substring(0, 50) : message;
+            aiConversationService.createOrGetConversation(conversationId, currentUser.getUserId(), title);
+            
+            // 调用 Agent 服务
+            AIAgentService.ChatResult chatResult = aiAgentService.chat(
+                message, currentUser.getUserId(), conversationId);
+            
+            // 更新会话（增加消息数量，更新更新时间）
+            aiConversationService.incrementMessageCount(conversationId, 2); // 用户消息 + 助手回复
+            
+            // 转换推荐商品为 DTO
+            List<CommodityDTO> recommendedCommodities = convertCommoditiesToDTOWithBatchProfile(
+                chatResult.getRecommendedCommodities() != null ? 
+                    chatResult.getRecommendedCommodities() : Collections.emptyList());
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("reply", chatResult.getReply());
+            result.put("conversationId", conversationId);
+            result.put("recommendedCommodities", recommendedCommodities);
+            result.put("hasRecommendations", !recommendedCommodities.isEmpty());
+            
+            return Result.ok("AI Agent 回复成功", result);
+            
+        } catch (Exception e) {
+            log.error("AI Agent 对话失败: {}", e.getMessage(), e);
+            throw new BusinessException("AI Agent 对话失败: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter aiAgentChatStream(String message, String conversationId) {
+        try {
+            // 获取当前用户
+            Object userObj = SecurityUtils.requireCurrentUser();
+            User currentUser = (User) userObj;
+            
+            log.info("AI Agent 流式对话 - userId: {}, conversationId: {}, message: {}", 
+                currentUser.getUserId(), conversationId, message);
+            
+            // 如果没有 conversationId，生成一个新的
+            final String finalConversationId = (conversationId == null || conversationId.trim().isEmpty()) 
+                ? UUID.randomUUID().toString() 
+                : conversationId;
+            
+            // 创建或获取会话记录（如果不存在则创建）
+            String title = message.length() > 50 ? message.substring(0, 50) : message;
+            aiConversationService.createOrGetConversation(finalConversationId, currentUser.getUserId(), title);
+            
+            // 创建 SSE Emitter，设置超时时间为 60 秒
+            org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = 
+                new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(60000L);
+            
+            // 创建流式聊天回调
+            AIAgentService.StreamChatCallback callback = new AIAgentService.StreamChatCallback() {
+                @Override
+                public void onToken(String token) {
+                    try {
+                        // 发送 token 数据
+                        emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event()
+                            .data(token)
+                            .name("token"));
+                    } catch (Exception e) {
+                        log.error("发送流式 token 失败: {}", e.getMessage(), e);
+                        emitter.completeWithError(e);
+                    }
+                }
+                
+                @Override
+                public void onComplete(String fullReply, List<Commodity> recommendedCommodities) {
+                    try {
+                        // 转换推荐商品为 DTO
+                        List<CommodityDTO> recommendedCommoditiesDTO = convertCommoditiesToDTOWithBatchProfile(
+                            recommendedCommodities != null ? recommendedCommodities : Collections.emptyList());
+                        
+                        // 发送完成事件，包含完整回复和推荐商品
+                        Map<String, Object> completeData = new HashMap<>();
+                        completeData.put("reply", fullReply);
+                        completeData.put("conversationId", finalConversationId);
+                        completeData.put("recommendedCommodities", recommendedCommoditiesDTO);
+                        completeData.put("hasRecommendations", !recommendedCommoditiesDTO.isEmpty());
+                        
+                        emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event()
+                            .data(completeData)
+                            .name("complete"));
+                        
+                        emitter.complete();
+                        
+                        // 更新会话（增加消息数量，更新更新时间）
+                        aiConversationService.incrementMessageCount(finalConversationId, 2); // 用户消息 + 助手回复
+                    } catch (Exception e) {
+                        log.error("发送流式完成事件失败: {}", e.getMessage(), e);
+                        emitter.completeWithError(e);
+                    }
+                }
+                
+                @Override
+                public void onError(String error) {
+                    try {
+                        Map<String, Object> errorData = new HashMap<>();
+                        errorData.put("error", error);
+                        emitter.send(org.springframework.web.servlet.mvc.method.annotation.SseEmitter.event()
+                            .data(errorData)
+                            .name("error"));
+                        emitter.completeWithError(new RuntimeException(error));
+                    } catch (Exception e) {
+                        log.error("发送流式错误事件失败: {}", e.getMessage(), e);
+                        emitter.completeWithError(e);
+                    }
+                }
+            };
+            
+            // 异步调用流式聊天
+            CompletableFuture.runAsync(() -> {
+                try {
+                    aiAgentService.chatStream(message, currentUser.getUserId(), finalConversationId, callback);
+                } catch (Exception e) {
+                    log.error("AI Agent 流式对话异常: {}", e.getMessage(), e);
+                    callback.onError("AI 对话异常: " + e.getMessage());
+                }
+            });
+            
+            return emitter;
+            
+        } catch (Exception e) {
+            log.error("AI Agent 流式对话失败: {}", e.getMessage(), e);
+            throw new BusinessException("AI Agent 流式对话失败: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public Result getAIChatList(Integer limit) {
+        try {
+            // 获取当前用户
+            Object userObj = SecurityUtils.requireCurrentUser();
+            User currentUser = (User) userObj;
+            
+            log.info("获取用户AI聊天列表 - userId: {}, limit: {}", currentUser.getUserId(), limit);
+            
+            // 调用 ConversationVectorService 获取chat列表
+            List<ConversationVectorService.ChatInfo> chatList = 
+                conversationVectorService.getUserChatList(currentUser.getUserId(), limit);
+            
+            return Result.ok("获取聊天列表成功", chatList);
+            
+        } catch (Exception e) {
+            log.error("获取AI聊天列表失败: {}", e.getMessage(), e);
+            throw new BusinessException("获取AI聊天列表失败: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public Result getAIChatMessages(String conversationId, Integer limit) {
+        try {
+            // 获取当前用户
+            Object userObj = SecurityUtils.requireCurrentUser();
+            User currentUser = (User) userObj;
+            
+            log.info("获取chat消息列表 - userId: {}, conversationId: {}, limit: {}", 
+                currentUser.getUserId(), conversationId, limit);
+            
+            // 调用 ConversationVectorService 获取消息列表
+            List<ConversationVectorService.ConversationMessage> messages = 
+                conversationVectorService.getChatMessages(conversationId, currentUser.getUserId(), limit);
+            
+            // 为每条消息查询推荐的商品详情（如果有商品ID列表）
+            List<Map<String, Object>> enrichedMessages = messages.stream()
+                .map(msg -> {
+                    Map<String, Object> msgMap = new HashMap<>();
+                    msgMap.put("conversationId", msg.getConversationId());
+                    msgMap.put("messageId", msg.getMessageId());
+                    msgMap.put("content", msg.getContent());
+                    msgMap.put("role", msg.getRole());
+                    msgMap.put("similarity", msg.getSimilarity());
+                    msgMap.put("recommendedCommodityIds", msg.getRecommendedCommodityIds());
+                    msgMap.put("createdAt", msg.getCreatedAt()); // 创建时间
+                    
+                    // 如果有推荐的商品ID列表，查询商品详情
+                    if (msg.getRecommendedCommodityIds() != null && !msg.getRecommendedCommodityIds().isEmpty()) {
+                        try {
+                            List<Commodity> commodities = msg.getRecommendedCommodityIds().stream()
+                                .map(id -> commodityRepository.findById(id).orElse(null))
+                                .filter(Objects::nonNull)
+                                .collect(Collectors.toList());
+                            
+                            if (!commodities.isEmpty()) {
+                                List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
+                                msgMap.put("recommendedCommodities", commodityDTOs);
+                            } else {
+                                msgMap.put("recommendedCommodities", Collections.emptyList());
+                            }
+                        } catch (Exception e) {
+                            log.warn("查询推荐商品详情失败: messageId={}, error={}", msg.getMessageId(), e.getMessage());
+                            msgMap.put("recommendedCommodities", Collections.emptyList());
+                        }
+                    } else {
+                        msgMap.put("recommendedCommodities", Collections.emptyList());
+                    }
+                    
+                    return msgMap;
+                })
+                .collect(Collectors.toList());
+            
+            return Result.ok("获取消息列表成功", enrichedMessages);
+            
+        } catch (Exception e) {
+            log.error("获取chat消息列表失败: {}", e.getMessage(), e);
+            throw new BusinessException("获取chat消息列表失败: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public Result aiAgentSearch(String query, String conversationId) {
+        try {
+            // 获取当前用户
+            Object userObj = SecurityUtils.requireCurrentUser();
+            User currentUser = (User) userObj;
+            
+            log.info("AI Agent 智能搜索 - userId: {}, conversationId: {}, query: {}", 
+                currentUser.getUserId(), conversationId, query);
+            
+            // 调用 Agent 智能搜索
+            AIAgentService.AgentSearchResult agentResult = 
+                aiAgentService.intelligentSearch(query, currentUser.getUserId(), conversationId);
+            
+            // 转换为DTO
+            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(
+                agentResult.getCommodities() != null ? agentResult.getCommodities() : Collections.emptyList());
+            
+            // 构建结果
+            Map<String, Object> result = new HashMap<>();
+            result.put("commodities", commodityDTOs);
+            result.put("explanation", agentResult.getExplanation());
+            result.put("originalQuery", agentResult.getOriginalQuery());
+            result.put("enhancedQuery", agentResult.getEnhancedQuery());
+            result.put("total", commodityDTOs.size());
+            
+            return Result.ok("AI Agent 智能搜索成功", result);
+            
+        } catch (Exception e) {
+            log.error("AI Agent 智能搜索失败: {}", e.getMessage(), e);
+            throw new BusinessException("AI Agent 智能搜索失败: " + e.getMessage());
         }
     }
     
@@ -645,8 +930,10 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         }
         int safePage = page == null || page < 1 ? 1 : page;
         int safeSize = size == null || size < 1 ? 10 : size;
+        // 获取当前用户ID（如果已登录）
+        String userId = SecurityUtils.getCurrentUserId();
         Optional<CommoditySearchResult> searchResultOptional = commoditySearchService.search(
-                keyword, safePage, safeSize, location, minPrice, maxPrice, category, sortBy);
+                keyword, safePage, safeSize, location, minPrice, maxPrice, category, sortBy, userId);
         if (searchResultOptional.isEmpty()) {
             return null;
         }

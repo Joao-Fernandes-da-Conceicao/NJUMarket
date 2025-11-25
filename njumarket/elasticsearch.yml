@@ -1,3 +1,0 @@
-cluster.name: "docker-cluster"
-network.host: 0.0.0.0
-# 同时记入索引和日志，可按需调整

@@ -16,6 +16,7 @@ import OrderDetail from '../views/OrderDetail.vue'
 import Messages from '../views/Messages.vue'
 import SellerCommodities from '../views/SellerCommodities.vue'
 import AddressManagement from '../views/AddressManagement.vue'
+import AIChat from '../views/AIChat.vue'
 
 const routes = [
   {
@@ -124,6 +125,12 @@ const routes = [
     path: '/addresses',
     name: 'AddressManagement',
     component: AddressManagement,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/ai-chat',
+    name: 'AIChat',
+    component: AIChat,
     meta: { requiresAuth: true }
   }
 ]

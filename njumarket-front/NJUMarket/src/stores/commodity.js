@@ -99,6 +99,31 @@ export const useCommodityStore = defineStore('commodity', {
       }
     },
     
+    // AI语义搜索
+    async aiSearch(query, location = null) {
+      this.loading.list = true
+      try {
+        const response = await commodityAPI.aiSearch(query, location)
+        
+        if (response.success) {
+          this.commodities = response.data.commodities || []
+          this.pagination = {
+            current: response.data.current || 1,
+            size: response.data.size || 12,
+            total: response.data.total || 0,
+            pages: response.data.pages || 0
+          }
+        }
+        
+        return response
+      } catch (error) {
+        console.error('AI搜索失败:', error)
+        throw error
+      } finally {
+        this.loading.list = false
+      }
+    },
+    
     // 获取商品详情
     async getCommodityDetail(commodityId) {
       this.loading.detail = true

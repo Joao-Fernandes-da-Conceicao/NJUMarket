@@ -155,6 +155,56 @@ public class UserCommodityController {
         return commodityQueryService.getCommoditiesBatchStatus(commodityIds);
     }
     
+    // ========== AI Agent 功能 ==========
+    
+    @Operation(summary = "AI Agent 对话", description = "与 AI Agent 进行智能对话，支持多轮对话和上下文理解")
+    @PostMapping("/ai-agent/chat")
+    public Result aiAgentChat(
+            @io.swagger.v3.oas.annotations.Parameter(description = "用户消息", required = true) 
+            @RequestParam String message,
+            @io.swagger.v3.oas.annotations.Parameter(description = "对话ID（可选，用于多轮对话）") 
+            @RequestParam(required = false) String conversationId) {
+        return commodityQueryService.aiAgentChat(message, conversationId);
+    }
+    
+    @Operation(summary = "AI Agent 流式对话", description = "与 AI Agent 进行流式对话，实时返回回复内容")
+    @GetMapping(value = "/ai-agent/chat-stream", produces = "text/event-stream")
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter aiAgentChatStream(
+            @io.swagger.v3.oas.annotations.Parameter(description = "用户消息", required = true) 
+            @RequestParam String message,
+            @io.swagger.v3.oas.annotations.Parameter(description = "对话ID（可选，用于多轮对话）") 
+            @RequestParam(required = false) String conversationId) {
+        return commodityQueryService.aiAgentChatStream(message, conversationId);
+    }
+    
+    @Operation(summary = "AI Agent 智能搜索", description = "使用 AI Agent 进行智能搜索，返回搜索结果和 AI 解释")
+    @GetMapping("/ai-agent/search")
+    public Result aiAgentSearch(
+            @io.swagger.v3.oas.annotations.Parameter(description = "搜索查询", required = true) 
+            @RequestParam String query,
+            @io.swagger.v3.oas.annotations.Parameter(description = "对话ID（可选，用于上下文理解）") 
+            @RequestParam(required = false) String conversationId) {
+        return commodityQueryService.aiAgentSearch(query, conversationId);
+    }
+    
+    @Operation(summary = "获取用户的所有AI聊天列表", description = "获取用户的所有AI聊天会话列表，按最后消息时间倒序")
+    @GetMapping("/ai-agent/chats")
+    public Result getAIChatList(
+            @io.swagger.v3.oas.annotations.Parameter(description = "返回数量限制", required = false) 
+            @RequestParam(defaultValue = "50") Integer limit) {
+        return commodityQueryService.getAIChatList(limit);
+    }
+    
+    @Operation(summary = "获取指定chat的消息列表", description = "获取指定对话ID的所有消息，按时间正序")
+    @GetMapping("/ai-agent/chats/{conversationId}/messages")
+    public Result getAIChatMessages(
+            @io.swagger.v3.oas.annotations.Parameter(description = "对话ID", required = true) 
+            @PathVariable String conversationId,
+            @io.swagger.v3.oas.annotations.Parameter(description = "返回数量限制", required = false) 
+            @RequestParam(defaultValue = "100") Integer limit) {
+        return commodityQueryService.getAIChatMessages(conversationId, limit);
+    }
+    
     // ========== 内部接口（用于微服务间调用） ==========
     
     /**

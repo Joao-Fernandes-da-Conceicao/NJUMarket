@@ -20,6 +20,7 @@
 		<java.version>17</java.version>
 		<spring-cloud.version>2023.0.3</spring-cloud.version>
 		<resilience4j.version>2.1.0</resilience4j.version>
+		<langchain4j.version>0.35.0</langchain4j.version>
 		<!-- Micrometer Tracing 版本由 Spring Boot 3.2.0 管理，不需要手动指定 -->
 		<!-- <micrometer-tracing.version>1.2.1</micrometer-tracing.version> -->
 		<!-- <zipkin-reporter.version>3.3.0</zipkin-reporter.version> -->
@@ -41,13 +42,29 @@
 
 	<dependencyManagement>
 		<dependencies>
-			<dependency>
-				<groupId>org.springframework.cloud</groupId>
-				<artifactId>spring-cloud-dependencies</artifactId>
-				<version>${spring-cloud.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-dependencies</artifactId>
+			<version>${spring-cloud.version}</version>
+			<type>pom</type>
+			<scope>import</scope>
+		</dependency>
+		<!-- LangChain4j 版本管理 -->
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-open-ai</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-spring-boot-starter</artifactId>
+			<version>${langchain4j.version}</version>
+		</dependency>
 			<!-- Resilience4j 版本管理 -->
 			<dependency>
 				<groupId>io.github.resilience4j</groupId>
@@ -84,6 +101,24 @@
 			-->
 		</dependencies>
 	</dependencyManagement>
+
+	<repositories>
+		<repository>
+			<id>central</id>
+			<name>Maven Central</name>
+			<url>https://repo1.maven.org/maven2</url>
+			<releases><enabled>true</enabled></releases>
+			<snapshots><enabled>false</enabled></snapshots>
+		</repository>
+		<!-- Spring 官方公开仓库，免鉴权 -->
+		<repository>
+			<id>spring-maven-public</id>
+			<name>Spring Maven Public</name>
+			<url>https://repo.spring.io/maven-public</url>
+			<releases><enabled>true</enabled></releases>
+			<snapshots><enabled>false</enabled></snapshots>
+		</repository>
+	</repositories>
 
 	<build>
 		<pluginManagement>

@@ -70,13 +70,25 @@ public class CommoditySearchService {
                                                   Double maxPrice,
                                                   String category,
                                                   String sortBy) {
+        return search(keyword, page, size, location, minPrice, maxPrice, category, sortBy, null);
+    }
+
+    public Optional<CommoditySearchResult> search(String keyword,
+                                                  int page,
+                                                  int size,
+                                                  String location,
+                                                  Double minPrice,
+                                                  Double maxPrice,
+                                                  String category,
+                                                  String sortBy,
+                                                  String userId) {
         if (!isEnabled()) {
             return Optional.empty();
         }
 
         try {
             Pageable pageable = PageRequest.of(Math.max(page - 1, 0), Math.max(size, 1), resolveSort(sortBy));
-            NativeQueryBuilder queryBuilder = buildQueryBuilder(keyword, location, minPrice, maxPrice, category, pageable);
+            NativeQueryBuilder queryBuilder = buildQueryBuilder(keyword, location, minPrice, maxPrice, category, pageable, userId);
             NativeQuery query = queryBuilder.build();
 
             if (log.isDebugEnabled()) {
@@ -314,7 +326,17 @@ public class CommoditySearchService {
                                                  Double maxPrice,
                                                  String category,
                                                  Pageable pageable) {
-        Query query = Query.of(q -> q.bool(configureBoolQuery(keyword, location, minPrice, maxPrice, category)));
+        return buildQueryBuilder(keyword, location, minPrice, maxPrice, category, pageable, null);
+    }
+
+    private NativeQueryBuilder buildQueryBuilder(String keyword,
+                                                 String location,
+                                                 Double minPrice,
+                                                 Double maxPrice,
+                                                 String category,
+                                                 Pageable pageable,
+                                                 String userId) {
+        Query query = Query.of(q -> q.bool(configureBoolQuery(keyword, location, minPrice, maxPrice, category, userId)));
         return NativeQuery.builder()
                 .withQuery(query)
                 .withPageable(pageable);
@@ -325,6 +347,15 @@ public class CommoditySearchService {
                                          Double minPrice,
                                          Double maxPrice,
                                          String category) {
+        return configureBoolQuery(keyword, location, minPrice, maxPrice, category, null);
+    }
+
+    private BoolQuery configureBoolQuery(String keyword,
+                                         String location,
+                                         Double minPrice,
+                                         Double maxPrice,
+                                         String category,
+                                         String userId) {
         return BoolQuery.of(bool -> {
             if (StringUtils.hasText(keyword)) {
                 bool.must(m -> m.multiMatch(mm -> mm
@@ -337,6 +368,14 @@ public class CommoditySearchService {
             bool.filter(f -> f.term(t -> t.field("commodityStatus").value(STATUS_ON_SHELF)));
             bool.filter(f -> f.term(t -> t.field("buyerVisibility").value(VISIBILITY_PUBLIC)));
             bool.filter(f -> f.term(t -> t.field("sellerVisibility").value(VISIBILITY_PUBLIC)));
+            
+            // 过滤掉库存为0的商品
+            bool.filter(f -> f.range(r -> r.field("stock").gt(JsonData.of(0))));
+
+            // 如果提供了userId，过滤掉自己的商品
+            if (StringUtils.hasText(userId)) {
+                bool.mustNot(mn -> mn.term(t -> t.field("sellerId").value(userId)));
+            }
 
             if (StringUtils.hasText(category)) {
                 bool.filter(f -> f.term(t -> t.field("category").value(category)));

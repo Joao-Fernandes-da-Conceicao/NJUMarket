@@ -20,6 +20,7 @@ import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.commodity.utils.CommodityValidator;
 import com.njumarket.commodity.search.CommoditySearchService;
+import com.njumarket.commodity.vector.CommodityVectorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -56,6 +57,7 @@ public class CommodityServiceImpl implements CommodityService {
     private final ObjectMapper objectMapper;
     private final CacheUtil cacheUtil;
     private final CommoditySearchService commoditySearchService;
+    private final CommodityVectorService commodityVectorService;
     
     // ✅ 统一使用GMT+8时区（中国大陆时区）
     private static final ZoneId GMT_PLUS_8_ZONE = ZoneId.of("Asia/Shanghai");
@@ -103,6 +105,8 @@ public class CommodityServiceImpl implements CommodityService {
         Commodity savedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(savedCommodity);
         appendCommodityToLatestCaches(savedCommodity);
+        // 异步生成商品向量
+        commodityVectorService.generateAndStoreVector(savedCommodity);
         
         return Result.ok("商品发布成功", convertToDTO(savedCommodity));
     }
@@ -138,6 +142,8 @@ public class CommodityServiceImpl implements CommodityService {
         Commodity savedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(savedCommodity);
         appendCommodityToLatestCaches(savedCommodity);
+        // 异步生成商品向量
+        commodityVectorService.generateAndStoreVector(savedCommodity);
         
         return Result.ok("草稿商品创建成功", convertToDTO(savedCommodity));
     }
@@ -185,6 +191,8 @@ public class CommodityServiceImpl implements CommodityService {
         // 保存更新
         Commodity updatedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(updatedCommodity);
+        // 异步更新商品向量
+        commodityVectorService.updateVector(updatedCommodity);
         
         // ✅ 注意：商品更新不发送事件到通知服务
         // 原因：库存变化通过订单事件体现（库存减少=下单，库存增加=退货/取消订单）
@@ -215,6 +223,8 @@ public class CommodityServiceImpl implements CommodityService {
         // 删除商品
         commodityRepository.delete(commodity);
         removeCommodityFromSearchIndex(commodityId);
+        // 删除商品向量
+        commodityVectorService.deleteVector(commodityId);
         
         // ✅ 清除商品相关缓存
         evictCommodityCache(commodityId);

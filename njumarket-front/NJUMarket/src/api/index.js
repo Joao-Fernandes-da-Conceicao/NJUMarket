@@ -188,6 +188,10 @@ export const commodityAPI = {
   // 搜索商品
   search: (params) => api.get('/public/commodity/search', { params }),
   
+  // AI语义搜索
+  aiSearch: (query, location) => 
+    api.get('/public/commodity/ai-search', { params: { query, location } }),
+  
   // 获取商品详情
   getDetail: (id) => api.get(`/public/commodity/${id}`),
   
@@ -281,7 +285,178 @@ export const commodityAPI = {
   
   // ✅ 批量查询商品状态（用于聊天界面，轻量级查询）
   getBatchStatus: (commodityIds) => 
-    api.post('/user/commodity/batch-status', commodityIds)
+    api.post('/user/commodity/batch-status', commodityIds),
+  
+  // ✅ AI Agent 对话（超时时间 30 秒，因为 AI Agent 处理较慢）
+  aiAgentChat: (message, conversationId) => 
+    api.post('/user/commodity/ai-agent/chat', null, { 
+      params: { message, conversationId },
+      timeout: 60000 // 60 秒超时
+    }),
+  // ✅ AI Agent 流式对话（使用 SSE，支持认证）
+  aiAgentChatStream: (message, conversationId, onToken, onComplete, onError) => {
+    // 使用 fetch API 接收 SSE 流式数据（支持自定义请求头，包含认证信息）
+    const params = new URLSearchParams({ message });
+    if (conversationId) {
+      params.append('conversationId', conversationId);
+    }
+    
+    // 获取 baseURL 和 token
+    const baseURL = api.defaults.baseURL || '';
+    const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const url = `${baseURL}/user/commodity/ai-agent/chat-stream?${params.toString()}`;
+    
+    // 构建请求头，包含认证信息
+    const headers = {
+      'Accept': 'text/event-stream',
+      'Cache-Control': 'no-cache'
+    };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+    
+    // 使用 fetch 接收 SSE 流
+    let abortController = new AbortController();
+    let isClosed = false;
+    
+    fetch(url, {
+      method: 'GET',
+      headers: headers,
+      signal: abortController.signal
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      const readStream = () => {
+        reader.read().then(({ done, value }) => {
+          if (done) {
+            if (!isClosed) {
+              isClosed = true;
+              if (onError) {
+                onError('连接已关闭');
+              }
+            }
+            return;
+          }
+          
+          // 解码数据
+          buffer += decoder.decode(value, { stream: true });
+          
+          // 处理 SSE 格式的数据
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // 保留最后一行（可能不完整）
+          
+          let eventType = 'message';
+          let eventData = '';
+          
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.substring(6).trim();
+            } else if (line.startsWith('data:')) {
+              eventData = line.substring(5).trim();
+            } else if (line === '') {
+              // 空行表示一个事件结束
+              if (eventData) {
+                if (eventType === 'token') {
+                  if (onToken) {
+                    onToken(eventData);
+                  }
+                } else if (eventType === 'complete') {
+                  try {
+                    const data = JSON.parse(eventData);
+                    if (onComplete) {
+                      onComplete(data);
+                    }
+                    isClosed = true;
+                    return;
+                  } catch (e) {
+                    console.error('解析完成事件失败:', e);
+                    if (onError) {
+                      onError('解析完成事件失败');
+                    }
+                    isClosed = true;
+                    return;
+                  }
+                } else if (eventType === 'error') {
+                  try {
+                    const data = JSON.parse(eventData);
+                    if (onError) {
+                      onError(data.error || '流式对话失败');
+                    }
+                  } catch (e) {
+                    if (onError) {
+                      onError('流式对话失败');
+                    }
+                  }
+                  isClosed = true;
+                  return;
+                }
+              }
+              // 重置事件数据
+              eventType = 'message';
+              eventData = '';
+            }
+          }
+          
+          // 继续读取
+          readStream();
+        }).catch(error => {
+          if (!isClosed && error.name !== 'AbortError') {
+            console.error('读取流失败:', error);
+            if (onError) {
+              onError('连接失败，请稍后重试');
+            }
+            isClosed = true;
+          }
+        });
+      };
+      
+      readStream();
+    })
+    .catch(error => {
+      if (!isClosed && error.name !== 'AbortError') {
+        console.error('SSE 连接失败:', error);
+        if (onError) {
+          onError('连接失败，请稍后重试');
+        }
+        isClosed = true;
+      }
+    });
+    
+    // 返回一个可以关闭的对象
+    return {
+      close: () => {
+        if (!isClosed) {
+          isClosed = true;
+          abortController.abort();
+        }
+      }
+    };
+  },
+  // ✅ AI Agent 智能搜索（超时时间 30 秒，因为 AI Agent 处理较慢）
+  aiAgentSearch: (query, conversationId) =>
+    api.get('/user/commodity/ai-agent/search', { 
+      params: { query, conversationId },
+      timeout: 60000 // 60 秒超时
+    }),
+  // ✅ 获取用户的所有AI聊天列表
+  getAIChatList: (limit = 50) =>
+    api.get('/user/commodity/ai-agent/chats', { 
+      params: { limit },
+      timeout: 10000
+    }),
+  // ✅ 获取指定chat的消息列表
+  getAIChatMessages: (conversationId, limit = 100) =>
+    api.get(`/user/commodity/ai-agent/chats/${conversationId}/messages`, { 
+      params: { limit },
+      timeout: 10000
+    })
 }
 
 // 订单相关API

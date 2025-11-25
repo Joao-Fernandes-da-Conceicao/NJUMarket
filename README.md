@@ -1,28 +1,23 @@
 # 南大集市 NJUMarket
 
-一个基于微服务架构的校园二手交易平台。
+一个基于微服务架构 + 语义搜索 + LangChain4j AI Agent 的校园二手交易平台。
 
 ## 📋 项目简介
 
 NJUMarket 是一个采用微服务架构的校园二手交易平台，支持商品发布、订单管理、实时消息等功能。
 
-**v2.1版本特点**：
-- ✅ **完整功能**：用户端和管理端功能全部实现
-- ✅ **微服务架构**：7个微服务，服务注册与发现、API网关、服务间通信全部完成
-- ✅ **数据一致性**：消息软删除时自动更新会话最新消息（用户端和管理端均已实现）
-- ✅ **管理端功能**：用户管理、商品管理、订单管理、会话管理、消息管理、管理员管理等全部功能
-- ✅ **代码质量**：反射滥用问题已解决，使用Spring Security标准注解，符合开发规范
-- ✅ **性能优化**：广泛使用批量查询，防止N+1查询问题，Feign调用次数为常数次
-- ✅ **Docker容器化**：一键启动所有服务，简化部署和调试流程（v2.1.0）
-- ✅ **监控与文档**：Spring Boot Actuator监控、Swagger API文档（v2.1.0）
-- ✅ **熔断降级**：Resilience4j熔断降级，防止服务雪崩（v2.1.1）
-- ✅ **配置中心**：Spring Cloud Config Server集中管理配置，支持环境隔离（v2.1.1）
+**v3.1.1 亮点**：
+- ✅ **LangChain4j AI Agent**：Cursor-like 对话、Function Calling 搜索工具、自动推荐商品
+- ✅ **语义搜索**：商品、用户画像、对话均向量化（pgvector），支持自然语言检索
+- ✅ **统一过滤**：ES + AI 搜索统一过滤库存、可见性、卖家身份，保证结果真实可售
+- ✅ **库存一致性**：Redis 分布式锁 + 数据库悲观锁 + 条件更新，多层保障
+- ✅ **快速部署**：Docker Compose 一键拉起所有服务，附详细运维手册
+- ✅ **监控治理**：Actuator、Zipkin、Prometheus/Grafana、Resilience4j 全覆盖
 
-- **架构**: 微服务架构（Spring Cloud）
-- **后端**: Spring Boot 3.2.0 + Spring Cloud 2023.0.3
-- **前端**: Vue 3 + Element Plus
-- **数据库**: MySQL 8.0+
-- **缓存**: Redis 6.0+
+- **架构**: Spring Cloud 微服务 + 向量检索 + AI Agent
+- **后端**: Spring Boot 3.2.x、Spring Cloud 2023.0.x、LangChain4j 0.35
+- **前端**: Vue 3 + Vite + Element Plus
+- **数据库**: PostgreSQL 16 + pgvector、Redis 7、Elasticsearch 8.13（IK 分词器）
 
 ## 🚀 快速开始
 
@@ -52,7 +47,12 @@ make up
 - API Gateway: http://localhost:8080
 - 健康检查: http://localhost:8080/actuator/health
 
-**详细文档**：查看 [DOCKER_QUICKSTART.md](./njumarket/DOCKER_QUICKSTART.md) 或 [docker/README.md](./njumarket/docker/README.md)
+> ⚠️ **首次启动后请进入容器完成扩展安装**  
+> - Elasticsearch：`bin/elasticsearch-plugin install https://get.infini.cloud/elasticsearch/analysis-ik/8.13.4`  
+> - PostgreSQL：`apt install -y postgresql-16-pgvector && CREATE EXTENSION vector;`  
+> 详细步骤见 [docker/README.md](./njumarket/docker/README.md#额外准备elasticsearch-ik-插件--postgresql-pgvector)
+
+**详细文档**：查看 [DOCKER_QUICKSTART.md](./njumarket/DOCKER_QUICKSTART.md) 和 [docker/README.md](./njumarket/docker/README.md)
 
 ---
 
@@ -62,7 +62,8 @@ make up
 
 - **JDK**: 17+
 - **Maven**: 3.6+
-- **MySQL**: 8.0+
+- **PostgreSQL**: 16（需启用 pgvector）
+- **Elasticsearch**: 8.13（需安装 IK 插件）
 - **Redis**: 6.0+
 - **IDE**: IntelliJ IDEA / VS Code（推荐）
 
@@ -77,25 +78,32 @@ cd NJUMarket/njumarket
 
 #### 2. 配置数据库
 
-**创建数据库**：
-```sql
-CREATE DATABASE nju_market CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
+1. **创建数据库 & 启用 pgvector**
+   ```sql
+   CREATE DATABASE njumarket;
+   \c njumarket
+   CREATE SCHEMA nju_market;
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
 
-**初始化数据库结构**：
-```bash
-mysql -u root -p nju_market < database/schema.sql
-```
+2. **导入结构**
+   ```bash
+   psql -U postgres -d njumarket -f database/schema.sql
+   ```
 
-**配置数据库连接**：
-修改各服务的 `application.yml` 中的数据库配置：
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/nju_market?useSSL=false&useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: your_username
-    password: your_password
-```
+3. **配置数据库连接**
+   修改各服务 `application.yml`：
+   ```yaml
+   spring:
+     datasource:
+       url: jdbc:postgresql://localhost:5432/njumarket?currentSchema=nju_market
+       username: postgres
+       password: your_password
+   ```
+
+4. **本地 Elasticsearch**  
+   启动 8.13.x 版本，并安装 IK 插件：  
+   `bin/elasticsearch-plugin install https://get.infini.cloud/elasticsearch/analysis-ik/8.13.4`
 
 #### 3. 配置Redis
 
@@ -200,10 +208,12 @@ njumarket/
 ├── DOCKER_QUICKSTART.md            # Docker 快速启动指南
 │
 ├── docs/                          # 项目文档
-│   ├── PROJECT_DOCUMENTATION_V2.0.md  # 2.0版本总览
-│   ├── PROJECT_DOCUMENTATION_V2.0.2.md  # v2.0.2详细文档（2.0阶段完成）
-│   ├── PROJECT_DOCUMENTATION_V2.1.0.md  # v2.1.0详细文档（Actuator、Docker、Swagger）
-│   └── BATCH_QUERY_ANALYSIS.md    # 批量查询分析报告
+│   ├── PROJECT_DOCUMENTATION_V3.1.1.md  # 最新版本总览
+│   ├── PROJECT_DOCUMENTATION_V3.1.0.md  # LangChain4j / 用户画像 / AI Agent
+│   ├── PROJECT_DOCUMENTATION_V3.0.0.md  # Spring AI → LangChain4j 迁移
+│   ├── PROJECT_DOCUMENTATION_V2.x*.md   # 历史版本档案
+│   ├── PROJECT_SUMMARY_INTERNSHIP.md    # 实习向总结（偏后端）
+│   └── BATCH_QUERY_ANALYSIS.md          # 批量查询分析报告
 │
 └── scripts/                        # 测试脚本
     ├── batch_create_users_simple.py  # 批量创建用户
@@ -242,8 +252,9 @@ export DB_PASSWORD=your_password
 
 ### 数据库初始化
 
-- `database/schema.sql` 仅包含数据库结构，**不包含测试数据**
-- 测试用户可通过后端注册API创建
+- `database/schema.sql` 仅包含结构（PostgreSQL + pgvector），**不含测试数据**
+- 需先执行 `CREATE DATABASE njumarket;` 和 `CREATE EXTENSION vector;`
+- 测试用户可通过注册接口或脚本创建
 - 管理员账号需要手动创建（参考 `database/README.md`）
 
 ### 测试数据
@@ -256,9 +267,9 @@ pip install -r requirements.txt
 python batch_create_users_simple.py
 ```
 
-### v2.0版本管理端功能
+### 管理端功能（v2.x 完整实现）
 
-管理端功能已完整实现，包括：
+管理后台覆盖以下能力：
 - ✅ **用户管理**：列表、详情、状态管理、信息编辑、删除
 - ✅ **商品管理**：列表、详情、状态管理、信息编辑、删除（支持搜索卖家昵称）
 - ✅ **订单管理**：列表、详情、状态修改、信息编辑、删除（支持搜索买家/卖家昵称）
@@ -274,10 +285,12 @@ python batch_create_users_simple.py
 ## 📚 相关文档
 
 ### 项目文档
-- **v2.0总览**: `docs/PROJECT_DOCUMENTATION_V2.0.md` - 2.0版本总览和架构设计
-- **v2.0.2文档**: `docs/PROJECT_DOCUMENTATION_V2.0.2.md` - v2.0.2详细文档（反射优化、Spring Security标准注解）✅ **2.0阶段已完成**
-- **v2.1.0文档**: `docs/PROJECT_DOCUMENTATION_V2.1.0.md` - v2.1.0详细文档（Actuator监控、Docker容器化、Swagger API文档）✅ **2.1.0阶段已完成**
-- **批量查询分析**: `docs/BATCH_QUERY_ANALYSIS.md` - 批量查询使用情况分析报告
+- `docs/PROJECT_DOCUMENTATION_V3.1.1.md`：当前版本综述（AI Agent、语义搜索）
+- `docs/PROJECT_DOCUMENTATION_V3.1.0.md`：LangChain4j 迁移、用户画像生成
+- `docs/PROJECT_DOCUMENTATION_V3.0.0.md`：AI 语义搜索初始版本
+- `docs/PROJECT_SUMMARY_INTERNSHIP.md`：面向实习/面试的项目总结
+- 历史版本可查阅 `docs/PROJECT_DOCUMENTATION_V2.*.md`
+- `docs/BATCH_QUERY_ANALYSIS.md`：批量查询优化分析
 
 ### Docker 文档
 - **Docker 快速启动**: `DOCKER_QUICKSTART.md` - Docker 快速启动指南
@@ -289,26 +302,13 @@ python batch_create_users_simple.py
 
 ## 📊 版本信息
 
-**当前版本**: v2.1.0 ✅ **2.1.0阶段已完成**
+**当前版本**: v3.1.1 ✅ 已完成最初规划功能
 
-**版本历史**：
-- **v2.0.0** (2024年): 从单体到微服务的架构迁移完成
-- **v2.0.1** (2025-11-09): DTO验证优化、异常处理完善、关键Bug修复
-- **v2.0.2** (2025-11-10): 反射滥用问题解决、使用Spring Security标准注解 ✅ **2.0阶段已完成**
-- **v2.1.0** (2025-11-11): Actuator监控、Docker容器化、Swagger API文档 ✅ **2.1.0阶段已完成**
-
-**2.0阶段核心成就**：
-- ✅ 微服务架构完整实现（7个微服务）
-- ✅ 用户端和管理端功能全部完成
-- ✅ 代码质量提升（DTO验证、异常处理、反射优化）
-- ✅ 符合开发规范（使用Spring Security标准注解）
-- ✅ 性能优化（批量查询，防止N+1问题）
-
-**2.1.0阶段核心成就**：
-- ✅ Spring Boot Actuator 监控集成（健康检查、指标收集）
-- ✅ Docker 容器化完成（一键启动所有服务）
-- ✅ Swagger 3 API 文档集成
-- ✅ 文档整理优化（Docker 文档合并，便于上手）
+**版本里程碑（摘选）**：
+- **v3.1.1 (2025)**：搜索过滤统一、ThreadLocal 清理、部署文档升级
+- **v3.1.0 (2025)**：LangChain4j AI Agent、用户画像、对话向量检索
+- **v3.0.0 (2025)**：语义搜索、Spring AI → LangChain4j 迁移
+- **v2.x 系列 (2024-2025)**：微服务拆分、管理端完成、容器化、监控治理
 
 ## ⚠️ 常见问题
 
@@ -318,12 +318,12 @@ python batch_create_users_simple.py
 - 配置 Docker 镜像加速器（参考 `docker/README.md`）
 - 或手动拉取镜像：`docker pull maven:3.9-eclipse-temurin-17`
 
-**端口被占用**：
-- 停止本地 MySQL/Redis 服务：`net stop MySQL80`
+- **端口被占用**：
+- 停止本地 PostgreSQL/Redis 服务：`net stop postgresql-x64-16`
 - 或修改 `docker-compose.yml` 中的端口映射
 
-**MySQL 初始化失败**：
-- 手动导入数据库：`Get-Content database\schema.sql -Encoding UTF8 | docker exec -i njumarket-mysql mysql -uroot -pHqz20050316 nju_market`
+**PostgreSQL 初始化失败**：
+- 手动导入结构：`docker-compose exec -T postgres psql -U postgres -d njumarket < database/schema.sql`
 
 **详细故障排查**：参考 [docker/README.md](./njumarket/docker/README.md) 的"故障排查"章节
 
@@ -331,10 +331,11 @@ python batch_create_users_simple.py
 
 **服务无法启动**：
 
-1. **检查端口占用**：确保8761, 8080, 8091-8097未被占用
-2. **检查数据库连接**：确认MySQL服务运行正常，数据库已创建
-3. **检查Redis连接**：确认Redis服务运行正常
-4. **检查JDK版本**：确保使用JDK 17+
+1. **检查端口占用**：确保 8761、8080、8091-8097 未被占用
+2. **检查 PostgreSQL**：确认服务运行、pgvector 已启用、数据库/Schema 已创建
+3. **检查 Elasticsearch**：确认 9200 端口可用且 IK 插件已安装
+4. **检查 Redis**：确认 6379 端口可访问
+5. **检查 JDK**：确保使用 JDK 17+
 
 ### 服务无法注册到Eureka
 
@@ -352,9 +353,9 @@ python batch_create_users_simple.py
 
 ### Docker 开发模式（推荐）
 
-**混合模式**：只启动基础设施（MySQL、Redis），本地运行服务
+**混合模式**：只启动基础设施（PostgreSQL、Redis、Elasticsearch），本地运行服务
 ```bash
-docker-compose up -d mysql redis
+docker-compose up -d postgres redis elasticsearch
 ```
 然后修改本地 `application.yml` 中的连接地址为 `localhost`，在 IDE 中运行服务。
 

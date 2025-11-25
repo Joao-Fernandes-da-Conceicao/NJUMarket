@@ -18,6 +18,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
+import java.io.IOException;
 import java.util.stream.Collectors;
 
 /**
@@ -237,6 +238,30 @@ public class GlobalExceptionHandler {
     public Result handleNumberFormatException(NumberFormatException e) {
         log.warn("数字格式异常: {}", e.getMessage());
         return Result.fail("数字格式错误: " + e.getMessage());
+    }
+
+    /**
+     * 处理 IO 异常（broken pipe 等）
+     * 当客户端提前关闭连接时，Spring MVC 会抛出 IOException
+     * 这种情况不需要记录错误日志，只需要静默处理
+     * 此处理器应该在 Exception 处理器之前，优先处理 IO 异常
+     */
+    @ExceptionHandler(IOException.class)
+    public Result handleIOException(IOException e) {
+        // 检查是否是 broken pipe 异常
+        String errorMessage = e.getMessage();
+        if (errorMessage != null && 
+            (errorMessage.contains("Broken pipe") || 
+             errorMessage.contains("Connection reset by peer") ||
+             errorMessage.contains("Connection closed"))) {
+            // 客户端已关闭连接，静默处理，不记录错误日志
+            log.debug("客户端连接已关闭: {}", errorMessage);
+            return null; // 返回 null，Spring MVC 会跳过响应写入
+        }
+        
+        // 其他 IO 异常正常记录
+        log.error("IO异常: {}", errorMessage, e);
+        return Result.fail("网络错误，请稍后重试");
     }
 
     /**

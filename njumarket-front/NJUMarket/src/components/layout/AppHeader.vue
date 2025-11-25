@@ -67,6 +67,15 @@
               消息
             </UnreadBadge>
           </router-link>
+          <router-link 
+            v-if="isLoggedIn" 
+            to="/ai-chat" 
+            class="nav-link" 
+            :class="{ active: $route.path.startsWith('/ai-chat') }"
+          >
+            <el-icon><ChatDotRound /></el-icon>
+            AI 助手
+          </router-link>
         </nav>
         
         <!-- 用户操作区（桌面端） -->
@@ -175,6 +184,10 @@
                 <span>消息</span>
                 <UnreadBadge :count="unreadCount" type="number" :max="99" />
               </div>
+              <div class="mobile-menu-item" @click="handleMobileItem('ai-chat')">
+                <el-icon><ChatDotRound /></el-icon>
+                <span>AI 助手</span>
+              </div>
               <div class="mobile-menu-item" @click="handleMobileItem('profile')">
                 <el-icon><User /></el-icon>
                 <span>个人资料</span>
@@ -212,7 +225,7 @@ import { useOrderStore } from '../../stores/order'
 import { createSafeUserState } from '../../utils/userUtils'
 import { getAvatarUrl } from '../../utils/imageUtils'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, User, ShoppingCart, Box, Plus, SwitchButton, Close, HomeFilled, Goods, Message } from '@element-plus/icons-vue'
+import { ArrowDown, User, ShoppingCart, Box, Plus, SwitchButton, Close, HomeFilled, Goods, Message, ChatDotRound } from '@element-plus/icons-vue'
 import UnifiedButton from '../common/UnifiedButton.vue'
 import UnreadBadge from '../common/UnreadBadge.vue'
 
@@ -391,6 +404,9 @@ const handleMobileItem = (item) => {
           break
         case 'messages':
           router.push('/messages')
+          break
+        case 'ai-chat':
+          router.push('/ai-chat')
           break
         case 'profile':
           router.push('/profile')

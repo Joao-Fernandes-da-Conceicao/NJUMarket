@@ -37,6 +37,7 @@ public class UserProfileServiceImpl implements UserProfileService {
     private final UserRepository userRepository;
     private final ImageClient imageClient;
     private final CacheUtil cacheUtil;
+    private final com.njumarket.auth.vector.UserProfileVectorService userProfileVectorService;
 
     @Override
     public Result getUserProfile(String userId) {
@@ -136,6 +137,11 @@ public class UserProfileServiceImpl implements UserProfileService {
             log.info("已删除用户档案缓存（Cache Aside模式）: userId={}, reason=档案信息变更, cacheKeys=[{}, {}]", userId, cacheKey, detailCacheKey);
         }
         
+        // ✅ 异步更新用户画像向量（用户档案变更后需要重新向量化）
+        if (userProfileVectorService != null) {
+            userProfileVectorService.updateUserProfileVector(userId);
+        }
+        
         return Result.ok(convertToDTO(profile));
     }
 
@@ -171,6 +177,12 @@ public class UserProfileServiceImpl implements UserProfileService {
         profile.setVipLevel("NORMAL");
 
         UserProfile savedProfile = userProfileRepository.save(profile);
+        
+        // ✅ 异步生成用户画像向量（新用户档案创建后需要向量化）
+        if (userProfileVectorService != null) {
+            userProfileVectorService.generateAndStoreUserProfileVector(userId);
+        }
+        
         return Result.ok(convertToDTO(savedProfile));
     }
 

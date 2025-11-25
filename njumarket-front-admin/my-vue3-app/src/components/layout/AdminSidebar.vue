@@ -42,7 +42,9 @@ export default {
         // ✅ 管理员管理：只对system权限显示
         { path: '/admins', label: '管理员管理', requiresSystem: true },
         // ✅ Elasticsearch 管理：只对system权限显示
-        { path: '/elasticsearch', label: 'ES 索引管理', requiresSystem: true }
+        { path: '/elasticsearch', label: 'ES 索引管理', requiresSystem: true },
+        // ✅ AI 引擎管理：只对system权限显示
+        { path: '/ai-engine', label: 'AI 引擎管理', requiresSystem: true }
       ]
     }
   },

@@ -88,6 +88,45 @@ public interface CommodityQueryService {
      */
     Result aiSearch(String query, String location);
     
+    /**
+     * AI Agent 对话
+     * @param message 用户消息
+     * @param conversationId 对话ID（可选，用于多轮对话）
+     * @return Agent 回复
+     */
+    Result aiAgentChat(String message, String conversationId);
+    
+    /**
+     * AI Agent 流式对话
+     * @param message 用户消息
+     * @param conversationId 对话ID（可选）
+     * @return SSE 流式响应
+     */
+    org.springframework.web.servlet.mvc.method.annotation.SseEmitter aiAgentChatStream(String message, String conversationId);
+    
+    /**
+     * AI Agent 智能搜索（带解释）
+     * @param query 搜索查询
+     * @param conversationId 对话ID（可选）
+     * @return 搜索结果和解释
+     */
+    Result aiAgentSearch(String query, String conversationId);
+    
+    /**
+     * 获取用户的所有AI聊天列表
+     * @param limit 返回数量限制
+     * @return 聊天列表
+     */
+    Result getAIChatList(Integer limit);
+    
+    /**
+     * 获取指定chat的消息列表
+     * @param conversationId 对话ID
+     * @param limit 返回数量限制
+     * @return 消息列表
+     */
+    Result getAIChatMessages(String conversationId, Integer limit);
+    
     // ========== 用户相关查询 ==========
     
     /**
