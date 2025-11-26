@@ -19,6 +19,7 @@ COPY njumarket-service-message/pom.xml ./njumarket-service-message/
 COPY njumarket-service-image/pom.xml ./njumarket-service-image/
 COPY njumarket-service-admin/pom.xml ./njumarket-service-admin/
 COPY njumarket-service-notification/pom.xml ./njumarket-service-notification/
+COPY njumarket-service-ai/pom.xml ./njumarket-service-ai/
 
 # 下载依赖（利用缓存）
 RUN mvn dependency:go-offline -B

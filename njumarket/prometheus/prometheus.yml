@@ -115,3 +115,12 @@ scrape_configs:
           service: 'notification'
           application: 'njumarket-service-notification'
 
+  # AI 服务
+  - job_name: 'njumarket-service-ai'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['ai-service:8098']
+        labels:
+          service: 'ai'
+          application: 'njumarket-service-ai'
+

@@ -18,10 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.sql.Connection;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 内部API控制器
@@ -39,7 +41,7 @@ public class InternalController {
     private final CommoditySearchService commoditySearchService;
     private final CommodityVectorService commodityVectorService;
     private final CommodityQueryService commodityQueryService;
-    private final com.njumarket.commodity.vector.ConversationVectorService conversationVectorService;
+    private final com.njumarket.commodity.vector.AISearchService aiSearchService;
     private final JdbcTemplate jdbcTemplate;
     
     /**
@@ -352,38 +354,6 @@ public class InternalController {
     }
     
     /**
-     * 获取用户的AI聊天记录（内部接口）
-     * 用于用户画像生成
-     * 从 conversation_vectors 表中获取用户的所有AI聊天记录（按时间倒序）
-     */
-    @GetMapping("/commodity/ai-chat-history/{userId}")
-    public Result getAIChatHistory(@PathVariable String userId,
-                                  @RequestParam(defaultValue = "50") Integer limit) {
-        try {
-            // 从 conversation_vectors 表中获取用户的AI聊天记录
-            List<com.njumarket.commodity.vector.ConversationVectorService.ConversationMessage> messages = 
-                conversationVectorService.getUserAIChatHistory(userId, limit);
-            
-            // 转换为Map列表，方便序列化
-            List<Map<String, Object>> resultList = new ArrayList<>();
-            for (com.njumarket.commodity.vector.ConversationVectorService.ConversationMessage msg : messages) {
-                Map<String, Object> msgMap = new HashMap<>();
-                msgMap.put("conversationId", msg.getConversationId());
-                msgMap.put("messageId", msg.getMessageId());
-                msgMap.put("content", msg.getContent());
-                msgMap.put("role", msg.getRole());
-                resultList.add(msgMap);
-            }
-            
-            log.debug("获取用户AI聊天记录成功: userId={}, count={}", userId, resultList.size());
-            return Result.ok("查询成功", resultList);
-        } catch (Exception e) {
-            log.error("获取AI聊天记录失败: userId={}, error={}", userId, e.getMessage(), e);
-            return Result.fail("获取AI聊天记录失败: " + e.getMessage());
-        }
-    }
-    
-    /**
      * 查询商品列表（管理端内部接口）
      */
     @GetMapping("/commodities")
@@ -471,6 +441,37 @@ public class InternalController {
             result.put("size", commodityPage.getSize());
             
             return Result.ok("查询成功", result);
+    }
+    
+    /**
+     * 批量查询商品详情（内部接口）
+     * 用于根据商品ID列表批量获取商品信息
+     * @param commodityIds 商品ID列表
+     * @return 商品列表
+     */
+    @PostMapping("/commodities/batch")
+    public Result getCommoditiesByIds(@RequestBody List<String> commodityIds) {
+        try {
+            if (commodityIds == null || commodityIds.isEmpty()) {
+                return Result.ok("批量查询成功", Collections.emptyList());
+            }
+            
+            // 去重
+            Set<String> uniqueIds = new HashSet<>(commodityIds);
+            
+            // 批量查询商品
+            List<Commodity> commodities = commodityRepository.findAllById(uniqueIds);
+            
+            // 转换为内部 DTO 列表
+            List<CommodityInternalDTO> commodityDTOs = commodities.stream()
+                .map(commodityInternalDTOConverter::toInternalDTO)
+                .collect(java.util.stream.Collectors.toList());
+            
+            return Result.ok("批量查询成功", commodityDTOs);
+        } catch (Exception e) {
+            log.error("批量查询商品失败: error={}", e.getMessage(), e);
+            return Result.fail("批量查询商品失败: " + e.getMessage());
+        }
     }
     
     /**
@@ -608,6 +609,39 @@ public class InternalController {
         } catch (Exception e) {
             log.error("获取数据库信息失败: error={}", e.getMessage(), e);
             return Result.fail("获取数据库信息失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * AI语义搜索（内部接口，供AI服务调用）
+     * @param query 搜索查询
+     * @param location 位置偏好（可选）
+     * @param limit 返回数量限制（可选）
+     * @param userId 用户ID（可选，用于过滤自己的商品）
+     * @return 商品列表
+     */
+    @GetMapping("/commodity/ai-search")
+    public Result aiSearchInternal(@RequestParam String query, 
+                                  @RequestParam(required = false) String location,
+                                  @RequestParam(required = false) Integer limit,
+                                  @RequestParam(required = false) String userId) {
+        try {
+            log.info("AI语义搜索（内部接口） - query: {}, location: {}, limit: {}, userId: {}", 
+                query, location, limit, userId);
+            
+            // 使用向量相似度搜索
+            List<Commodity> commodities = aiSearchService.search(query, location, limit, userId);
+            
+            // 转换为内部DTO
+            List<CommodityInternalDTO> commodityDTOs = commodities.stream()
+                .map(commodityInternalDTOConverter::toInternalDTO)
+                .collect(java.util.stream.Collectors.toList());
+            
+            return Result.ok("AI搜索成功", commodityDTOs);
+            
+        } catch (Exception e) {
+            log.error("AI语义搜索失败（内部接口）: {}", e.getMessage(), e);
+            return Result.fail("AI搜索失败: " + e.getMessage());
         }
     }
     

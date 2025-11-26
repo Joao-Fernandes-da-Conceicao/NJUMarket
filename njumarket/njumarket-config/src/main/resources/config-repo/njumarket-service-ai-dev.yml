@@ -1,0 +1,45 @@
+# AI Service - Dev 环境配置
+# 包含 PostgreSQL 和 Redis 等环境相关配置
+
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${AI_DATASOURCE_URL:jdbc:postgresql://localhost:5432/njumarket?currentSchema=nju_market}
+    username: ${AI_DATASOURCE_USERNAME:postgres}
+    password: ${AI_DATASOURCE_PASSWORD:Hqz20050316}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${AI_REDIS_DATABASE:3}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+
+# LangChain4j 配置（用于 Doubao API）
+langchain4j:
+  open-ai:
+    # 火山引擎 Doubao API 配置（兼容 OpenAI API）
+    # API Key 通过环境变量 DOUBAO_API_KEY 设置
+    api-key: ${DOUBAO_API_KEY:8736b46e-a38e-4d2c-8859-0460a1167310}
+    # 火山引擎 API base-url
+    # LangChain4j 会自动在 base-url 后添加 /chat/completions 或 /embeddings
+    # 官方文档示例：https://ark.cn-beijing.volces.com/api/v3/chat/completions
+    base-url: ${DOUBAO_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
+    # Chat 模型配置（官方提供的模型ID）
+    chat-model: ${DOUBAO_CHAT_MODEL:doubao-seed-1-6-250615}
+    timeout: 60s
+    # Embedding 模型配置
+    embedding-model: ${DOUBAO_EMBEDDING_MODEL:doubao-embedding-text-240715}
+    # 注意：Doubao embedding 模型实际返回 2560 维，代码中会将向量截断到 2000 维（HNSW 索引限制）
+

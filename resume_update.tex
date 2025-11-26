@@ -1,0 +1,34 @@
+% 更新后的专业技能部分
+\section{专业技能}
+
+\textbf{编程语言:} 掌握 Java 语法，掌握反射、集合、多线程等，了解锁机制、线程池原理、ThreadLocal 等\\
+
+\textbf{框架与技术:} 熟练使用 Spring Boot、Spring Cloud、SpringMVC、MyBatis-Plus 等框架，熟悉微服务架构、服务注册发现（Nacos）、服务间调用（OpenFeign）、Spring Security 鉴权等\\
+
+\textbf{数据库:} 掌握 PostgreSQL，了解数据库索引、事务和库表设计，掌握 SQL 优化技术；熟悉 pgvector 向量数据库扩展，了解向量相似度搜索原理\\
+
+\textbf{搜索与AI:} 掌握 Elasticsearch 全文检索，熟悉 IK 分词器配置；了解 LangChain4j 框架，熟悉 Function Calling 机制，能实现 AI Agent 与业务系统的集成\\
+
+\textbf{中间件:} 掌握 Redis，了解 Redis 的数据结构，理解缓存穿透、雪崩、击穿等问题及解决，能根据需求制定过期策略和内存淘汰策略；熟悉 RabbitMQ 的交换机/队列配置及消息重试策略；熟悉 JWT 的原理和作用、拦截器机制和 WebSocket 实时通信\\
+
+\textbf{开发工具:} 熟练使用 Git、Maven/Gradle、IDEA、Docker；了解 Zipkin 链路追踪、Prometheus/Grafana 监控
+
+% 更新后的项目经历部分（第一个项目）
+\section{项目经历}
+
+\datedsubsection{\textbf{NJUMarket 南大集市（校园二手交易平台）}}{}
+
+技术栈：Spring Boot 3、Spring Cloud、PostgreSQL + pgvector、Elasticsearch、Redis、RabbitMQ、LangChain4j、Docker、Nacos、Zipkin\\
+
+基于微服务架构的校园二手交易平台，集成 AI Agent 智能推荐和语义搜索功能，支持商品发布、订单管理、实时消息等核心功能
+
+\begin{itemize}[leftmargin=*]
+	\item 基于 Spring Cloud 构建微服务架构，使用 Nacos 实现服务注册与发现，通过 OpenFeign 实现服务间调用，使用 Spring Security 实现统一鉴权
+	\item 设计库存扣减链路：Redis 分布式锁 + 数据库悲观锁 + 条件更新，结合数据库事务确保库存一致性，防止超卖
+	\item 接入 Elasticsearch 全文检索，配置 IK 分词器支持中文分词；使用 PostgreSQL + pgvector 实现商品语义搜索，支持自然语言查询
+	\item 统一搜索过滤逻辑：在 ES 和 AI 语义搜索中统一过滤库存为 0 的商品和用户自己的商品，保证搜索结果真实可售
+	\item 基于 LangChain4j 实现 AI Agent，通过 Function Calling 让用户对话式描述需求，系统自动匹配最适合的商品并生成推荐理由
+	\item 自研 WebSocket 消息服务：买家咨询/卖家报价即时推送，配合 RabbitMQ 异步消息投递、离线 ACK 与消息持久化，保障交易沟通连续性
+	\item 配置 Docker Compose 一键部署所有服务，集成 Zipkin 链路追踪和 Prometheus/Grafana 监控，支持快速部署与运维
+\end{itemize}
+

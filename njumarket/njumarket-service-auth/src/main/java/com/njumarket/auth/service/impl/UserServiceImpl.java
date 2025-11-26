@@ -45,7 +45,6 @@ public class UserServiceImpl implements UserService {
     private final StringRedisTemplate stringRedisTemplate;
     private final UserProfileService userProfileService;
     private final CacheUtil cacheUtil;
-    private final com.njumarket.auth.vector.UserProfileVectorService userProfileVectorService;
 
     // ========== 认证相关 ==========
     @Override
@@ -99,16 +98,6 @@ public class UserServiceImpl implements UserService {
             result.setOrderReminderStatus(defaultStatus);
         }
         
-        // ✅ v3.1.0: 登录成功后异步生成用户画像向量（降低API调用成本）
-        try {
-            if (userProfileVectorService != null) {
-                userProfileVectorService.generateAndStoreUserProfileVector(user.getUserId());
-                log.debug("登录后触发用户画像生成: userId={}", user.getUserId());
-            }
-        } catch (Exception e) {
-            // 画像生成失败不影响登录流程，只记录日志
-            log.warn("登录后触发用户画像生成失败: userId={}, error={}", user.getUserId(), e.getMessage());
-        }
         
         return Result.ok(result);
     }
@@ -277,16 +266,6 @@ public class UserServiceImpl implements UserService {
             result.setOrderReminderStatus(defaultStatus);
         }
         
-        // ✅ v3.1.0: 登录成功后异步生成用户画像向量（降低API调用成本）
-        try {
-            if (userProfileVectorService != null) {
-                userProfileVectorService.generateAndStoreUserProfileVector(user.getUserId());
-                log.debug("登录后触发用户画像生成: userId={}", user.getUserId());
-            }
-        } catch (Exception e) {
-            // 画像生成失败不影响登录流程，只记录日志
-            log.warn("登录后触发用户画像生成失败: userId={}, error={}", user.getUserId(), e.getMessage());
-        }
         
         return Result.ok(result);
     }

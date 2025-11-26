@@ -1,8 +1,8 @@
-package com.njumarket.commodity.service.impl;
+package com.njumarket.ai.service.impl;
 
-import com.njumarket.commodity.entity.AIConversation;
-import com.njumarket.commodity.repository.AIConversationRepository;
-import com.njumarket.commodity.service.AIConversationService;
+import com.njumarket.ai.entity.AIConversation;
+import com.njumarket.ai.repository.AIConversationRepository;
+import com.njumarket.ai.service.AIConversationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,13 +30,11 @@ public class AIConversationServiceImpl implements AIConversationService {
             throw new IllegalArgumentException("conversationId 和 userId 不能为空");
         }
         
-        // 尝试获取现有会话
         Optional<AIConversation> existing = aiConversationRepository.findByConversationIdAndUserId(conversationId, userId);
         if (existing.isPresent()) {
             return existing.get();
         }
         
-        // 创建新会话
         AIConversation conversation = new AIConversation();
         conversation.setConversationId(conversationId);
         conversation.setUserId(userId);
@@ -59,7 +57,6 @@ public class AIConversationServiceImpl implements AIConversationService {
             return;
         }
         
-        // 限制标题长度
         if (title != null && title.length() > 200) {
             title = title.substring(0, 200);
         }
@@ -86,7 +83,6 @@ public class AIConversationServiceImpl implements AIConversationService {
             return;
         }
         
-        // 更新更新时间（通过查询和保存触发 @PreUpdate）
         Optional<AIConversation> conversation = aiConversationRepository.findById(conversationId);
         if (conversation.isPresent()) {
             AIConversation conv = conversation.get();
@@ -103,7 +99,6 @@ public class AIConversationServiceImpl implements AIConversationService {
         
         List<AIConversation> conversations = aiConversationRepository.findActiveByUserId(userId);
         
-        // 限制返回数量
         if (conversations.size() > limit) {
             return conversations.subList(0, limit);
         }

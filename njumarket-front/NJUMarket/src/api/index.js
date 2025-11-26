@@ -289,7 +289,7 @@ export const commodityAPI = {
   
   // ✅ AI Agent 对话（超时时间 30 秒，因为 AI Agent 处理较慢）
   aiAgentChat: (message, conversationId) => 
-    api.post('/user/commodity/ai-agent/chat', null, { 
+    api.post('/user/ai-agent/chat', null, { 
       params: { message, conversationId },
       timeout: 60000 // 60 秒超时
     }),
@@ -304,7 +304,7 @@ export const commodityAPI = {
     // 获取 baseURL 和 token
     const baseURL = api.defaults.baseURL || '';
     const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
-    const url = `${baseURL}/user/commodity/ai-agent/chat-stream?${params.toString()}`;
+    const url = `${baseURL}/user/ai-agent/chat-stream?${params.toString()}`;
     
     // 构建请求头，包含认证信息
     const headers = {
@@ -441,19 +441,19 @@ export const commodityAPI = {
   },
   // ✅ AI Agent 智能搜索（超时时间 30 秒，因为 AI Agent 处理较慢）
   aiAgentSearch: (query, conversationId) =>
-    api.get('/user/commodity/ai-agent/search', { 
+    api.get('/user/ai-agent/search', { 
       params: { query, conversationId },
       timeout: 60000 // 60 秒超时
     }),
   // ✅ 获取用户的所有AI聊天列表
   getAIChatList: (limit = 50) =>
-    api.get('/user/commodity/ai-agent/chats', { 
+    api.get('/user/ai-agent/chats', { 
       params: { limit },
       timeout: 10000
     }),
   // ✅ 获取指定chat的消息列表
   getAIChatMessages: (conversationId, limit = 100) =>
-    api.get(`/user/commodity/ai-agent/chats/${conversationId}/messages`, { 
+    api.get(`/user/ai-agent/chats/${conversationId}/messages`, { 
       params: { limit },
       timeout: 10000
     })

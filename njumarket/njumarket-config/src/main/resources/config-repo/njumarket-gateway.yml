@@ -16,6 +16,10 @@ spring:
           enabled: true
           lower-case-service-id: true
       routes:
+        - id: ai-service-user
+          uri: lb://njumarket-service-ai
+          predicates:
+            - Path=/api/user/ai-agent/**
         - id: commodity-service-public
           uri: lb://njumarket-service-commodity
           predicates:

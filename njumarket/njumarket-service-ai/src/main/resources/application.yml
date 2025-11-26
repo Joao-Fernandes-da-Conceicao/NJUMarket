@@ -1,0 +1,41 @@
+# AI Service 本地配置（简化版）
+# 详细配置已迁移到 Config Server: config-repo/njumarket-service-ai.yml
+# 本地仅保留必要的服务标识和 Config Server 连接配置
+# 如果 Config Server 不可用，会使用本地配置作为后备
+
+server:
+  port: 8098
+  # 增加连接超时时间，支持 AI 对话等耗时操作
+  connection-timeout: 120000  # 120 秒
+  tomcat:
+    connection-timeout: 120000  # 120 秒
+    keep-alive-timeout: 120000  # 120 秒
+
+spring:
+  application:
+    name: njumarket-service-ai
+  # ✅ Spring Cloud Config Client 配置
+  # Docker 环境通过环境变量 SPRING_CONFIG_IMPORT 覆盖，本地开发使用 localhost
+  config:
+    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
+    fail-fast: false  # Config Server 不可用时，使用本地配置
+  # 本地数据源配置（作为 Config Server 不可用时的后备）
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${AI_DATASOURCE_URL:jdbc:postgresql://localhost:5432/njumarket?currentSchema=nju_market}
+    username: ${AI_DATASOURCE_USERNAME:postgres}
+    password: ${AI_DATASOURCE_PASSWORD:Hqz20050316}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${AI_REDIS_DATABASE:3}
+

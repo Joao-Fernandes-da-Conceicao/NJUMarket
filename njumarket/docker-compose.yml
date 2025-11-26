@@ -423,6 +423,57 @@ services:
       retries: 5
       start_period: 60s
 
+  # AI 服务
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: njumarket-service-ai
+        SERVICE_PORT: 8098
+    container_name: njumarket-service-ai
+    ports:
+      - "8098:8098"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - AI_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - AI_DATASOURCE_USERNAME=postgres
+      - AI_DATASOURCE_PASSWORD=Hqz20050316
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
+      # LangChain4j / Doubao API 配置
+      # 使用 Docker Compose 的默认值语法 ${VARIABLE:-default}
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY:-8736b46e-a38e-4d2c-8859-0460a1167310}
+      - DOUBAO_BASE_URL=${DOUBAO_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}
+      - DOUBAO_CHAT_MODEL=${DOUBAO_CHAT_MODEL:-doubao-seed-1-6-250615}
+      - DOUBAO_EMBEDDING_MODEL=${DOUBAO_EMBEDDING_MODEL:-doubao-embedding-text-240715}
+      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
+      - LANG=C.UTF-8
+      - LC_ALL=C.UTF-8
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
+    depends_on:
+      discovery:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      zipkin:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8098/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   # Zipkin 分布式链路追踪服务
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4

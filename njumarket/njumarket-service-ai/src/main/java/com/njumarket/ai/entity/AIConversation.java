@@ -1,4 +1,4 @@
-package com.njumarket.commodity.entity;
+package com.njumarket.ai.entity;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -9,7 +9,6 @@ import java.time.LocalDateTime;
 
 /**
  * AI 聊天会话实体类
- * 用于统一管理 AI 聊天会话，避免 conversation_id 悬空
  */
 @Entity
 @Table(name = "ai_conversations", schema = "nju_market")
@@ -26,13 +25,13 @@ public class AIConversation {
     private String userId;
     
     @Column(name = "title", length = 200)
-    private String title; // 会话标题（第一条用户消息的前50个字符）
+    private String title;
     
     @Column(name = "message_count")
-    private Integer messageCount = 0; // 消息数量（冗余字段，可通过查询计算）
+    private Integer messageCount = 0;
     
     @Column(name = "status", length = 20)
-    private String status = "ACTIVE"; // 状态：ACTIVE（活跃）、DELETED（已删除）
+    private String status = "ACTIVE";
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;

@@ -1,6 +1,8 @@
-package com.njumarket.commodity.config;
+package com.njumarket.ai.config;
 
+import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,9 +13,8 @@ import org.springframework.context.annotation.Primary;
 import java.time.Duration;
 
 /**
- * LangChain4j 配置类（商品服务）
- * 仅配置 Embedding 模型，用于商品向量化
- * Chat 模型已迁移到 AI 服务
+ * LangChain4j 配置类
+ * 配置 Doubao API（兼容 OpenAI API）
  */
 @Slf4j
 @Configuration
@@ -25,16 +26,34 @@ public class LangChain4jConfig {
     @Value("${langchain4j.open-ai.base-url:${DOUBAO_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}}")
     private String baseUrl;
     
+    @Value("${langchain4j.open-ai.chat-model:${DOUBAO_CHAT_MODEL:doubao-seed-1-6-250615}}")
+    private String chatModel;
+    
     @Value("${langchain4j.open-ai.embedding-model:${DOUBAO_EMBEDDING_MODEL:doubao-embedding-text-240715}}")
     private String embeddingModel;
     
-    /**
-     * 配置 Embedding 模型（用于商品向量化）
-     */
+    @Bean
+    @Primary
+    public ChatLanguageModel chatLanguageModel() {
+        log.info("配置 LangChain4j Chat 模型 - base-url: {}, model: {}, api-key: {}", 
+            baseUrl, chatModel, maskApiKey(apiKey));
+        
+        return OpenAiChatModel.builder()
+            .apiKey(apiKey)
+            .baseUrl(baseUrl)
+            .modelName(chatModel)
+            .temperature(0.7)
+            .maxTokens(2000)
+            .timeout(Duration.ofSeconds(60))
+            .logRequests(true)
+            .logResponses(true)
+            .build();
+    }
+    
     @Bean
     @Primary
     public EmbeddingModel embeddingModel() {
-        log.info("配置 LangChain4j Embedding 模型（商品服务） - base-url: {}, model: {}, api-key: {}", 
+        log.info("配置 LangChain4j Embedding 模型 - base-url: {}, model: {}, api-key: {}", 
             baseUrl, embeddingModel, maskApiKey(apiKey));
         
         return OpenAiEmbeddingModel.builder()

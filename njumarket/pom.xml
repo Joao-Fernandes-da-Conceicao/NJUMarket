@@ -38,6 +38,7 @@
 		<module>njumarket-service-image</module>
 		<module>njumarket-service-admin</module>
 		<module>njumarket-service-notification</module>
+		<module>njumarket-service-ai</module>
 	</modules>
 
 	<dependencyManagement>
