@@ -42,23 +42,6 @@ public class RabbitMQConfig {
      */
     public static final String ORDER_ROUTING_KEY = "order.#";
 
-    // ========== 商品事件相关 ==========
-    
-    /**
-     * 商品事件交换机
-     */
-    public static final String COMMODITY_EXCHANGE = "commodity.exchange";
-    
-    /**
-     * 商品事件队列
-     */
-    public static final String COMMODITY_QUEUE = "commodity.queue";
-    
-    /**
-     * 商品事件路由键
-     */
-    public static final String COMMODITY_ROUTING_KEY = "commodity.*";
-
     // ========== 消息推送事件相关 ==========
     
     /**
@@ -106,33 +89,6 @@ public class RabbitMQConfig {
                 .with(ORDER_ROUTING_KEY);
         log.info("✅ 绑定订单队列到交换机: {} -> {} (routingKey: {})", ORDER_QUEUE, ORDER_EXCHANGE, ORDER_ROUTING_KEY);
         return binding;
-    }
-
-    /**
-     * 创建商品事件交换机（Topic 类型）
-     */
-    @Bean
-    public TopicExchange commodityExchange() {
-        return new TopicExchange(COMMODITY_EXCHANGE, true, false);
-    }
-
-    /**
-     * 创建商品事件队列
-     */
-    @Bean
-    public Queue commodityQueue() {
-        return QueueBuilder.durable(COMMODITY_QUEUE).build();
-    }
-
-    /**
-     * 绑定商品队列到交换机
-     */
-    @Bean
-    public Binding commodityBinding() {
-        return BindingBuilder
-                .bind(commodityQueue())
-                .to(commodityExchange())
-                .with(COMMODITY_ROUTING_KEY);
     }
 
     /**

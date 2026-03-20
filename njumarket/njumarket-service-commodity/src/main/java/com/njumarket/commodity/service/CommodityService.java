@@ -1,8 +1,11 @@
 package com.njumarket.commodity.service;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.CommodityInternalDTO;
 import com.njumarket.commodity.dto.CommodityDTO;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 /**
  * 商品服务接口
@@ -61,21 +64,11 @@ public interface CommodityService {
     Result republishCommodity(String commodityId);
     
     // ========== 商品可见性管理 ==========
-    
+
     /**
-     * 修改商品可见性（同时设置卖家和买家可见性）
+     * 修改商品可见性（PUBLIC = 正常可见，HIDDEN = 管理端软隐藏）
      */
     Result updateCommodityVisibility(String commodityId, String visibility);
-    
-    /**
-     * 修改商品卖家可见性
-     */
-    Result updateCommoditySellerVisibility(String commodityId, String sellerVisibility);
-    
-    /**
-     * 修改商品买家可见性
-     */
-    Result updateCommodityBuyerVisibility(String commodityId, String buyerVisibility);
     
     // ========== 图片管理 ==========
     
@@ -131,18 +124,33 @@ public interface CommodityService {
      * 强制下架商品（管理端）
      */
     Result removeCommodity(String commodityId, String reason);
-    
-    // ========== 内部方法（用于微服务间调用） ==========
-    
+
+    // ========== 内部接口（供服务间调用） ==========
+
     /**
-     * 查询商品（带悲观锁，用于创建订单）
-     * 内部方法，用于Order Service创建订单时锁定商品
+     * 完整更新商品字段（管理端内部），含搜索索引同步和缓存失效
+     */
+    CommodityInternalDTO updateCommodityFullInternal(String commodityId, Map<String, Object> payload);
+
+    /**
+     * 物理删除商品（管理端内部），含搜索索引和缓存清理
+     */
+    void deleteCommodityInternal(String commodityId);
+
+    /**
+     * 同步指定商品到搜索索引（管理端内部）
+     */
+    void syncCommoditySearchInternal(String commodityId);
+
+    // ========== 内部接口（供订单服务等调用，库存已移交订单服务） ==========
+
+    /**
+     * 查询商品并加悲观锁（内部），用于创建订单时锁定商品行。
      */
     Result getCommodityForUpdate(String commodityId);
-    
+
     /**
-     * 更新商品库存
-     * 内部方法，用于Order Service更新商品库存
+     * 更新商品库存（内部），委托订单服务调整库存；库存数据已迁移至订单服务。
      */
     Result updateCommodityStock(String commodityId, Integer quantity);
 }

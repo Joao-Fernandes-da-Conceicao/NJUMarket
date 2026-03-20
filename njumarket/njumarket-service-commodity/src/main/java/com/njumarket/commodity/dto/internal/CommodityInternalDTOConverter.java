@@ -32,8 +32,7 @@ public class CommodityInternalDTOConverter {
         dto.setStock(commodity.getStock());
         dto.setCategory(commodity.getCategory());
         dto.setConditionLevel(commodity.getConditionLevel());
-        dto.setStatus(commodity.getCommodityStatus()); // 使用commodityStatus
-        dto.setSellerVisibility(commodity.getSellerVisibility());
+        dto.setStatus(commodity.getCommodityStatus());
         dto.setBuyerVisibility(commodity.getBuyerVisibility());
         dto.setLocation(commodity.getLocation()); // 保留原有字段，用于兼容
         
@@ -51,6 +50,7 @@ public class CommodityInternalDTOConverter {
         dto.setLatitude(commodity.getLatitude());
         
         dto.setImages(commodity.getImages()); // 添加图片字段转换
+        dto.setClickCount(commodity.getClickCount());
         dto.setCreateTime(commodity.getPublishTime()); // 使用publishTime作为createTime
         dto.setUpdateTime(null); // Commodity实体没有updateTime字段
         return dto;

@@ -1,7 +1,9 @@
 package com.njumarket.commodity.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.CommodityInternalDTO;
 import com.njumarket.commodity.dto.CommodityDTO;
+import com.njumarket.commodity.dto.internal.CommodityInternalDTOConverter;
 import com.njumarket.commodity.vo.CommodityPageResultVO;
 import com.njumarket.njumarket.vo.BatchOperationResultVO;
 import com.njumarket.commodity.entity.Commodity;
@@ -12,7 +14,6 @@ import com.njumarket.commodity.service.CommodityService;
 import com.njumarket.commodity.service.CommodityQueryService;
 import com.njumarket.commodity.client.AuthClient;
 import com.njumarket.commodity.client.ImageClient;
-import com.njumarket.commodity.client.NotificationClient;
 import com.njumarket.commodity.client.OrderClient;
 import com.njumarket.njumarket.dto.internal.AddressInternalDTO;
 import com.njumarket.njumarket.utils.SecurityUtils;
@@ -20,7 +21,6 @@ import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.commodity.utils.CommodityValidator;
 import com.njumarket.commodity.search.CommoditySearchService;
-import com.njumarket.commodity.vector.CommodityVectorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,10 +38,42 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.Map;
 
 /**
- * 商品服务实现类
- * 重构后专注于商品管理功能，查询功能已迁移到CommodityQueryService
+ * 商品服务实现类，专注于商品管理（写操作）。查询功能见 CommodityQueryService。
+ *
+ * ── 商品状态机 ──────────────────────────────────────────────────────────────
+ *
+ *   状态值         语义                  买家可见  进最新缓存  可下单
+ *   DRAFT          草稿，尚未提交         ✗        ✗          ✗
+ *   PUBLISHED      已提交但未上架         ✗        ✗          ✗
+ *   ON_SHELF       正式上架，公开售卖      ✓        ✓          ✓
+ *   OFF_SHELF      已下架                 ✗        ✗          ✗
+ *
+ * ── 合法转换 ────────────────────────────────────────────────────────────────
+ *
+ *   入口（创建）
+ *     publishCommodity()      → PUBLISHED   （直发，跳过草稿）
+ *     createDraftCommodity()  → DRAFT       （先存草稿）
+ *     copyCommodity()         → DRAFT       （复制副本）
+ *
+ *   卖家操作
+ *     publishDraftCommodity() DRAFT       → PUBLISHED
+ *     shelfCommodity()        PUBLISHED   → ON_SHELF     ← 唯一进最新缓存的入口
+ *     unshelfCommodity()      ON_SHELF    → OFF_SHELF
+ *     draftCommodity()        *           → DRAFT        （任意状态退回草稿）
+ *     republishCommodity()    *           → ON_SHELF     （直接重新上架）
+ *
+ *   管理端
+ *     removeCommodity()       *           → OFF_SHELF    （强制下架）
+ *     deleteCommodity()       *           → [删除]       （需无关联订单）
+ *
+ * ── 每次状态变更的联动 ───────────────────────────────────────────────────────
+ *
+ *   syncCommoditySearchIndex()   所有状态变更后同步 ES 索引
+ *   evictCommodityCache()        所有状态变更后清除 Redis 缓存（详情+列表+热门+最新）
+ *   appendCommodityToLatestCaches() 仅 ON_SHELF 时写入最新商品缓存
  */
 @Slf4j
 @Service
@@ -49,16 +81,15 @@ import java.util.stream.Collectors;
 public class CommodityServiceImpl implements CommodityService {
 
     private final CommodityRepository commodityRepository;
+    private final CommodityInternalDTOConverter commodityInternalDTOConverter;
     private final AuthClient authClient;
     private final OrderClient orderClient;
     private final ImageClient imageClient;
     private final CommodityQueryService commodityQueryService;
-    private final NotificationClient notificationClient;
     private final ObjectMapper objectMapper;
     private final CacheUtil cacheUtil;
     private final CommoditySearchService commoditySearchService;
-    private final CommodityVectorService commodityVectorService;
-    
+
     // ✅ 统一使用GMT+8时区（中国大陆时区）
     private static final ZoneId GMT_PLUS_8_ZONE = ZoneId.of("Asia/Shanghai");
     private static final TypeReference<List<CommodityDTO>> COMMODITY_DTO_LIST_TYPE =
@@ -93,7 +124,6 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setConditionLevel(commodityDTO.getConditionLevel());
         commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
         commodity.setCommodityStatus("PUBLISHED"); // 默认设为已发布但未上架
-        commodity.setSellerVisibility("PUBLIC");
         commodity.setBuyerVisibility("PUBLIC");
         commodity.setClickCount(0);
         commodity.setPublishTime(LocalDateTime.now());
@@ -101,12 +131,9 @@ public class CommodityServiceImpl implements CommodityService {
         // ✅ 创建地址快照 - 获取地址信息（使用Feign Client）
         setCommodityAddress(commodity, commodityDTO, currentUser.getUserId());
         
-        // 保存商品
+        // 保存商品（PUBLISHED 状态，未上架，不进入最新商品缓存）
         Commodity savedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(savedCommodity);
-        appendCommodityToLatestCaches(savedCommodity);
-        // 异步生成商品向量
-        commodityVectorService.generateAndStoreVector(savedCommodity);
         
         return Result.ok("商品发布成功", convertToDTO(savedCommodity));
     }
@@ -130,7 +157,6 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setConditionLevel(commodityDTO.getConditionLevel());
         commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
         commodity.setCommodityStatus("DRAFT"); // 设为草稿状态
-        commodity.setSellerVisibility("PUBLIC");
         commodity.setBuyerVisibility("PUBLIC");
         commodity.setClickCount(0);
         commodity.setPublishTime(LocalDateTime.now());
@@ -138,12 +164,9 @@ public class CommodityServiceImpl implements CommodityService {
         // ✅ 创建地址快照 - 获取地址信息（使用Feign Client）
         setCommodityAddress(commodity, commodityDTO, currentUser.getUserId());
         
-        // 保存商品
+        // 保存草稿（DRAFT 状态，不进入最新商品缓存）
         Commodity savedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(savedCommodity);
-        appendCommodityToLatestCaches(savedCommodity);
-        // 异步生成商品向量
-        commodityVectorService.generateAndStoreVector(savedCommodity);
         
         return Result.ok("草稿商品创建成功", convertToDTO(savedCommodity));
     }
@@ -157,12 +180,11 @@ public class CommodityServiceImpl implements CommodityService {
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         CommodityValidator.requireCommodityStatus(commodity, "DRAFT");
         
-        // 发布商品
+        // 发布草稿为 PUBLISHED（仍未上架，不进入最新商品缓存）
         commodity.setCommodityStatus("PUBLISHED");
         commodity.setPublishTime(LocalDateTime.now());
         commodityRepository.save(commodity);
         syncCommoditySearchIndex(commodity);
-        appendCommodityToLatestCaches(commodity);
         
         return Result.ok("草稿商品发布成功");
     }
@@ -174,7 +196,12 @@ public class CommodityServiceImpl implements CommodityService {
         User currentUser = (User) userObj;
         Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
-        
+
+        boolean wasOnShelf = "ON_SHELF".equals(commodity.getCommodityStatus());
+        Integer oldStock = commodity.getStock() != null ? commodity.getStock() : 0;
+        int newStockVal = commodityDTO.getStock() != null ? commodityDTO.getStock() : 0;
+        boolean stockChanged = wasOnShelf && (oldStock.intValue() != newStockVal);
+
         // 更新商品信息
         commodity.setTitle(commodityDTO.getTitle());
         commodity.setDescription(commodityDTO.getDescription());
@@ -184,25 +211,40 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setCategory(commodityDTO.getCategory());
         commodity.setConditionLevel(commodityDTO.getConditionLevel());
         commodity.setImages(commodityDTO.getImages() != null ? String.join(",", commodityDTO.getImages()) : null);
-        
+
         // ✅ 更新地址快照 - 获取地址信息（使用Feign Client）
         setCommodityAddress(commodity, commodityDTO, currentUser.getUserId());
-        
+
         // 保存更新
         Commodity updatedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(updatedCommodity);
-        // 异步更新商品向量
-        commodityVectorService.updateVector(updatedCommodity);
-        
-        // ✅ 注意：商品更新不发送事件到通知服务
-        // 原因：库存变化通过订单事件体现（库存减少=下单，库存增加=退货/取消订单）
-        // 商品的其他变更（如价格、描述等）不需要通知
-        
+
+        // ON_SHELF 且库存变更：同步到订单服务；失败则回滚商品表并抛错（补偿保证一致性）
+        if (stockChanged) {
+            try {
+                Result adjustResult = orderClient.adjustInventory(Map.of(
+                        "commodityId", commodityId,
+                        "newTotalQuantity", newStockVal
+                ));
+                if (adjustResult == null || !Boolean.TRUE.equals(adjustResult.getSuccess())) {
+                    updatedCommodity.setStock(oldStock);
+                    commodityRepository.save(updatedCommodity);
+                    throw new BusinessException(adjustResult != null && adjustResult.getErrorMsg() != null
+                            ? adjustResult.getErrorMsg() : "库存同步失败，请重试");
+                }
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("库存调整 Feign 失败，回滚商品库存: commodityId={}, error={}", commodityId, e.getMessage());
+                updatedCommodity.setStock(oldStock);
+                commodityRepository.save(updatedCommodity);
+                throw new BusinessException("库存同步失败，请重试", e);
+            }
+        }
+
         // ✅ 清除商品相关缓存（最终一致性：写入时删除缓存）
-        // 注意：商品详情更新（价格、描述、图片、地址等）不影响列表组成，只删除详情缓存
-        // 列表缓存中的商品信息会通过TTL自然过期，或在下一次列表查询时重新加载
         evictCommodityCache(commodityId, false);
-        
+
         return Result.ok("商品更新成功", convertToDTO(updatedCommodity));
     }
     
@@ -223,9 +265,10 @@ public class CommodityServiceImpl implements CommodityService {
         // 删除商品
         commodityRepository.delete(commodity);
         removeCommodityFromSearchIndex(commodityId);
-        // 删除商品向量
-        commodityVectorService.deleteVector(commodityId);
-        
+
+        // 删除时归零库存（防止孤悬库存记录被误用）
+        zeroInventoryInOrderService(commodityId);
+
         // ✅ 清除商品相关缓存
         evictCommodityCache(commodityId);
         
@@ -233,7 +276,35 @@ public class CommodityServiceImpl implements CommodityService {
     }
     
     // ========== 商品状态管理 ==========
-    
+
+    /**
+     * 上架成功后，将库存同步到订单服务（非阻塞：失败只记录警告，不回滚上架）。
+     */
+    private void syncInventoryToOrderService(Commodity commodity) {
+        try {
+            int stock = commodity.getStock() != null ? commodity.getStock() : 0;
+            orderClient.syncInventory(Map.of(
+                    "commodityId", commodity.getCommodityId(),
+                    "availableQuantity", stock,
+                    "totalQuantity", stock
+            ));
+        } catch (Exception e) {
+            log.warn("库存同步到订单服务失败（不影响上架）: commodityId={}, error={}",
+                    commodity.getCommodityId(), e.getMessage());
+        }
+    }
+
+    /**
+     * 下架/草稿时，将订单服务中的库存归零，禁止后续下单（非阻塞）。
+     */
+    private void zeroInventoryInOrderService(String commodityId) {
+        try {
+            orderClient.zeroInventory(commodityId);
+        } catch (Exception e) {
+            log.warn("库存归零失败（不影响操作）: commodityId={}, error={}", commodityId, e.getMessage());
+        }
+    }
+
     @Override
     @Transactional
     public Result shelfCommodity(String commodityId) {
@@ -244,15 +315,14 @@ public class CommodityServiceImpl implements CommodityService {
         CommodityValidator.requireCommodityStatus(commodity, "PUBLISHED");
         
         commodity.setCommodityStatus("ON_SHELF");
-        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
+        LocalDateTime now = nowGMT8();
         commodity.setPublishTime(now);
         Commodity savedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(savedCommodity);
-        syncCommoditySearchIndex(savedCommodity);
         
-        // ✅ 注意：商品上架不发送事件到通知服务
-        // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
-        
+        // 上架时将库存同步到订单服务
+        syncInventoryToOrderService(savedCommodity);
+
         // ✅ 清除商品相关缓存
         evictCommodityCache(commodityId);
         appendCommodityToLatestCaches(savedCommodity);
@@ -271,10 +341,10 @@ public class CommodityServiceImpl implements CommodityService {
         commodity.setCommodityStatus("OFF_SHELF");
         Commodity savedCommodity = commodityRepository.save(commodity);
         syncCommoditySearchIndex(savedCommodity);
-        
-        // ✅ 注意：商品下架不发送事件到通知服务
-        // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
-        
+
+        // 下架时归零库存，禁止下单
+        zeroInventoryInOrderService(commodityId);
+
         // ✅ 清除商品相关缓存
         evictCommodityCache(commodityId);
         
@@ -289,26 +359,14 @@ public class CommodityServiceImpl implements CommodityService {
         Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
-        // ✅ 获取变更前的状态（用于判断是否需要记录变更）
-        String previousStatus = commodity.getCommodityStatus();
-        
         commodity.setCommodityStatus("DRAFT");
-        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodityRepository.save(commodity);
         syncCommoditySearchIndex(commodity);
-        
-        // ✅ 只有当商品之前是已上架状态（ON_SHELF）时才记录变更
-        // 原因：只有已上架的商品才会出现在聊天界面中，设为草稿后需要更新卡片状态
-        // 如果商品本来就是草稿或其他状态，不会出现在聊天中，无需记录变更
-        if ("ON_SHELF".equals(previousStatus)) {
-            try {
-                notificationClient.recordCommodityChange(commodityId, "DRAFT", now.toString());
-            } catch (Exception e) {
-                log.warn("记录商品变更失败（不影响商品保存为草稿）: commodityId={}, error={}", commodityId, e.getMessage());
-            }
-        }
-        
-        // ✅ 清除商品相关缓存（商品状态变更后需要清除缓存）
+
+        // 退草稿时归零库存
+        zeroInventoryInOrderService(commodityId);
+
+        // 清除商品相关缓存（商品状态变更后需要清除缓存）
         evictCommodityCache(commodityId);
         
         return Result.ok("商品设为草稿成功");
@@ -323,16 +381,14 @@ public class CommodityServiceImpl implements CommodityService {
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
         
         commodity.setCommodityStatus("ON_SHELF");
-        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
-        commodity.setPublishTime(now);
+        commodity.setPublishTime(nowGMT8());
         Commodity savedCommodity = commodityRepository.save(commodity);
-        
-        // ✅ 注意：商品重新上架不发送事件到通知服务
-        // 原因：只有订单变化才需要通知（库存变化通过订单事件体现）
-        
-        // ✅ 清除商品相关缓存
+        syncCommoditySearchIndex(savedCommodity);
         evictCommodityCache(commodityId);
         appendCommodityToLatestCaches(savedCommodity);
+
+        // 重新上架时同步库存
+        syncInventoryToOrderService(savedCommodity);
         
         return Result.ok("商品重新上架成功");
     }
@@ -346,67 +402,16 @@ public class CommodityServiceImpl implements CommodityService {
         User currentUser = (User) userObj;
         Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
         CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
-        
-        // 验证可见性值
-        if (!"PUBLIC".equals(visibility) && !"PRIVATE".equals(visibility) && !"HIDDEN".equals(visibility)) {
-            throw new BusinessException("无效的可见性值");
+
+        if (!"PUBLIC".equals(visibility) && !"HIDDEN".equals(visibility)) {
+            throw new BusinessException("无效的可见性值，只允许 PUBLIC 或 HIDDEN");
         }
-        
-        commodity.setSellerVisibility(visibility);
         commodity.setBuyerVisibility(visibility);
         commodityRepository.save(commodity);
         syncCommoditySearchIndex(commodity);
-        
-        // ✅ 清除商品相关缓存（可见性变更后需要清除缓存）
         evictCommodityCache(commodityId);
-        
+
         return Result.ok("商品可见性修改成功");
-    }
-    
-    @Override
-    @Transactional
-    public Result updateCommoditySellerVisibility(String commodityId, String sellerVisibility) {
-        Object userObj = SecurityUtils.requireCurrentUser();
-        User currentUser = (User) userObj;
-        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
-        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
-        
-        // 验证可见性值
-        if (!"PUBLIC".equals(sellerVisibility) && !"PRIVATE".equals(sellerVisibility) && !"HIDDEN".equals(sellerVisibility)) {
-            throw new BusinessException("无效的卖家可见性值");
-        }
-        
-        commodity.setSellerVisibility(sellerVisibility);
-        commodityRepository.save(commodity);
-        syncCommoditySearchIndex(commodity);
-        
-        // ✅ 清除商品相关缓存（可见性变更后需要清除缓存）
-        evictCommodityCache(commodityId);
-        
-        return Result.ok("商品卖家可见性修改成功");
-    }
-    
-    @Override
-    @Transactional
-    public Result updateCommodityBuyerVisibility(String commodityId, String buyerVisibility) {
-        Object userObj = SecurityUtils.requireCurrentUser();
-        User currentUser = (User) userObj;
-        Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
-        CommodityValidator.requireCommodityOwner(commodity, currentUser.getUserId());
-        
-        // 验证可见性值
-        if (!"PUBLIC".equals(buyerVisibility) && !"PRIVATE".equals(buyerVisibility) && !"HIDDEN".equals(buyerVisibility)) {
-            throw new BusinessException("无效的买家可见性值");
-        }
-        
-        commodity.setBuyerVisibility(buyerVisibility);
-        commodityRepository.save(commodity);
-        syncCommoditySearchIndex(commodity);
-        
-        // ✅ 清除商品相关缓存（可见性变更后需要清除缓存）
-        evictCommodityCache(commodityId);
-        
-        return Result.ok("商品买家可见性修改成功");
     }
     
     // ========== 图片管理 ==========
@@ -536,7 +541,6 @@ public class CommodityServiceImpl implements CommodityService {
         newCommodity.setConditionLevel(originalCommodity.getConditionLevel());
         newCommodity.setImages(originalCommodity.getImages());
         newCommodity.setCommodityStatus("DRAFT");
-        newCommodity.setSellerVisibility("PUBLIC");
         newCommodity.setBuyerVisibility("PUBLIC");
         newCommodity.setClickCount(0);
         newCommodity.setPublishTime(LocalDateTime.now());
@@ -611,44 +615,11 @@ public class CommodityServiceImpl implements CommodityService {
         Commodity commodity = CommodityValidator.requireCommodity(commodityId, commodityRepository);
         
         commodity.setCommodityStatus("OFF_SHELF");
-        LocalDateTime now = nowGMT8(); // ✅ 使用GMT+8时区
         commodityRepository.save(commodity);
         syncCommoditySearchIndex(commodity);
-        
-        // ✅ 记录商品变更（用于增量轮询）- 管理端强制下架也需要更新聊天界面
-        try {
-            notificationClient.recordCommodityChange(commodityId, "UNSHELF", now.toString());
-        } catch (Exception e) {
-            log.warn("记录商品变更失败（不影响商品下架）: commodityId={}, error={}", commodityId, e.getMessage());
-        }
+        evictCommodityCache(commodityId);
         
         return Result.ok("商品强制下架成功");
-    }
-    
-    // ========== 内部方法（用于微服务间调用） ==========
-    
-    @Override
-    @Transactional
-    public Result getCommodityForUpdate(String commodityId) {
-        Optional<Commodity> commodityOpt = commodityRepository.findByIdForUpdate(commodityId);
-        if (commodityOpt.isEmpty()) {
-            throw new BusinessException("商品不存在");
-        }
-        return Result.ok(commodityOpt.get());
-    }
-    
-    @Override
-    @Transactional
-    public Result updateCommodityStock(String commodityId, Integer quantity) {
-        int updateResult = commodityRepository.updateStockWithCondition(commodityId, quantity);
-        if (updateResult == 0) {
-            throw new BusinessException("商品库存不足，请刷新后重试");
-        }
-        
-        // ✅ 清除商品详情缓存（库存变化需要更新缓存）
-        cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
-        
-        return Result.ok("库存更新成功");
     }
     
     // ========== 私有辅助方法 ==========
@@ -664,8 +635,9 @@ public class CommodityServiceImpl implements CommodityService {
      */
     private void evictCommodityCache(String commodityId, boolean evictListCache) {
         try {
-            // 清除商品详情缓存（所有操作都需要删除）
+            // 清除商品详情缓存和基础数据缓存（所有操作都需要删除）
             cacheUtil.delete(RedisConstants.CACHE_COMMODITY_DETAIL_KEY + commodityId);
+            cacheUtil.delete(RedisConstants.CACHE_COMMODITY_KEY + commodityId);
             
             // 只有在影响列表的操作时才删除列表缓存
             if (evictListCache) {
@@ -798,7 +770,7 @@ public class CommodityServiceImpl implements CommodityService {
             return false;
         }
         String status = commodity.getCommodityStatus();
-        return "PUBLISHED".equalsIgnoreCase(status) || "ON_SHELF".equalsIgnoreCase(status);
+        return "ON_SHELF".equalsIgnoreCase(status);
     }
     
     private int parseLimitFromLatestCacheKey(String cacheKey) {
@@ -852,7 +824,6 @@ public class CommodityServiceImpl implements CommodityService {
         
         dto.setPublishTime(commodity.getPublishTime());
         dto.setCommodityStatus(commodity.getCommodityStatus());
-        dto.setSellerVisibility(commodity.getSellerVisibility());
         dto.setBuyerVisibility(commodity.getBuyerVisibility());
         dto.setCategory(commodity.getCategory());
         dto.setConditionLevel(commodity.getConditionLevel());
@@ -979,6 +950,153 @@ public class CommodityServiceImpl implements CommodityService {
                 commodity.setAddressSnapshotFull(commodityDTO.getLocation());
             }
         }
+    }
+
+    // ========== 内部接口实现 ==========
+
+    private static final Set<String> ALLOWED_CONDITION_LEVELS = new HashSet<>(
+        Arrays.asList("全新", "九成新", "八成新", "七成新", "六成新", "五成新"));
+    private static final Set<String> ALLOWED_STATUSES = new HashSet<>(
+        Arrays.asList("DRAFT", "PUBLISHED", "ON_SHELF", "OFF_SHELF"));
+    private static final Set<String> ALLOWED_CATEGORIES = new HashSet<>(
+        Arrays.asList("电子产品", "服装配饰", "图书文具", "生活用品", "运动户外", "美妆护肤", "其他"));
+
+    @Override
+    public CommodityInternalDTO updateCommodityFullInternal(String commodityId, Map<String, Object> payload) {
+        Commodity c = commodityRepository.findById(commodityId)
+            .orElseThrow(() -> new BusinessException("商品不存在"));
+
+        Object title = payload.get("title");
+        if (title instanceof String) c.setTitle(((String) title).trim());
+
+        Object description = payload.get("description");
+        if (description instanceof String) c.setDescription(((String) description).trim());
+
+        Object price = payload.get("price");
+        if (price != null) {
+            try {
+                double v = price instanceof Number
+                    ? ((Number) price).doubleValue()
+                    : Double.parseDouble(price.toString().trim());
+                if (v >= 0) c.setPrice(v);
+            } catch (NumberFormatException ignored) {}
+        }
+
+        Object stock = payload.get("stock");
+        if (stock != null) {
+            try {
+                int v = stock instanceof Number
+                    ? ((Number) stock).intValue()
+                    : Integer.parseInt(stock.toString().trim());
+                if (v >= 0) c.setStock(v);
+            } catch (NumberFormatException ignored) {}
+        }
+
+        Object location = payload.get("location");
+        if (location instanceof String) c.setLocation(((String) location).trim());
+
+        Object category = payload.get("category");
+        if (category instanceof String) {
+            String cat = ((String) category).trim();
+            if (!ALLOWED_CATEGORIES.contains(cat)) throw new BusinessException("非法的商品分类");
+            c.setCategory(cat);
+        }
+
+        Object conditionLevel = payload.get("conditionLevel");
+        if (conditionLevel instanceof String) {
+            String lvl = ((String) conditionLevel).trim();
+            if (!ALLOWED_CONDITION_LEVELS.contains(lvl)) throw new BusinessException("非法的成色等级");
+            c.setConditionLevel(lvl);
+        }
+
+        Object commodityStatus = payload.get("commodityStatus");
+        if (commodityStatus instanceof String) {
+            String st = ((String) commodityStatus).trim();
+            if (!ALLOWED_STATUSES.contains(st)) throw new BusinessException("非法的商品状态");
+            c.setCommodityStatus(st);
+        }
+
+        Object images = payload.get("images");
+        if (images instanceof String) c.setImages(((String) images).trim());
+
+        Object addressProvince = payload.get("addressSnapshotProvince");
+        if (addressProvince instanceof String) c.setAddressSnapshotProvince(((String) addressProvince).trim());
+        Object addressCity = payload.get("addressSnapshotCity");
+        if (addressCity instanceof String) c.setAddressSnapshotCity(((String) addressCity).trim());
+        Object addressDistrict = payload.get("addressSnapshotDistrict");
+        if (addressDistrict instanceof String) c.setAddressSnapshotDistrict(((String) addressDistrict).trim());
+        Object addressStreet = payload.get("addressSnapshotStreet");
+        if (addressStreet instanceof String) c.setAddressSnapshotStreet(((String) addressStreet).trim());
+        Object addressDetail = payload.get("addressSnapshotDetail");
+        if (addressDetail instanceof String) c.setAddressSnapshotDetail(((String) addressDetail).trim());
+        Object addressFull = payload.get("addressSnapshotFull");
+        if (addressFull instanceof String) c.setAddressSnapshotFull(((String) addressFull).trim());
+
+        Object clickCount = payload.get("clickCount");
+        if (clickCount != null) {
+            try {
+                int v = clickCount instanceof Number
+                    ? ((Number) clickCount).intValue()
+                    : Integer.parseInt(clickCount.toString().trim());
+                if (v >= 0) c.setClickCount(v);
+            } catch (NumberFormatException ignored) {}
+        }
+
+        Object buyerVisibility = payload.get("buyerVisibility");
+        if (buyerVisibility instanceof String) {
+            String vis = ((String) buyerVisibility).trim();
+            if (!"PUBLIC".equals(vis) && !"HIDDEN".equals(vis)) {
+                throw new BusinessException("非法的可见性值，只允许 PUBLIC 或 HIDDEN");
+            }
+            c.setBuyerVisibility(vis);
+        }
+
+        commodityRepository.save(c);
+        commoditySearchService.syncCommodity(c);
+
+        // Cache Aside：先更新数据库，再删缓存（复用统一的缓存清理逻辑）
+        boolean evictListCache = payload.containsKey("commodityStatus")
+            || payload.containsKey("buyerVisibility")
+            || payload.containsKey("clickCount");
+        evictCommodityCache(commodityId, evictListCache);
+
+        return commodityInternalDTOConverter.toInternalDTO(c);
+    }
+
+    @Override
+    public void deleteCommodityInternal(String commodityId) {
+        Commodity commodity = commodityRepository.findById(commodityId)
+            .orElseThrow(() -> new BusinessException("商品不存在"));
+        commodityRepository.delete(commodity);
+        commoditySearchService.removeCommodity(commodityId);
+        evictCommodityCache(commodityId, true);
+    }
+
+    @Override
+    public void syncCommoditySearchInternal(String commodityId) {
+        Commodity commodity = commodityRepository.findById(commodityId)
+            .orElseThrow(() -> new BusinessException("商品不存在"));
+        commoditySearchService.syncCommodity(commodity);
+    }
+
+    @Override
+    public Result getCommodityForUpdate(String commodityId) {
+        return commodityRepository.findByIdForUpdate(commodityId)
+                .map(commodityInternalDTOConverter::toInternalDTO)
+                .map(dto -> Result.ok("查询成功", dto))
+                .orElse(Result.fail("商品不存在或无法锁定"));
+    }
+
+    @Override
+    public Result updateCommodityStock(String commodityId, Integer quantity) {
+        if (quantity == null || quantity < 0) {
+            return Result.fail("库存数量无效");
+        }
+        Map<String, Object> payload = Map.of(
+                "commodityId", commodityId,
+                "newTotalQuantity", quantity.intValue()
+        );
+        return orderClient.adjustInventory(payload);
     }
 }
 

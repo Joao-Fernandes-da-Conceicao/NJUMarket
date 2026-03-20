@@ -1,504 +1,488 @@
 package com.njumarket.ai.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.njumarket.ai.config.MilvusProperties;
+import com.njumarket.ai.storage.AIConversationStorage;
 import com.njumarket.ai.tool.SearchCommoditiesTool;
-import com.njumarket.ai.client.AuthClient;
-import com.njumarket.ai.vector.ConversationVectorService;
-import com.njumarket.njumarket.dto.Result;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.memory.ChatMemory;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
-import dev.langchain4j.model.chat.ChatLanguageModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.MemoryId;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
+import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
- * AI Agent 服务
- * 使用 LangChain4j 实现智能对话和搜索
+ * AI Agent 服务（无关系库，Redis + Milvus）
+ *
+ * <p>对话流程：
+ * <ol>
+ *   <li>用户画像 → Redis 摘要 + Milvus 语义 chunk</li>
+ *   <li>ChatMemory → Milvus 语义召回</li>
+ *   <li>Agent 循环（ES/向量/混合检索）</li>
+ *   <li>消息持久化 → Redis 列表 + Milvus 向量</li>
+ *   <li>画像更新 → Redis + Milvus chunk</li>
+ * </ol>
  */
 @Slf4j
 @Service
 public class AIAgentService {
-    
-    private final ChatLanguageModel chatLanguageModel;
-    @SuppressWarnings("unused")
-    private final EmbeddingModel embeddingModel;
-    private final ConversationVectorService conversationVectorService;
-    private final AuthClient authClient;
-    private final SearchCommoditiesTool searchCommoditiesTool;
-    
-    private final ShoppingAssistant shoppingAssistant;
-    private final Map<String, ChatMemory> chatMemoryMap = new HashMap<>();
-    
+
     private static final int MAX_MEMORY_MESSAGES = 15;
-    private static final int MAX_SUMMARY_TRIGGER = 20;
-    private static final int MAX_CONVERSATION_HISTORY = 5;
-    
+    private static final int SUMMARY_TRIGGER = 20;
+    private static final int PROFILE_UPDATE_INTERVAL = 10;
+    private static final int MAX_TOOL_ITERATIONS = 5;
+    private static final int MEMORY_RECALL_LIMIT = 12;
+
+    private final ChatModel chatLanguageModel;
+    private final SearchCommoditiesTool searchCommoditiesTool;
+    private final AIConversationStorage storage;
+    private final ObjectMapper objectMapper;
+    private final MilvusVectorService milvusVectorService;
+    private final MilvusProperties milvusProperties;
+
+    private final Map<String, ChatMemory> chatMemoryMap = new ConcurrentHashMap<>();
+    private final ShoppingAssistant shoppingAssistant;
+
     public interface ShoppingAssistant {
         String chat(@MemoryId String memoryId, @dev.langchain4j.service.UserMessage String userMessage);
+        Flux<String> chatStream(@MemoryId String memoryId, @dev.langchain4j.service.UserMessage String userMessage);
     }
-    
-    private final Map<String, ConversationContext> contextMap = new HashMap<>();
-    
-    private static class ConversationContext {
-        String userId;
-        String userProfileContext;
-        String conversationSummary;
-        List<ConversationVectorService.ConversationMessage> relevantHistory;
-        @SuppressWarnings("unused")
-        long lastUpdateTime;
-    }
-    
-    public AIAgentService(ChatLanguageModel chatLanguageModel,
-                         EmbeddingModel embeddingModel,
-                         ConversationVectorService conversationVectorService,
-                         AuthClient authClient,
-                         SearchCommoditiesTool searchCommoditiesTool) {
+
+    public AIAgentService(ChatModel chatLanguageModel,
+                          StreamingChatModel streamingChatLanguageModel,
+                          SearchCommoditiesTool searchCommoditiesTool,
+                          AIConversationStorage storage,
+                          ObjectMapper objectMapper,
+                          MilvusVectorService milvusVectorService,
+                          MilvusProperties milvusProperties) {
         this.chatLanguageModel = chatLanguageModel;
-        this.embeddingModel = embeddingModel;
-        this.conversationVectorService = conversationVectorService;
-        this.authClient = authClient;
         this.searchCommoditiesTool = searchCommoditiesTool;
-        
+        this.storage = storage;
+        this.objectMapper = objectMapper;
+        this.milvusVectorService = milvusVectorService;
+        this.milvusProperties = milvusProperties;
+
         this.shoppingAssistant = AiServices.builder(ShoppingAssistant.class)
-            .chatLanguageModel(chatLanguageModel)
+            .chatModel(chatLanguageModel)
+            .streamingChatModel(streamingChatLanguageModel)
             .tools(searchCommoditiesTool)
+            .maxSequentialToolsInvocations(MAX_TOOL_ITERATIONS)
             .chatMemoryProvider(chatMemoryId -> {
-                String memoryId = chatMemoryId != null ? chatMemoryId.toString() : "default";
-                return chatMemoryMap.computeIfAbsent(memoryId, 
-                    id -> MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES));
+                String id = chatMemoryId != null ? chatMemoryId.toString() : "default";
+                return chatMemoryMap.computeIfAbsent(id,
+                    k -> MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES));
             })
-            .systemMessageProvider(chatMemoryId -> {
-                String memoryId = chatMemoryId != null ? chatMemoryId.toString() : "default";
-                ConversationContext context = contextMap.get(memoryId);
-                if (context != null) {
-                    return buildEnhancedSystemPrompt(context.userId, context.userProfileContext,
-                        context.conversationSummary, context.relevantHistory);
-                }
-                return buildSystemPrompt(null);
-            })
+            .systemMessageProvider(chatMemoryId -> buildBaseSystemPrompt())
             .build();
     }
-    
+
     public static class ChatResult {
-        private String reply;
-        private List<SearchCommoditiesTool.CommodityDTO> recommendedCommodities;
-        
-        public ChatResult(String reply, List<SearchCommoditiesTool.CommodityDTO> recommendedCommodities) {
+        private final String reply;
+        private final List<SearchCommoditiesTool.CommodityDTO> recommendedCommodities;
+
+        public ChatResult(String reply, List<SearchCommoditiesTool.CommodityDTO> commodities) {
             this.reply = reply;
-            this.recommendedCommodities = recommendedCommodities != null ? recommendedCommodities : new ArrayList<>();
+            this.recommendedCommodities = commodities != null ? commodities : new ArrayList<>();
         }
-        
+
         public String getReply() { return reply; }
         public List<SearchCommoditiesTool.CommodityDTO> getRecommendedCommodities() { return recommendedCommodities; }
     }
-    
-    public interface StreamChatCallback {
-        void onToken(String token);
-        void onComplete(String fullReply, List<SearchCommoditiesTool.CommodityDTO> recommendedCommodities);
-        void onError(String error);
-    }
-    
+
     public ChatResult chat(String userMessage, String userId, String conversationId) {
+        if (!StringUtils.hasText(userMessage) || !StringUtils.hasText(userId)) {
+            return new ChatResult("抱歉，我无法理解您的问题。", null);
+        }
         try {
-            if (!StringUtils.hasText(userMessage) || !StringUtils.hasText(userId)) {
-                return new ChatResult("抱歉，我无法理解您的问题。", new ArrayList<>());
-            }
-            
-            searchCommoditiesTool.setLastSearchResults(new ArrayList<>());
-            
+            searchCommoditiesTool.clearForNewTurn();
             String memoryId = StringUtils.hasText(conversationId) ? conversationId : userId + "_default";
-            
-            String userProfileContext = getUserProfileContext(userId);
-            
-            List<ConversationVectorService.ConversationMessage> relevantHistory = 
-                conversationVectorService.searchRelevantConversations(userMessage, userId, MAX_CONVERSATION_HISTORY);
-            
-            ChatMemory chatMemory = chatMemoryMap.computeIfAbsent(memoryId, 
-                id -> {
-                    ChatMemory newMemory = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
-                    if (StringUtils.hasText(conversationId)) {
-                        loadHistoryToChatMemory(newMemory, conversationId, userId);
-                    }
-                    return newMemory;
-                });
-            
-            String conversationSummary = null;
-            List<ChatMessage> memoryMessages = chatMemory.messages();
-            if (memoryMessages.size() >= MAX_SUMMARY_TRIGGER) {
-                conversationSummary = summarizeOldMessages(memoryMessages, MAX_MEMORY_MESSAGES);
-                log.debug("生成对话摘要: memoryId={}, summaryLength={}", memoryId, 
-                    conversationSummary != null ? conversationSummary.length() : 0);
+
+            initChatMemory(memoryId, conversationId, userId);
+            rebuildMemoryBySimilarity(memoryId, conversationId, userId, userMessage);
+            injectSemanticProfileContext(memoryId, userId, userMessage);
+
+            ChatMemory chatMemory = chatMemoryMap.get(memoryId);
+            if (chatMemory.messages().size() >= SUMMARY_TRIGGER) {
+                summarizeAndCompress(chatMemory, chatMemory.messages(), memoryId);
             }
-            
-            ConversationContext context = new ConversationContext();
-            context.userId = userId;
-            context.userProfileContext = userProfileContext;
-            context.conversationSummary = conversationSummary;
-            context.relevantHistory = relevantHistory;
-            context.lastUpdateTime = System.currentTimeMillis();
-            contextMap.put(memoryId, context);
-            
-            injectRelevantHistory(chatMemory, relevantHistory, memoryMessages);
-            
+
             String assistantReply = shoppingAssistant.chat(memoryId, userMessage);
-            
-            List<SearchCommoditiesTool.CommodityDTO> recommendedCommodities = searchCommoditiesTool.getLastSearchResults();
-            
+            List<SearchCommoditiesTool.CommodityDTO> recommended = searchCommoditiesTool.getRecommendedCommoditiesForResponse();
+
             if (StringUtils.hasText(conversationId)) {
-                String userMessageId = UUID.randomUUID().toString();
-                String assistantMessageId = UUID.randomUUID().toString();
-                
-                conversationVectorService.storeConversationVector(
-                    conversationId, userMessageId, userId, userMessage, "user");
-                
-                List<String> commodityIds = recommendedCommodities != null && !recommendedCommodities.isEmpty()
-                    ? recommendedCommodities.stream()
-                        .map(SearchCommoditiesTool.CommodityDTO::getCommodityId)
-                        .filter(Objects::nonNull)
-                        .collect(java.util.stream.Collectors.toList())
-                    : null;
-                conversationVectorService.storeConversationVector(
-                    conversationId, assistantMessageId, userId, assistantReply, "assistant", commodityIds);
+                persistMessages(conversationId, userId, userMessage, assistantReply, recommended);
+                checkAndUpdateProfile(userId, conversationId);
             }
-            
-            log.info("AI Agent 对话完成: userId={}, conversationId={}, memorySize={}, relevantHistory={}, recommendedCommodities={}", 
-                userId, conversationId, memoryMessages.size(), relevantHistory.size(), 
-                recommendedCommodities != null ? recommendedCommodities.size() : 0);
-            
-            return new ChatResult(assistantReply, recommendedCommodities);
-            
+
+            log.info("AI 对话完成: userId={}, cid={}, recommended={}", userId, conversationId,
+                recommended != null ? recommended.size() : 0);
+            return new ChatResult(assistantReply, recommended);
+
         } catch (Exception e) {
-            log.error("AI Agent 对话失败: userId={}, error={}", userId, e.getMessage(), e);
-            return new ChatResult("抱歉，我遇到了一些问题，请稍后再试。", new ArrayList<>());
+            log.error("AI 对话失败: userId={}, error={}", userId, e.getMessage(), e);
+            return new ChatResult("抱歉，我遇到了一些问题，请稍后再试。", null);
         }
     }
-    
-    public void chatStream(String userMessage, String userId, String conversationId, StreamChatCallback callback) {
+
+    public Flux<ServerSentEvent<String>> chatStream(String userMessage, String userId, String conversationId) {
+        if (!StringUtils.hasText(userMessage) || !StringUtils.hasText(userId)) {
+            return Flux.just(errorEvent("用户消息或用户ID不能为空"));
+        }
+
         try {
-            if (!StringUtils.hasText(userMessage) || !StringUtils.hasText(userId)) {
-                callback.onError("用户消息或用户ID不能为空");
-                return;
-            }
-            
-            searchCommoditiesTool.setLastSearchResults(new ArrayList<>());
-            
+            searchCommoditiesTool.clearForNewTurn();
             String memoryId = StringUtils.hasText(conversationId) ? conversationId : userId + "_default";
-            
-            String userProfileContext = getUserProfileContext(userId);
-            
-            List<ConversationVectorService.ConversationMessage> relevantHistory = 
-                conversationVectorService.searchRelevantConversations(userMessage, userId, MAX_CONVERSATION_HISTORY);
-            
-            ChatMemory chatMemory = chatMemoryMap.computeIfAbsent(memoryId, 
-                id -> {
-                    ChatMemory newMemory = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
-                    if (StringUtils.hasText(conversationId)) {
-                        loadHistoryToChatMemory(newMemory, conversationId, userId);
-                    }
-                    return newMemory;
-                });
-            
-            String conversationSummary = null;
-            List<ChatMessage> memoryMessages = chatMemory.messages();
-            if (memoryMessages.size() >= MAX_SUMMARY_TRIGGER) {
-                conversationSummary = summarizeOldMessages(memoryMessages, MAX_MEMORY_MESSAGES);
-                log.debug("生成对话摘要: memoryId={}, summaryLength={}", memoryId, 
-                    conversationSummary != null ? conversationSummary.length() : 0);
+
+            initChatMemory(memoryId, conversationId, userId);
+            rebuildMemoryBySimilarity(memoryId, conversationId, userId, userMessage);
+            injectSemanticProfileContext(memoryId, userId, userMessage);
+
+            ChatMemory chatMemory = chatMemoryMap.get(memoryId);
+            if (chatMemory.messages().size() >= SUMMARY_TRIGGER) {
+                summarizeAndCompress(chatMemory, chatMemory.messages(), memoryId);
             }
-            
-            String systemPrompt = buildEnhancedSystemPrompt(userId, userProfileContext, conversationSummary, relevantHistory);
-            
-            List<ChatMessage> allMessages = new ArrayList<>();
-            allMessages.add(SystemMessage.from(systemPrompt));
-            allMessages.addAll(chatMemory.messages());
-            allMessages.add(UserMessage.from(userMessage));
-            
+
             StringBuilder fullReply = new StringBuilder();
-            
-            ConversationContext context = new ConversationContext();
-            context.userId = userId;
-            context.userProfileContext = getUserProfileContext(userId);
-            context.conversationSummary = conversationSummary;
-            context.relevantHistory = relevantHistory;
-            context.lastUpdateTime = System.currentTimeMillis();
-            contextMap.put(memoryId, context);
-            
-            injectRelevantHistory(chatMemory, relevantHistory, memoryMessages);
-            
-            CompletableFuture.runAsync(() -> {
-                try {
-                    String completeReply = shoppingAssistant.chat(memoryId, userMessage);
-                    
-                    if (completeReply != null) {
-                        completeReply = completeReply
-                            .replaceAll("<\\|FunctionCallBegin\\|>.*?<\\|FunctionCallEnd\\|>", "")
-                            .replaceAll("<\\|FunctionCallBegin\\|>", "")
-                            .replaceAll("<\\|FunctionCallEnd\\|>", "")
-                            .trim();
+
+            return shoppingAssistant.chatStream(memoryId, userMessage)
+                .map(token -> {
+                    fullReply.append(token);
+                    return ServerSentEvent.<String>builder()
+                        .event("token")
+                        .data(token)
+                        .build();
+                })
+                .concatWith(buildCompleteEvent(conversationId, userId, userMessage, fullReply))
+                .onErrorResume(e -> {
+                    log.error("AI 流式对话失败: userId={}, cid={}, error={}", userId, conversationId, e.getMessage(), e);
+                    return Flux.just(errorEvent(e.getMessage()));
+                });
+
+        } catch (Exception e) {
+            log.error("AI 流式对话启动失败: userId={}, error={}", userId, e.getMessage(), e);
+            return Flux.just(errorEvent(e.getMessage()));
+        }
+    }
+
+    /** 获取用户画像（供 Controller 返回） */
+    public Optional<AIConversationStorage.ProfileSummary> getUserProfile(String userId) {
+        return storage.getProfileSummary(userId);
+    }
+
+    /** 解析推荐商品 ID 列表（JSON 数组字符串） */
+    public List<String> parseRecommendedIds(String json) {
+        if (!StringUtils.hasText(json)) return Collections.emptyList();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private void initChatMemory(String memoryId, String conversationId, String userId) {
+        chatMemoryMap.computeIfAbsent(memoryId, id -> {
+            ChatMemory mem = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
+            injectUserProfile(mem, userId);
+            return mem;
+        });
+    }
+
+    private void rebuildMemoryBySimilarity(String memoryId, String conversationId, String userId, String userMessage) {
+        try {
+            ChatMemory newMemory = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
+            injectUserProfile(newMemory, userId);
+            if (StringUtils.hasText(conversationId) && StringUtils.hasText(userMessage)) {
+                int topK = Math.max(milvusProperties.getMemoryTopK(), MEMORY_RECALL_LIMIT);
+                List<Map<String, Object>> hits = milvusVectorService.searchConversationByText(userMessage, conversationId, topK);
+                int added = 0;
+                for (Map<String, Object> hit : hits) {
+                    Object entityRaw = hit.get("entity");
+                    if (!(entityRaw instanceof Map<?, ?> entity)) continue;
+                    Object contentObj = entity.get("content");
+                    if (contentObj == null) continue;
+                    String content = String.valueOf(contentObj);
+                    if (content.startsWith("role=user\ncontent=")) {
+                        newMemory.add(UserMessage.from(content.substring("role=user\ncontent=".length())));
+                        added++;
+                    } else if (content.startsWith("role=assistant\ncontent=")) {
+                        newMemory.add(AiMessage.from(content.substring("role=assistant\ncontent=".length())));
+                        added++;
                     }
-                    
-                    if (completeReply == null || completeReply.trim().isEmpty()) {
-                        completeReply = "我已经为您搜索了相关商品，请查看推荐列表。";
-                    }
-                    
-                    int chunkSize = 3;
-                    for (int i = 0; i < completeReply.length(); i += chunkSize) {
-                        int end = Math.min(i + chunkSize, completeReply.length());
-                        String chunk = completeReply.substring(i, end);
-                        fullReply.append(chunk);
-                        callback.onToken(chunk);
-                        
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                            break;
-                        }
-                    }
-                    
-                    String finalReply = fullReply.toString();
-                    
-                    List<SearchCommoditiesTool.CommodityDTO> recommendedCommodities = searchCommoditiesTool.getLastSearchResults();
-                    
-                    if (StringUtils.hasText(conversationId)) {
-                        String userMessageId = UUID.randomUUID().toString();
-                        String assistantMessageId = UUID.randomUUID().toString();
-                        
-                        conversationVectorService.storeConversationVector(
-                            conversationId, userMessageId, userId, userMessage, "user");
-                        
-                        List<String> commodityIds = recommendedCommodities != null && !recommendedCommodities.isEmpty()
-                            ? recommendedCommodities.stream()
-                                .map(SearchCommoditiesTool.CommodityDTO::getCommodityId)
-                                .filter(Objects::nonNull)
-                                .collect(java.util.stream.Collectors.toList())
-                            : null;
-                        conversationVectorService.storeConversationVector(
-                            conversationId, assistantMessageId, userId, finalReply, "assistant", commodityIds);
-                    }
-                    
-                    log.info("AI Agent 流式对话完成: userId={}, conversationId={}, memorySize={}, relevantHistory={}, recommendedCommodities={}", 
-                        userId, conversationId, memoryMessages.size(), relevantHistory.size(), 
-                        recommendedCommodities != null ? recommendedCommodities.size() : 0);
-                    
-                    callback.onComplete(finalReply, recommendedCommodities);
-                    
-                } catch (Exception e) {
-                    log.error("AI Agent 流式对话失败: userId={}, error={}", userId, e.getMessage(), e);
-                    callback.onError("AI 对话失败: " + e.getMessage());
+                    if (added >= MAX_MEMORY_MESSAGES - 3) break;
+                }
+                log.debug("Milvus 语义记忆召回完成: cid={}, recalled={}", conversationId, added);
+            }
+            chatMemoryMap.put(memoryId, newMemory);
+        } catch (Exception e) {
+            log.warn("基于 Milvus 重建语义记忆失败，回退空记忆: cid={}, error={}", conversationId, e.getMessage());
+            ChatMemory fallback = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
+            injectUserProfile(fallback, userId);
+            chatMemoryMap.put(memoryId, fallback);
+        }
+    }
+
+    private void injectUserProfile(ChatMemory chatMemory, String userId) {
+        try {
+            storage.getProfileSummary(userId).ifPresent(profile -> {
+                if (StringUtils.hasText(profile.profileSummary())) {
+                    chatMemory.add(SystemMessage.from(
+                        buildBaseSystemPrompt() + "\n\n=== 用户画像 ===\n" + profile.profileSummary()
+                        + "\n请根据以上偏好提供个性化推荐。"));
                 }
             });
-            
         } catch (Exception e) {
-            log.error("AI Agent 流式对话失败: userId={}, error={}", userId, e.getMessage(), e);
-            callback.onError("AI 对话失败: " + e.getMessage());
+            log.debug("注入用户画像失败（可选）: userId={}, error={}", userId, e.getMessage());
         }
     }
-    
-    public AgentSearchResult intelligentSearch(String query, String userId, String conversationId) {
+
+    private void injectSemanticProfileContext(String memoryId, String userId, String userMessage) {
         try {
-            ChatResult chatResult = chat(query, userId, conversationId);
-            
-            AgentSearchResult result = new AgentSearchResult();
-            result.setCommodities(chatResult.getRecommendedCommodities() != null ? 
-                chatResult.getRecommendedCommodities() : new ArrayList<>());
-            result.setExplanation(chatResult.getReply());
-            result.setOriginalQuery(query);
-            result.setEnhancedQuery(query);
-            
-            log.info("智能搜索完成（通过Agent）: userId={}, query={}, commodities={}", 
-                userId, query, result.getCommodities().size());
-            
-            return result;
-            
-        } catch (Exception e) {
-            log.error("智能搜索失败: userId={}, error={}", userId, e.getMessage(), e);
-            AgentSearchResult result = new AgentSearchResult();
-            result.setCommodities(new ArrayList<>());
-            result.setExplanation("抱歉，搜索时遇到了问题，请稍后重试。");
-            result.setOriginalQuery(query);
-            result.setEnhancedQuery(query);
-            return result;
-        }
-    }
-    
-    private String buildSystemPrompt(String userId) {
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("你是一个智能购物助手，帮助用户在南大集市（二手交易平台）上找到合适的商品。\n\n");
-        prompt.append("你的职责：\n");
-        prompt.append("1. 理解用户的购物需求\n");
-        prompt.append("2. 当用户想要查找、购买或了解商品时，使用 searchCommodities 工具搜索商品\n");
-        prompt.append("3. 基于搜索结果推荐合适的商品\n");
-        prompt.append("4. 回答关于商品的问题\n");
-        prompt.append("5. 提供友好的购物建议\n\n");
-        prompt.append("使用工具的规则：\n");
-        prompt.append("- 当用户明确表示想要查找、购买、搜索商品时，必须调用 searchCommodities 工具\n");
-        prompt.append("- 从用户的描述中提取搜索关键词（query参数）\n");
-        prompt.append("- 如果用户提到位置，使用 location 参数\n");
-        prompt.append("- 如果没有明确提到数量，默认返回 20 个结果\n");
-        prompt.append("- 基于工具返回的搜索结果，为用户提供个性化的推荐和解释\n\n");
-        prompt.append("注意事项：\n");
-        prompt.append("- 回答要简洁明了、友好自然\n");
-        prompt.append("- 基于搜索结果回答，不要编造商品信息\n");
-        prompt.append("- 如果搜索结果为空，友好地建议用户调整搜索条件\n");
-        prompt.append("- 如果用户的问题不明确，要友好地询问更多细节\n");
-        return prompt.toString();
-    }
-    
-    private String buildEnhancedSystemPrompt(String userId, String userProfileContext, 
-                                            String conversationSummary, 
-                                            List<ConversationVectorService.ConversationMessage> relevantHistory) {
-        StringBuilder prompt = new StringBuilder(buildSystemPrompt(userId));
-        
-        if (StringUtils.hasText(userProfileContext)) {
-            prompt.append("\n\n=== 用户画像信息 ===\n");
-            prompt.append(userProfileContext);
-            prompt.append("\n请根据用户的偏好和需求提供个性化推荐。\n");
-        }
-        
-        if (StringUtils.hasText(conversationSummary)) {
-            prompt.append("\n\n=== 之前的对话摘要 ===\n");
-            prompt.append(conversationSummary);
-            prompt.append("\n这是之前对话的摘要，请参考这些信息理解上下文。\n");
-        }
-        
-        if (relevantHistory != null && !relevantHistory.isEmpty()) {
-            prompt.append("\n\n=== 相关的历史对话 ===\n");
-            for (int i = 0; i < relevantHistory.size() && i < MAX_CONVERSATION_HISTORY; i++) {
-                ConversationVectorService.ConversationMessage msg = relevantHistory.get(i);
-                prompt.append(String.format("[%s]: %s\n", 
-                    "user".equals(msg.getRole()) ? "用户" : "助手", 
-                    msg.getContent()));
-            }
-            prompt.append("\n这些是相关的历史对话，请参考以更好地理解用户的需求。\n");
-        }
-        
-        return prompt.toString();
-    }
-    
-    private String getUserProfileContext(String userId) {
-        try {
-            Result result = authClient.getUserProfileVector(userId);
-            if (result != null && result.getSuccess() != null && result.getSuccess() && result.getData() != null) {
-                return "用户已建立购物偏好画像，请根据历史行为提供个性化推荐。";
+            List<Map<String, Object>> hits = milvusVectorService.searchUserProfileByText(userMessage, 3);
+            if (hits == null || hits.isEmpty()) return;
+            String context = hits.stream()
+                    .map(hit -> {
+                        Object entityRaw = hit.get("entity");
+                        if (!(entityRaw instanceof Map<?, ?> entity)) return null;
+                        Object bizId = entity.get("bizId");
+                        if (bizId == null || !userId.equals(String.valueOf(bizId))) return null;
+                        Object content = entity.get("content");
+                        Object score = hit.get("score");
+                        if (content == null) return null;
+                        return "- [" + score + "] " + content;
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("\n"));
+            if (!StringUtils.hasText(context)) return;
+            ChatMemory chatMemory = chatMemoryMap.get(memoryId);
+            if (chatMemory != null) {
+                chatMemory.add(SystemMessage.from("=== 用户画像语义片段（按当前问题召回）===\n" + context));
             }
         } catch (Exception e) {
-            log.debug("获取用户画像失败（可选）: userId={}, error={}", userId, e.getMessage());
+            log.debug("注入用户画像语义片段失败（忽略）: userId={}, error={}", userId, e.getMessage());
         }
-        return null;
     }
-    
-    private String summarizeOldMessages(List<ChatMessage> messages, int keepRecent) {
-        if (messages == null || messages.size() <= keepRecent) {
-            return null;
-        }
-        
+
+    protected void persistMessages(String conversationId, String userId,
+                                   String userText, String assistantText,
+                                   List<SearchCommoditiesTool.CommodityDTO> recommended) {
         try {
-            int toSummarize = messages.size() - keepRecent;
-            List<ChatMessage> oldMessages = messages.subList(0, toSummarize);
-            
-            StringBuilder conversationText = new StringBuilder();
+            AIConversationStorage.MessageRecord userRec = storage.appendMessage(conversationId, userId, "user", userText, null);
+            upsertConversationMemory(userRec.messageId(), userRec.conversationId(), "user", userText);
+
+            String recIds = null;
+            if (recommended != null && !recommended.isEmpty()) {
+                List<String> ids = recommended.stream()
+                    .map(SearchCommoditiesTool.CommodityDTO::getCommodityId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+                try {
+                    recIds = objectMapper.writeValueAsString(ids);
+                } catch (Exception ignored) {}
+            }
+            AIConversationStorage.MessageRecord assistantRec = storage.appendMessage(conversationId, userId, "assistant", assistantText, recIds);
+            upsertConversationMemory(assistantRec.messageId(), assistantRec.conversationId(), "assistant", assistantText);
+
+        } catch (Exception e) {
+            log.error("持久化消息失败（用户回复不受影响）: cid={}, error={}", conversationId, e.getMessage(), e);
+        }
+    }
+
+    private void upsertConversationMemory(String messageId, String conversationId, String role, String content) {
+        try {
+            String vectorContent = "role=" + role + "\ncontent=" + content;
+            milvusVectorService.upsertConversationMessageByText(messageId, conversationId, vectorContent);
+        } catch (Exception e) {
+            log.debug("写入对话语义记忆失败（不影响主流程）: mid={}, error={}", messageId, e.getMessage());
+        }
+    }
+
+    private Flux<ServerSentEvent<String>> buildCompleteEvent(String conversationId, String userId,
+                                                             String userMessage, StringBuilder fullReply) {
+        return Flux.<ServerSentEvent<String>>defer(() -> {
+            String reply = fullReply.toString();
+            List<SearchCommoditiesTool.CommodityDTO> recommended = searchCommoditiesTool.getRecommendedCommoditiesForResponse();
+
+            if (StringUtils.hasText(conversationId)) {
+                persistMessages(conversationId, userId, userMessage, reply, recommended);
+                checkAndUpdateProfile(userId, conversationId);
+            }
+
+            try {
+                Map<String, Object> data = new HashMap<>();
+                data.put("reply", reply);
+                data.put("conversationId", conversationId);
+                data.put("recommendedCommodities", recommended);
+                data.put("hasRecommendations", recommended != null && !recommended.isEmpty());
+
+                return Flux.just(ServerSentEvent.<String>builder()
+                    .event("complete")
+                    .data(objectMapper.writeValueAsString(data))
+                    .build());
+            } catch (Exception e) {
+                log.error("构建 complete 事件失败: {}", e.getMessage(), e);
+                return Flux.empty();
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private void checkAndUpdateProfile(String userId, String conversationId) {
+        try {
+            long msgCount = storage.countMessages(conversationId);
+            if (msgCount % PROFILE_UPDATE_INTERVAL == 0) {
+                updateUserProfileAsync(userId, conversationId);
+            }
+        } catch (Exception e) {
+            log.debug("检查画像更新条件失败（忽略）: {}", e.getMessage());
+        }
+    }
+
+    private void summarizeAndCompress(ChatMemory oldMemory, List<ChatMessage> messages, String memoryId) {
+        try {
+            int keepRecent = MAX_MEMORY_MESSAGES;
+            if (messages.size() <= keepRecent) return;
+
+            List<ChatMessage> oldMessages = messages.subList(0, messages.size() - keepRecent);
+            StringBuilder sb = new StringBuilder();
             for (ChatMessage msg : oldMessages) {
                 String role = msg instanceof UserMessage ? "用户" : "助手";
-                String content = msg instanceof UserMessage ? 
-                    ((UserMessage) msg).singleText() : 
-                    ((AiMessage) msg).text();
-                conversationText.append(String.format("[%s]: %s\n", role, content));
+                String text = msg instanceof UserMessage
+                    ? ((UserMessage) msg).singleText()
+                    : ((AiMessage) msg).text();
+                sb.append("[").append(role).append("]: ").append(text).append("\n");
             }
-            
-            String summaryPrompt = String.format(
-                "以下是用户与购物助手的早期对话记录，请用简洁的语言总结主要内容和用户的需求偏好：\n\n%s\n\n" +
-                "请用一段话（不超过200字）总结这段对话的主要内容、用户的需求和偏好。",
-                conversationText.toString()
-            );
-            
-            Response<AiMessage> response = chatLanguageModel.generate(UserMessage.from(summaryPrompt));
-            String summary = response.content().text().trim();
-            
-            log.debug("生成对话摘要成功: messagesCount={}, summaryLength={}", 
-                oldMessages.size(), summary.length());
-            
-            return summary;
-            
+            String prompt = "请用简洁的语言（不超过200字）总结以下对话的主要内容和用户需求偏好：\n\n"
+                + sb + "\n一段话总结：";
+            ChatResponse resp = chatLanguageModel.chat(UserMessage.from(prompt));
+            String summary = resp.aiMessage().text().trim();
+
+            List<ChatMessage> recentMessages = new ArrayList<>(
+                messages.subList(messages.size() - keepRecent, messages.size()));
+            ChatMemory newMemory = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
+            newMemory.add(SystemMessage.from("【历史摘要】" + summary));
+            recentMessages.forEach(newMemory::add);
+            chatMemoryMap.put(memoryId, newMemory);
+
+            log.debug("对话摘要完成，压缩了 {} 条消息", oldMessages.size());
         } catch (Exception e) {
-            log.warn("生成对话摘要失败: error={}", e.getMessage());
-            return null;
+            log.warn("生成对话摘要失败（忽略，保持原有记忆）: {}", e.getMessage());
         }
     }
-    
-    private void loadHistoryToChatMemory(ChatMemory chatMemory, String conversationId, String userId) {
+
+    @Async
+    public void updateUserProfileAsync(String userId, String conversationId) {
         try {
-            List<ConversationVectorService.ConversationMessage> historyMessages = 
-                conversationVectorService.getChatMessages(conversationId, userId, MAX_MEMORY_MESSAGES * 2);
-            
-            if (historyMessages == null || historyMessages.isEmpty()) {
-                log.debug("没有找到历史消息: conversationId={}", conversationId);
-                return;
+            List<AIConversationStorage.MessageRecord> recent = storage.getRecentMessages(conversationId, 30);
+            if (recent.isEmpty()) return;
+
+            StringBuilder sb = new StringBuilder();
+            for (AIConversationStorage.MessageRecord msg : recent) {
+                String role = "user".equals(msg.role()) ? "用户" : "助手";
+                sb.append("[").append(role).append("]: ").append(msg.content()).append("\n");
             }
-            
-            int count = 0;
-            for (ConversationVectorService.ConversationMessage msg : historyMessages) {
-                if (count >= MAX_MEMORY_MESSAGES) {
-                    break;
-                }
-                
-                if ("user".equals(msg.getRole())) {
-                    chatMemory.add(UserMessage.from(msg.getContent()));
-                    count++;
-                } else if ("assistant".equals(msg.getRole())) {
-                    chatMemory.add(AiMessage.from(msg.getContent()));
-                    count++;
-                }
+            String prompt = "根据以下用户与购物助手的对话，用一句话（不超过100字）归纳该用户的购物偏好，"
+                + "包括商品类型、价格区间、地区等信息：\n\n" + sb + "\n偏好摘要：";
+
+            ChatResponse resp = chatLanguageModel.chat(UserMessage.from(prompt));
+            String summary = resp.aiMessage().text().trim();
+
+            storage.saveProfileSummary(userId, summary);
+
+            List<String> chunks = buildProfileChunks(summary, recent);
+            int idx = 0;
+            for (String chunk : chunks) {
+                String vectorId = "up_" + userId + "_" + System.currentTimeMillis() + "_" + idx++;
+                milvusVectorService.upsertUserProfileVectorByText(vectorId, userId, chunk);
             }
-            
-            log.info("加载历史消息到 ChatMemory: conversationId={}, loadedCount={}", conversationId, count);
-            
+
+            log.info("用户画像已更新: userId={}", userId);
         } catch (Exception e) {
-            log.error("加载历史消息失败: conversationId={}, error={}", conversationId, e.getMessage(), e);
+            log.warn("更新用户画像失败（异步，不影响主流程）: userId={}, error={}", userId, e.getMessage());
         }
     }
-    
-    private void injectRelevantHistory(ChatMemory chatMemory, 
-                                      List<ConversationVectorService.ConversationMessage> relevantHistory,
-                                      List<ChatMessage> memoryMessages) {
-        if (relevantHistory == null || relevantHistory.isEmpty()) {
-            return;
+
+    private List<String> buildProfileChunks(String summary, List<AIConversationStorage.MessageRecord> recentMessages) {
+        List<String> chunks = new ArrayList<>();
+        if (StringUtils.hasText(summary)) {
+            chunks.add("用户长期偏好摘要: " + summary);
         }
-        
-        int relevantCount = relevantHistory.size();
-        int memorySize = memoryMessages.size();
-        
-        log.debug("发现相关历史: count={}, memorySize={}", relevantCount, memorySize);
+        StringBuilder dialog = new StringBuilder();
+        int count = 0;
+        for (AIConversationStorage.MessageRecord msg : recentMessages) {
+            if (count >= 12) break;
+            String role = "user".equals(msg.role()) ? "用户" : "助手";
+            dialog.append(role).append("：").append(msg.content()).append('\n');
+            count++;
+        }
+        String dialogText = dialog.toString();
+        int chunkSize = 220;
+        for (int i = 0; i < dialogText.length(); i += chunkSize) {
+            int end = Math.min(i + chunkSize, dialogText.length());
+            String part = dialogText.substring(i, end).trim();
+            if (!part.isEmpty()) {
+                chunks.add("近期对话偏好片段: " + part);
+            }
+        }
+        return chunks;
     }
-    
-    public static class AgentSearchResult {
-        private List<SearchCommoditiesTool.CommodityDTO> commodities;
-        private String explanation;
-        private String originalQuery;
-        private String enhancedQuery;
-        
-        public List<SearchCommoditiesTool.CommodityDTO> getCommodities() { return commodities; }
-        public void setCommodities(List<SearchCommoditiesTool.CommodityDTO> commodities) { this.commodities = commodities; }
-        
-        public String getExplanation() { return explanation; }
-        public void setExplanation(String explanation) { this.explanation = explanation; }
-        
-        public String getOriginalQuery() { return originalQuery; }
-        public void setOriginalQuery(String originalQuery) { this.originalQuery = originalQuery; }
-        
-        public String getEnhancedQuery() { return enhancedQuery; }
-        public void setEnhancedQuery(String enhancedQuery) { this.enhancedQuery = enhancedQuery; }
+
+    private String buildBaseSystemPrompt() {
+        return "你是一个智能购物助手，帮助用户在南大集市（二手交易平台）上找到合适的商品。\n\n"
+            + "你的职责：\n"
+            + "1. 理解用户的购物需求\n"
+            + "2. 当用户想要查找、购买或了解商品时，使用 searchCommodities 工具搜索商品\n"
+            + "2.1 当用户需求描述模糊、同义表达多时，优先使用 searchCommoditiesByVector\n"
+            + "2.2 当需要兼顾精确关键词和语义召回时，使用 searchCommoditiesHybrid\n"
+            + "3. 基于搜索结果推荐合适的商品\n"
+            + "4. 回答关于商品的问题\n"
+            + "5. 提供友好的购物建议\n\n"
+            + "使用工具的规则：\n"
+            + "- 当用户明确表示想要查找、购买、搜索商品时，必须调用 searchCommodities 工具\n"
+            + "- 如果用户描述是偏语义、口语化（例如“适合宿舍追剧的轻薄本”），优先用 searchCommoditiesByVector 或 searchCommoditiesHybrid\n"
+            + "- 从用户的描述中提取搜索关键词（query 参数）作为主搜索条件\n"
+            + "- location 是弱参数：仅当用户明确强调「只要某地」「附近」等时可选传入，用作软偏好即可，不要过度依赖；多数情况不传或传空\n"
+            + "- 如果没有明确提到数量，默认返回 20 个结果\n"
+            + "- 基于工具返回的搜索结果，为用户提供个性化的推荐和解释\n\n"
+            + "结果过滤与推荐（重要）：\n"
+            + "- 搜索引擎返回的结果粒度较粗，常会混入仅关键词相关、但不符合用户具体要求的商品。\n"
+            + "- 你必须对搜索结果做「过滤」：只推荐真正符合用户描述的商品，不要推荐勉强相关却不符合的。\n"
+            + "- 例如：用户要「二合一笔记本」时，只推荐二合一/可翻转/触屏本，不要推荐普通笔记本。\n"
+            + "- 在给出文字回复前，必须调用 confirmRecommendedCommodities，传入且仅传入「经过过滤、真正符合用户需求」的 commodityId 列表；没有符合的则传空列表。只有被确认的商品会作为推荐卡片展示给用户，未确认的不会展示。\n\n"
+            + "Agent 回溯（仅在「ES 搜索 + LLM 过滤」之后仍不足时）：\n"
+            + "- 流程顺序固定：先做 ES 搜索（粗粒度、OR 型）→ 对本次搜索结果做 LLM 过滤并调用 confirmRecommendedCommodities → 若此时过滤后仍没有或不够合适结果，再考虑回溯。\n"
+            + "- 你可以在首次检索阶段自主选择 ES、向量或混合检索；但都必须先完成过滤与 confirm，再决定是否回溯。\n"
+            + "- 不要在「刚搜完、还没做过滤」时就换词重搜。回溯只发生在「已经过滤并确认过，仍不满意」之后。\n"
+            + "- 回溯时：改进搜索关键词（同义词、限定词、更具体说法），再次 searchCommodities，然后对新区结果同样先过滤、再 confirm，直到有合适推荐或工具调用次数用尽（最多 5 次）。\n"
+            + "- 只有在多次「搜索 + 过滤」后仍无合适结果时，才回复用户说明并建议调整需求。不要凑数推荐不匹配的商品。\n\n"
+            + "注意事项：\n"
+            + "- 回答要简洁明了、友好自然\n"
+            + "- 基于搜索结果回答，不要编造商品信息\n"
+            + "- 如果搜索结果为空，友好地建议用户调整搜索条件\n"
+            + "- 如果用户的问题不明确，要友好地询问更多细节\n";
+    }
+
+    private ServerSentEvent<String> errorEvent(String message) {
+        String safeMsg = message != null ? message.replace("\"", "'") : "未知错误";
+        return ServerSentEvent.<String>builder()
+            .event("error")
+            .data("{\"error\":\"" + safeMsg + "\"}")
+            .build();
     }
 }
-

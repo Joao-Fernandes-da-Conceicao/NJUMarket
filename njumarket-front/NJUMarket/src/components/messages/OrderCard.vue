@@ -8,9 +8,9 @@
         <h4 class="card-title">{{ order.commoditySnapshotTitle || '商品' }}</h4>
         <div class="card-price">¥{{ formatPrice(order.payAmount || order.totalAmount || order.commoditySnapshotPrice || 0) }}</div>
         <div class="card-status">
-          <UnifiedTag :type="getStatusType(order.orderStatus)" size="small">
+          <el-tag :type="getStatusType(order.orderStatus)" size="small">
             {{ getStatusText(order.orderStatus) }}
-          </UnifiedTag>
+          </el-tag>
         </div>
       </div>
     </div>
@@ -40,7 +40,6 @@
 import { onMounted, watch } from 'vue'
 import { formatPrice } from '../../utils/formatUtils'
 import { imageAPI } from '../../api'
-import UnifiedTag from '../common/UnifiedTag.vue'
 
 const props = defineProps({
   order: {

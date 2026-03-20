@@ -52,10 +52,6 @@ public class User implements IUser {
     @JsonIgnore  // 避免Jackson序列化时的循环引用
     private List<UserAddress> addresses;
     
-    // 一对多关系：用户活动记录
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<UserActivityRecord> activityRecords;
-    
     /**
      * 用户登录
      * @param type 登录类型

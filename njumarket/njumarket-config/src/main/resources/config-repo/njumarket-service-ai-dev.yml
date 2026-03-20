@@ -1,19 +1,7 @@
 # AI Service - Dev 环境配置
-# 包含 PostgreSQL 和 Redis 等环境相关配置
+# 无关系库，仅 Redis + Milvus
 
 spring:
-  datasource:
-    driver-class-name: org.postgresql.Driver
-    url: ${AI_DATASOURCE_URL:jdbc:postgresql://localhost:5432/njumarket?currentSchema=nju_market}
-    username: ${AI_DATASOURCE_USERNAME:postgres}
-    password: ${AI_DATASOURCE_PASSWORD:Hqz20050316}
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -26,20 +14,33 @@ eureka:
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
 
-# LangChain4j 配置（用于 Doubao API）
+# LangChain4j 配置（用于 Doubao API，兼容 OpenAI 协议）
+# 新版 Spring Boot Starter 要求 chat-model 为对象，不能为字符串
 langchain4j:
   open-ai:
-    # 火山引擎 Doubao API 配置（兼容 OpenAI API）
-    # API Key 通过环境变量 DOUBAO_API_KEY 设置
     api-key: ${DOUBAO_API_KEY:8736b46e-a38e-4d2c-8859-0460a1167310}
-    # 火山引擎 API base-url
-    # LangChain4j 会自动在 base-url 后添加 /chat/completions 或 /embeddings
-    # 官方文档示例：https://ark.cn-beijing.volces.com/api/v3/chat/completions
     base-url: ${DOUBAO_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
-    # Chat 模型配置（官方提供的模型ID）
-    chat-model: ${DOUBAO_CHAT_MODEL:doubao-seed-1-6-250615}
     timeout: 60s
-    # Embedding 模型配置
-    embedding-model: ${DOUBAO_EMBEDDING_MODEL:doubao-embedding-text-240715}
-    # 注意：Doubao embedding 模型实际返回 2560 维，代码中会将向量截断到 2000 维（HNSW 索引限制）
+    # 必须是对象结构，否则会报 ConverterNotFoundException: String -> ChatModelProperties
+    chat-model:
+      model-name: ${DOUBAO_CHAT_MODEL:doubao-seed-1-6-250615}
+      temperature: 0.7
+      max-tokens: 2000
+    embedding-model:
+      model-name: ${DOUBAO_EMBEDDING_MODEL:doubao-embedding-text-240715}
+
+njumarket:
+  ai:
+    milvus:
+      enabled: ${MILVUS_ENABLED:true}
+      uri: ${MILVUS_URI:http://localhost:19530}
+      token: ${MILVUS_TOKEN:}
+      db-name: ${MILVUS_DB_NAME:default}
+      commodity-collection: ${MILVUS_COMMODITY_COLLECTION:commodity_vectors}
+      user-profile-collection: ${MILVUS_USER_PROFILE_COLLECTION:user_profile_vectors}
+      conversation-collection: ${MILVUS_CONVERSATION_COLLECTION:conversation_memory_vectors}
+      dimension: ${MILVUS_DIMENSION:1024}
+      top-k: ${MILVUS_TOP_K:10}
+      metric-type: ${MILVUS_METRIC_TYPE:COSINE}
+      memory-top-k: ${MILVUS_MEMORY_TOP_K:12}
 

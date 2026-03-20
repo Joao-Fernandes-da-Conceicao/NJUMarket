@@ -44,15 +44,15 @@
           
           <!-- 本人主页：操作按钮 -->
           <div class="profile-actions" v-if="isOwnHome">
-            <UnifiedButton type="primary" class="profile-action-btn" @click="showAvatarDialog = true">
+            <el-button type="primary" class="profile-action-btn" @click="showAvatarDialog = true">
               更换头像
-            </UnifiedButton>
-            <UnifiedButton type="primary" class="profile-action-btn" @click="goToEditProfile">
+            </el-button>
+            <el-button type="primary" class="profile-action-btn" @click="goToEditProfile">
               编辑资料
-            </UnifiedButton>
-            <UnifiedButton type="primary" class="profile-action-btn" @click="$router.push('/publish')">
+            </el-button>
+            <el-button type="primary" class="profile-action-btn" @click="$router.push('/publish')">
               发布商品
-            </UnifiedButton>
+            </el-button>
           </div>
         </div>
 
@@ -92,9 +92,9 @@
           <div class="commodities-list" v-loading="loading">
             <div v-if="commodities.length === 0 && !loading" class="empty-state">
               <el-empty :description="getEmptyDescription()">
-                <UnifiedButton v-if="isOwnHome" type="primary" @click="handleEmptyAction()">
+                <el-button v-if="isOwnHome" type="primary" @click="handleEmptyAction()">
                   {{ getEmptyActionText() }}
-                </UnifiedButton>
+                </el-button>
               </el-empty>
             </div>
 
@@ -202,7 +202,7 @@
           :before-upload="beforeAvatarUpload"
           accept="image/*"
         >
-          <UnifiedButton type="primary" class="pill-upload-btn">选择头像</UnifiedButton>
+          <el-button type="primary" class="pill-upload-btn">选择头像</el-button>
         </el-upload>
         <div class="upload-tip">
           <p>支持 JPG、PNG 格式，建议尺寸 200x200 像素</p>
@@ -210,7 +210,7 @@
       </div>
       
       <template #footer>
-        <UnifiedButton @click="showAvatarDialog = false" class="pill-close-btn">关闭</UnifiedButton>
+        <el-button @click="showAvatarDialog = false" class="pill-close-btn">关闭</el-button>
       </template>
     </el-dialog>
   </div>
@@ -225,7 +225,6 @@ import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowDown } from '@element-plus/icons-vue'
 import SafeTabs from '../components/SafeTabs.vue'
 import MyCommodityCard from '../components/commodity/MyCommodityCard.vue'
-import UnifiedButton from '../components/common/UnifiedButton.vue'
 import AddressManager from '../components/address/AddressManager.vue'
 import '../styles/pagination.css'
 
@@ -234,7 +233,6 @@ export default {
   components: {
     SafeTabs,
     MyCommodityCard,
-    UnifiedButton,
     AddressManager,
     ArrowLeft,
     ArrowDown

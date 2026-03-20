@@ -14,9 +14,5 @@ public class UserDTO {
     private LocalDateTime registerTime;
     private String nickname;
     private String avatar;
-    private Integer creditScore;
-    private Double buyerRating;
-    private Double sellerRating;
-    private String vipLevel;
 }
 

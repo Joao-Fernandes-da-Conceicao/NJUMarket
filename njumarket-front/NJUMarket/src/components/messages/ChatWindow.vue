@@ -17,7 +17,7 @@
       </div>
 
       <div class="chat-actions">
-        <UnifiedButton text @click="$emit('view-profile', currentConversation?.otherUserId)">查看主页</UnifiedButton>
+        <el-button text @click="$emit('view-profile', currentConversation?.otherUserId)">查看主页</el-button>
       </div>
     </div>
 
@@ -36,14 +36,14 @@
           :style="menuPosition"
           @click.stop
         >
-          <UnifiedButton 
+          <el-button 
             type="danger" 
             size="small"
             @click="handleDeleteMessage(message)"
             class="delete-button"
           >
             删除
-          </UnifiedButton>
+          </el-button>
         </div>
         
         <template v-if="!message.isMine">
@@ -107,7 +107,7 @@
 
     <!-- 输入区域 -->
     <div class="message-input-area">
-      <UnifiedInput
+      <el-input
         v-model="localValue"
         type="textarea"
         :autosize="{ minRows: 2, maxRows: 6 }"
@@ -117,28 +117,28 @@
       <div class="input-actions">
         <span class="input-tip">Ctrl + Enter 发送</span>
         <div class="buttons-group">
-          <UnifiedButton 
+          <el-button 
             class="action-btn consult-commodity-btn" 
             :type="selectedCommodityId ? 'primary' : 'default'"
             @click="showCommodityDialog"
           >
             咨询商品
-          </UnifiedButton>
-          <UnifiedButton 
+          </el-button>
+          <el-button 
             class="action-btn consult-order-btn" 
             :type="selectedOrderId ? 'primary' : 'default'"
             @click="showOrderDialog"
           >
             咨询订单
-          </UnifiedButton>
-          <UnifiedButton 
+          </el-button>
+          <el-button 
             type="primary" 
             class="action-btn send-btn" 
             :disabled="!localValue.trim() || sending" 
             @click="onSend"
           >
             发送
-          </UnifiedButton>
+          </el-button>
         </div>
       </div>
       
@@ -174,8 +174,6 @@ import { useUserStore } from '../../stores/user'
 import { useMessageStore } from '../../stores/message'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import UnifiedButton from '../common/UnifiedButton.vue'
-import UnifiedInput from '../common/UnifiedInput.vue'
 import MessageCommodityCard from './CommodityCard.vue'
 import MessageOrderCard from './OrderCard.vue'
 import SelectCommodityOrOrderDialog from './SelectCommodityOrOrderDialog.vue'

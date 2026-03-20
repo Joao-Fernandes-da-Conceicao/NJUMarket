@@ -8,10 +8,10 @@
         <h4 class="card-title">{{ commodity.title }}</h4>
         <div class="card-price">¥{{ formatPrice(commodity.price) }}</div>
         <div class="card-tags">
-          <UnifiedTag size="small" type="info" v-if="commodity.category">{{ commodity.category }}</UnifiedTag>
-          <UnifiedTag size="small" type="warning" v-if="commodity.conditionLevel">{{ commodity.conditionLevel }}</UnifiedTag>
-          <UnifiedTag size="small" type="danger" v-if="commodity.commodityStatus === 'SOLD_OUT'">已售完</UnifiedTag>
-          <UnifiedTag size="small" type="warning" v-if="commodity.commodityStatus === 'OFF_SHELF'">已下架</UnifiedTag>
+          <el-tag size="small" type="info" v-if="commodity.category">{{ commodity.category }}</el-tag>
+          <el-tag size="small" type="warning" v-if="commodity.conditionLevel">{{ commodity.conditionLevel }}</el-tag>
+          <el-tag size="small" type="danger" v-if="commodity.commodityStatus === 'SOLD_OUT'">已售完</el-tag>
+          <el-tag size="small" type="warning" v-if="commodity.commodityStatus === 'OFF_SHELF'">已下架</el-tag>
         </div>
       </div>
     </div>
@@ -29,7 +29,6 @@
 import { computed } from 'vue'
 import { imageAPI } from '../../api'
 import { formatPrice } from '../../utils/formatUtils'
-import UnifiedTag from '../common/UnifiedTag.vue'
 
 const props = defineProps({
   commodity: {

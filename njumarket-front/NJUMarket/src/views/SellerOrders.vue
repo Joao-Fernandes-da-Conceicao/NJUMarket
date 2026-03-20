@@ -6,12 +6,12 @@
         <div class="page-header">
           <h1>卖家订单</h1>
           <div class="header-actions">
-            <UnifiedButton type="info" @click="$router.push('/orders')">
+            <el-button type="info" @click="$router.push('/orders')">
               买家订单
-            </UnifiedButton>
-            <UnifiedButton type="primary" @click="$router.push('/home')">
+            </el-button>
+            <el-button type="primary" @click="$router.push('/home')">
               管理商品
-            </UnifiedButton>
+            </el-button>
           </div>
         </div>
 
@@ -27,9 +27,9 @@
         <div class="orders-list" v-loading="loading">
           <div v-if="orders.length === 0 && !loading" class="empty-state">
             <el-empty :description="getEmptyDescription()">
-              <UnifiedButton type="primary" @click="handleEmptyAction()">
+              <el-button type="primary" @click="handleEmptyAction()">
                 {{ getEmptyActionText() }}
-              </UnifiedButton>
+              </el-button>
             </el-empty>
           </div>
 
@@ -43,57 +43,57 @@
           >
             <template #actions>
               <!-- 卖家发货按钮 -->
-              <UnifiedButton
+              <el-button
                 v-if="canShip(order)"
                 type="primary"
                 class="action-btn-desktop"
                 @click="handleShip(order.orderId)"
               >
                 发货
-              </UnifiedButton>
+              </el-button>
 
               <!-- 卖家取消订单按钮 -->
-              <UnifiedButton
+              <el-button
                 v-if="canCancel(order)"
                 class="action-btn-desktop"
                 @click="handleCancel(order.orderId)"
               >
                 取消订单
-              </UnifiedButton>
+              </el-button>
               
               <!-- 处理退款申请按钮 -->
-              <UnifiedButton
+              <el-button
                 v-if="order.orderStatus === 'REFUND_REQUESTED'"
                 type="success"
                 class="action-btn-desktop"
                 @click="handleApproveRefund(order.orderId)"
               >
                 同意退款
-              </UnifiedButton>
-              <UnifiedButton
+              </el-button>
+              <el-button
                 v-if="order.orderStatus === 'REFUND_REQUESTED'"
                 type="danger"
                 class="action-btn-desktop"
                 @click="handleRejectRefund(order.orderId)"
               >
                 拒绝退款
-              </UnifiedButton>
+              </el-button>
               
               <!-- 桌面端：查看和删除按钮 -->
-              <UnifiedButton 
+              <el-button 
                 class="action-btn-desktop"
                 @click="viewOrderDetail(order.orderId)"
               >
                 查看详情
-              </UnifiedButton>
-              <UnifiedButton
+              </el-button>
+              <el-button
                 v-if="canDeleteOrder(order)"
                 type="danger"
                 class="action-btn-desktop"
                 @click="handleDelete(order.orderId)"
               >
                 删除
-              </UnifiedButton>
+              </el-button>
               
               <!-- 移动端：操作选择器 -->
               <div class="action-select-mobile" @click.stop="toggleActionSelect(order.orderId)">
@@ -155,7 +155,6 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import OrderTabs from '../components/order/OrderTabs.vue'
 import OrderCard from '../components/order/OrderCard.vue'
 import Pagination from '../components/common/Pagination.vue'
-import UnifiedButton from '../components/common/UnifiedButton.vue'
 
 export default {
   name: 'SellerOrders',
@@ -164,7 +163,6 @@ export default {
     OrderCard,
     ArrowDown,
     Pagination,
-    UnifiedButton
   },
   setup() {
     const router = useRouter()

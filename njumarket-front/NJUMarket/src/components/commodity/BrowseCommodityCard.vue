@@ -14,12 +14,12 @@
       
       <!-- 商品状态标签 -->
       <div v-if="commodity.commodityStatus !== 'ON_SHELF'" class="status-badge">
-        <UnifiedTag 
+        <el-tag 
           :type="getStatusTagType(commodity.commodityStatus)"
           size="small"
         >
           {{ getStatusText(commodity.commodityStatus) }}
-        </UnifiedTag>
+        </el-tag>
       </div>
     </div>
     
@@ -50,12 +50,12 @@
       
       <!-- 标签（分类和成色） -->
       <div v-if="commodity.category || commodity.conditionLevel" class="commodity-tags">
-        <UnifiedTag v-if="commodity.category" size="small" type="info">
+        <el-tag v-if="commodity.category" size="small" type="info">
           {{ commodity.category }}
-        </UnifiedTag>
-        <UnifiedTag v-if="commodity.conditionLevel" size="small" type="warning">
+        </el-tag>
+        <el-tag v-if="commodity.conditionLevel" size="small" type="warning">
           {{ commodity.conditionLevel }}
-        </UnifiedTag>
+        </el-tag>
       </div>
       
       <!-- 价格 -->
@@ -89,7 +89,6 @@ import { defineProps, defineEmits, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCommodityImageUrl, getAvatarUrl } from '../../utils/imageUtils'
 import { formatPrice, formatTime } from '../../utils/formatUtils'
-import UnifiedTag from '../common/UnifiedTag.vue'
 
 const router = useRouter()
 

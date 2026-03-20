@@ -1,13 +1,16 @@
 package com.njumarket.auth.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.UserInternalDTO;
 import com.njumarket.auth.dto.UserDTO;
 import com.njumarket.auth.dto.LoginFormDTO;
 import com.njumarket.auth.dto.RegisterDTO;
+import com.njumarket.auth.dto.internal.UserInternalDTOConverter;
+import com.njumarket.auth.entity.UserProfile;
+import com.njumarket.auth.repository.UserProfileRepository;
 import com.njumarket.auth.vo.LoginResultVO;
 import com.njumarket.auth.vo.TokenResultVO;
 import com.njumarket.auth.entity.User;
-import com.njumarket.auth.entity.UserProfile;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.service.UserService;
 import com.njumarket.auth.service.PasswordService;
@@ -20,15 +23,25 @@ import com.njumarket.njumarket.utils.RegexUtils;
 import com.njumarket.njumarket.utils.CacheUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.servlet.http.HttpSession;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -40,11 +53,13 @@ import java.util.concurrent.TimeUnit;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final UserProfileRepository userProfileRepository;
     private final PasswordService passwordService;
     private final JwtUtils jwtUtils;
     private final StringRedisTemplate stringRedisTemplate;
     private final UserProfileService userProfileService;
     private final CacheUtil cacheUtil;
+    private final UserInternalDTOConverter userInternalDTOConverter;
 
     // ========== 认证相关 ==========
     @Override
@@ -270,164 +285,79 @@ public class UserServiceImpl implements UserService {
         return Result.ok(result);
     }
 
+    /*
     @Override
     public Result loginThirdParty(String type, String code, HttpSession session) {
         // TODO:实现第三方登录逻辑
         return Result.ok("登录成功");
     }
+        */
 
     @Override
     public Result logout(HttpSession session) {
-        // 1. 获取当前用户（使用 SecurityUtils）
+        // 1. 获取当前用户（SecurityUtils 从 SecurityContext 中取，由 UserContextFilter 设置）
         Object userObj = SecurityUtils.requireCurrentUser();
         User currentUser = (User) userObj;
         String userId = currentUser.getUserId();
-        
+
         log.info("用户登出开始: userId={}", userId);
-        
-        // 2. 删除Redis中的AccessToken
-        String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
-        String oldAccessToken = stringRedisTemplate.opsForValue().get(tokenKey);
-        Boolean accessTokenDeleted = stringRedisTemplate.delete(tokenKey);
-        log.info("删除AccessToken: userId={}, tokenKey={}, oldToken存在={}, deleted={}", 
-            userId, tokenKey, oldAccessToken != null, accessTokenDeleted);
-        
-        // 验证AccessToken是否已删除
-        String verifyAccessToken = stringRedisTemplate.opsForValue().get(tokenKey);
-        if (verifyAccessToken != null) {
-            log.error("AccessToken删除失败，仍然存在: userId={}, tokenKey={}", userId, tokenKey);
-            // 强制删除
-            stringRedisTemplate.delete(tokenKey);
+
+        // 2. 通过用户-Session索引找到 accessSessionId，删除对应 Session Hash
+        String userSessionIndex = RedisConstants.LOGIN_TOKEN_KEY + userId;
+        String accessSessionId = stringRedisTemplate.opsForValue().get(userSessionIndex);
+        if (accessSessionId != null) {
+            stringRedisTemplate.delete(RedisConstants.SESSION_KEY + accessSessionId);
+            log.info("已删除 Access Session: userId={}, accessSessionId={}", userId, accessSessionId);
         }
-        
-        // 3. 删除Redis中的RefreshToken
-        String refreshKey = RedisConstants.REFRESH_TOKEN_KEY + userId;
-        String oldRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-        Boolean refreshTokenDeleted = stringRedisTemplate.delete(refreshKey);
-        log.info("删除RefreshToken: userId={}, refreshKey={}, oldToken存在={}, deleted={}", 
-            userId, refreshKey, oldRefreshToken != null, refreshTokenDeleted);
-        
-        // 验证RefreshToken是否已删除
-        String verifyRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-        if (verifyRefreshToken != null) {
-            log.error("RefreshToken删除失败，仍然存在: userId={}, refreshKey={}", userId, refreshKey);
-            // 强制删除
-            stringRedisTemplate.delete(refreshKey);
-        }
-        
-        // 4. 清除ThreadLocal中的用户信息
+        // 删除索引本身
+        stringRedisTemplate.delete(userSessionIndex);
+
+        // 3. 清除 ThreadLocal / SecurityContext
         SecurityUtils.clearContext();
-        
-        log.info("用户登出成功: userId={}, accessTokenDeleted={}, refreshTokenDeleted={}", 
-            userId, accessTokenDeleted, refreshTokenDeleted);
+
+        log.info("用户登出成功: userId={}", userId);
         return Result.ok("登出成功");
     }
 
     @Override
     public Result refreshToken(String refreshToken) {
-        // 1. 验证刷新Token（JWT本身）
+        // 1. 验证 JWT 签名与有效期
         if (!jwtUtils.validateToken(refreshToken)) {
             throw new BusinessException("刷新Token无效或已过期");
         }
-        
-        // 2. 检查是否为刷新Token
         if (!jwtUtils.isRefreshToken(refreshToken)) {
             throw new BusinessException("Token类型错误，请使用RefreshToken");
         }
-        
-        // 3. 从刷新Token中获取用户ID
-        String userId = jwtUtils.getUserIdFromToken(refreshToken);
-        if (userId == null) {
-            throw new BusinessException("无法从Token中获取用户信息");
+
+        // 2. 从 JWT 中取出 refreshSessionId
+        String refreshSessionId = jwtUtils.getSessionIdFromToken(refreshToken);
+        if (refreshSessionId == null) {
+            throw new BusinessException("无法从Token中获取Session信息");
         }
-        
-        // 4. 验证Redis中的RefreshToken（检查是否被撤销）
-        String refreshKey = RedisConstants.REFRESH_TOKEN_KEY + userId;
-        String cachedRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-        
-        if (!StringUtils.hasText(cachedRefreshToken)) {
-            throw new BusinessException("RefreshToken已被撤销，请重新登录");
+
+        // 3. 查询 Refresh Session，取出 userId
+        String refreshSessionKey = RedisConstants.SESSION_REFRESH_KEY + refreshSessionId;
+        Object userIdObj = stringRedisTemplate.opsForHash().get(refreshSessionKey, "userId");
+        if (userIdObj == null) {
+            throw new BusinessException("RefreshToken已失效，请重新登录");
         }
-        
-        // 5. 验证Redis中的RefreshToken是否与请求中的一致
-        if (!refreshToken.equals(cachedRefreshToken)) {
-            throw new BusinessException("RefreshToken不匹配，可能在其他设备登录");
-        }
-        
-        // 6. 查询用户信息
+        String userId = userIdObj.toString();
+
+        // 4. 查询用户，并校验状态
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new BusinessException("用户不存在"));
-        
-        // 7. 检查用户状态
+                .orElseThrow(() -> new BusinessException("用户不存在"));
         if (!"ACTIVE".equals(user.getAccountStatus())) {
             throw new BusinessException("账户已被禁用");
         }
-        
-        // 8. 生成新的AccessToken和RefreshToken
-        String newAccessToken = jwtUtils.generateToken(user.getUserId(), user.getPrimaryPhone());
-        String newRefreshToken = jwtUtils.generateRefreshToken(user.getUserId());
-        
-        log.info("刷新Token: userId={}, newAccessToken前10字符={}..., newRefreshToken前10字符={}...", 
-            user.getUserId(), 
-            newAccessToken.length() > 10 ? newAccessToken.substring(0, 10) : newAccessToken,
-            newRefreshToken.length() > 10 ? newRefreshToken.substring(0, 10) : newRefreshToken);
-        
-        // 9. 更新Redis中的AccessToken（使用set覆盖写入，确保更新）
-        String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + user.getUserId();
-        
-        // 检查是否存在旧AccessToken（用于日志记录）
-        String oldAccessToken = stringRedisTemplate.opsForValue().get(tokenKey);
-        boolean hasOldAccessToken = oldAccessToken != null;
-        
-        // 使用set方法直接覆盖写入（不是setIfAbsent，确保更新）
-        stringRedisTemplate.opsForValue().set(tokenKey, newAccessToken, 
-            RedisConstants.LOGIN_TOKEN_TTL, TimeUnit.MINUTES);
-        
-        // 验证AccessToken写入是否成功
-        String storedNewToken = stringRedisTemplate.opsForValue().get(tokenKey);
-        if (storedNewToken == null) {
-            log.error("刷新Token时AccessToken写入Redis失败（读取为null）: userId={}, tokenKey={}", user.getUserId(), tokenKey);
-            throw new BusinessException("Token刷新失败：AccessToken写入失败");
-        }
-        if (!storedNewToken.equals(newAccessToken)) {
-            log.error("刷新Token时AccessToken写入Redis失败（值不匹配）: userId={}, tokenKey={}, 期望长度={}, 实际长度={}", 
-                user.getUserId(), tokenKey, newAccessToken.length(), storedNewToken.length());
-            throw new BusinessException("Token刷新失败：AccessToken值不匹配");
-        }
-        log.info("刷新Token时AccessToken写入Redis成功: userId={}, tokenKey={}, TTL={}分钟, 覆盖旧Token={}", 
-            user.getUserId(), tokenKey, RedisConstants.LOGIN_TOKEN_TTL, hasOldAccessToken);
-        
-        // 10. 更新Redis中的RefreshToken（使用set覆盖写入，确保更新）
-        // 检查是否存在旧RefreshToken（用于日志记录）
-        String oldRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-        boolean hasOldRefreshToken = oldRefreshToken != null;
-        
-        // 使用set方法直接覆盖写入（不是setIfAbsent，确保更新）
-        stringRedisTemplate.opsForValue().set(refreshKey, newRefreshToken, 
-            RedisConstants.REFRESH_TOKEN_TTL, TimeUnit.MINUTES);
-        
-        // 验证RefreshToken写入是否成功
-        String storedNewRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-        if (storedNewRefreshToken == null) {
-            log.error("刷新Token时RefreshToken写入Redis失败（读取为null）: userId={}, refreshKey={}", user.getUserId(), refreshKey);
-            throw new BusinessException("Token刷新失败：RefreshToken写入失败");
-        }
-        if (!storedNewRefreshToken.equals(newRefreshToken)) {
-            log.error("刷新Token时RefreshToken写入Redis失败（值不匹配）: userId={}, refreshKey={}, 期望长度={}, 实际长度={}", 
-                user.getUserId(), refreshKey, newRefreshToken.length(), storedNewRefreshToken.length());
-            throw new BusinessException("Token刷新失败：RefreshToken值不匹配");
-        }
-        log.info("刷新Token时RefreshToken写入Redis成功: userId={}, refreshKey={}, TTL={}分钟, 覆盖旧Token={}", 
-            user.getUserId(), refreshKey, RedisConstants.REFRESH_TOKEN_TTL, hasOldRefreshToken);
-        
-        // 11. 返回新Token
-        TokenResultVO result = new TokenResultVO();
-        result.setAccessToken(newAccessToken);
-        result.setRefreshToken(newRefreshToken);
-        result.setExpiresIn(RedisConstants.LOGIN_TOKEN_TTL * 60L); // 转换为秒
-        
-        log.debug("Token刷新成功: userId={}", userId);
-        return Result.ok(result);
+
+        // 5. 删除旧 Refresh Session（轮转：每次 refresh 都重新生成，防止泄露复用）
+        stringRedisTemplate.delete(refreshSessionKey);
+
+        // 6. 调用 generateAndStoreTokens 生成新 Session + 新 JWT
+        TokenResultVO tokenResult = generateAndStoreTokens(user);
+
+        log.info("Token 刷新成功（Session 模式）: userId={}", userId);
+        return Result.ok(tokenResult);
     }
 
     @Override
@@ -632,12 +562,14 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         
         // ✅ Cache Aside模式：先更新数据库，再删除缓存
-        // 删除用户信息缓存（primaryPhone变更后需要清除缓存）
         if (cacheUtil != null) {
             String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
             cacheUtil.delete(cacheKey);
             log.info("已删除用户信息缓存（Cache Aside模式）: userId={}, reason=primaryPhone变更, cacheKey={}", userId, cacheKey);
         }
+
+        // ✅ Session 直写策略：phone 字段直接更新到当前 session，保持 Gateway 注入头的实时性
+        syncSessionField(userId, "phone", phone.trim());
         
         return true;
     }
@@ -693,10 +625,6 @@ public class UserServiceImpl implements UserService {
             UserProfile profile = user.getUserProfile();
             userDTO.setNickname(profile.getNickname());
             userDTO.setAvatar(profile.getAvatar());
-            userDTO.setCreditScore(profile.getCreditScore());
-            userDTO.setBuyerRating(profile.getBuyerRating());
-            userDTO.setSellerRating(profile.getSellerRating());
-            userDTO.setVipLevel(profile.getVipLevel());
         }
         
         return userDTO;
@@ -838,100 +766,229 @@ public class UserServiceImpl implements UserService {
      * @param user 用户对象
      * @return 包含accessToken和refreshToken的TokenResultVO
      */
+    /**
+     * 生成并存储 Session Token（Session ID 模式）。
+     *
+     * 流程：
+     *  1. 生成两个随机 UUID 作为 accessSessionId / refreshSessionId。
+     *  2. 在 Redis 中以 Hash 结构存储 Session 数据：
+     *       session:{accessSessionId}  -> {userId, username, phone, accountStatus}  TTL=24h
+     *       session:refresh:{refreshSessionId} -> {userId}  TTL=7d
+     *  3. JWT 中仅携带 sessionId（薄 Token），不再嵌入 userId / phone。
+     *  4. 旧 Session 若存在，在写入新 Session 后顺手删除（单设备策略）。
+     *
+     * 下游服务不再需要 Feign 调用 auth 获取用户信息：
+     *  Gateway 读取 Redis Session → 将 userId/accountStatus/username 注入请求头。
+     */
     private TokenResultVO generateAndStoreTokens(User user) {
         String userId = user.getUserId();
-        log.info("开始生成并存储Token: userId={}", userId);
-        
+        log.info("开始生成并存储 Session Token: userId={}", userId);
+
         try {
-            // 1. 生成AccessToken和RefreshToken（每次生成都是新的，因为issuedAt时间不同）
-            String accessToken = jwtUtils.generateToken(userId, user.getPrimaryPhone());
-            String refreshToken = jwtUtils.generateRefreshToken(userId);
-            
-            log.info("Token生成完成: userId={}, accessToken长度={}, refreshToken长度={}", 
-                userId, accessToken.length(), refreshToken.length());
-            
-            // 2. 存储AccessToken到Redis（使用set覆盖写入，确保更新）
-            String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
-            
-            // 检查是否存在旧Token（用于日志记录）
-            String oldAccessToken = stringRedisTemplate.opsForValue().get(tokenKey);
-            boolean hasOldToken = oldAccessToken != null;
-            
-            if (hasOldToken && oldAccessToken != null) {
-                log.info("检测到旧AccessToken，将被覆盖: userId={}, tokenKey={}, 旧Token前10字符={}...", 
-                    userId, tokenKey, 
-                    oldAccessToken.length() > 10 ? oldAccessToken.substring(0, 10) : oldAccessToken);
+            // 1. 生成 sessionId（UUID）
+            String accessSessionId = java.util.UUID.randomUUID().toString();
+            String refreshSessionId = java.util.UUID.randomUUID().toString();
+
+            // 2. 将 Session 数据写入 Redis Hash
+            String sessionKey = RedisConstants.SESSION_KEY + accessSessionId;
+            java.util.Map<String, String> sessionData = new java.util.LinkedHashMap<>();
+            sessionData.put("userId", userId);
+            sessionData.put("username", user.getUsername() != null ? user.getUsername() : "");
+            sessionData.put("phone", user.getPrimaryPhone() != null ? user.getPrimaryPhone() : "");
+            sessionData.put("accountStatus", user.getAccountStatus() != null ? user.getAccountStatus() : "ACTIVE");
+            stringRedisTemplate.opsForHash().putAll(sessionKey, sessionData);
+            stringRedisTemplate.expire(sessionKey, java.time.Duration.ofSeconds(RedisConstants.SESSION_TTL));
+
+            String refreshSessionKey = RedisConstants.SESSION_REFRESH_KEY + refreshSessionId;
+            stringRedisTemplate.opsForHash().put(refreshSessionKey, "userId", userId);
+            stringRedisTemplate.expire(refreshSessionKey, java.time.Duration.ofSeconds(RedisConstants.SESSION_REFRESH_TTL));
+
+            // 3. 同时在 login:token:{userId} 写入 accessSessionId（方便单设备踢出旧 Session）
+            String userSessionIndex = RedisConstants.LOGIN_TOKEN_KEY + userId; // 复用旧 key 存 sessionId
+            String oldSessionId = stringRedisTemplate.opsForValue().get(userSessionIndex);
+            stringRedisTemplate.opsForValue().set(userSessionIndex, accessSessionId,
+                    java.time.Duration.ofSeconds(RedisConstants.SESSION_TTL));
+
+            // 4. 删除旧 Session（单设备：踢掉旧登录）
+            if (oldSessionId != null && !oldSessionId.equals(accessSessionId)) {
+                stringRedisTemplate.delete(RedisConstants.SESSION_KEY + oldSessionId);
+                log.info("已删除旧 Session: userId={}, oldSessionId={}", userId, oldSessionId);
             }
-            
-            // 使用set方法直接覆盖写入（不是setIfAbsent，确保更新）
-            stringRedisTemplate.opsForValue().set(tokenKey, accessToken, 
-                RedisConstants.LOGIN_TOKEN_TTL, TimeUnit.MINUTES);
-            
-            // 验证写入是否成功
-            String storedAccessToken = stringRedisTemplate.opsForValue().get(tokenKey);
-            if (storedAccessToken == null) {
-                log.error("AccessToken写入Redis失败（读取为null）: userId={}, tokenKey={}", userId, tokenKey);
-                throw new RuntimeException("AccessToken写入Redis失败：读取为null");
-            }
-            if (!storedAccessToken.equals(accessToken)) {
-                log.error("AccessToken写入Redis失败（值不匹配）: userId={}, tokenKey={}, 期望长度={}, 实际长度={}", 
-                    userId, tokenKey, accessToken.length(), storedAccessToken.length());
-                throw new RuntimeException("AccessToken写入Redis失败：值不匹配");
-            }
-            
-            log.info("AccessToken存储成功: userId={}, tokenKey={}, TTL={}分钟, 覆盖旧Token={}", 
-                userId, tokenKey, RedisConstants.LOGIN_TOKEN_TTL, hasOldToken);
-            
-            // 3. 存储RefreshToken到Redis（使用set覆盖写入，确保更新）
-            String refreshKey = RedisConstants.REFRESH_TOKEN_KEY + userId;
-            
-            // 检查是否存在旧RefreshToken（用于日志记录）
-            String oldRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-            boolean hasOldRefreshToken = oldRefreshToken != null;
-            
-            if (hasOldRefreshToken) {
-                log.info("检测到旧RefreshToken，将被覆盖: userId={}, refreshKey={}", userId, refreshKey);
-            }
-            
-            // 使用set方法直接覆盖写入（不是setIfAbsent，确保更新）
-            stringRedisTemplate.opsForValue().set(refreshKey, refreshToken, 
-                RedisConstants.REFRESH_TOKEN_TTL, TimeUnit.MINUTES);
-            
-            // 验证RefreshToken写入是否成功
-            String storedRefreshToken = stringRedisTemplate.opsForValue().get(refreshKey);
-            if (storedRefreshToken == null) {
-                log.error("RefreshToken写入Redis失败（读取为null）: userId={}, refreshKey={}", userId, refreshKey);
-                throw new RuntimeException("RefreshToken写入Redis失败：读取为null");
-            }
-            if (!storedRefreshToken.equals(refreshToken)) {
-                log.error("RefreshToken写入Redis失败（值不匹配）: userId={}, refreshKey={}, 期望长度={}, 实际长度={}", 
-                    userId, refreshKey, refreshToken.length(), storedRefreshToken.length());
-                throw new RuntimeException("RefreshToken写入Redis失败：值不匹配");
-            }
-            
-            log.info("RefreshToken存储成功: userId={}, refreshKey={}, TTL={}分钟, 覆盖旧Token={}", 
-                userId, refreshKey, RedisConstants.REFRESH_TOKEN_TTL, hasOldRefreshToken);
-            
-            // 4. 返回Token信息
+
+            // 5. 生成薄 JWT（仅含 sessionId）
+            String accessToken = jwtUtils.generateSessionToken(accessSessionId);
+            String refreshToken = jwtUtils.generateSessionRefreshToken(refreshSessionId);
+
+            log.info("Session Token 生成并存储完成: userId={}, accessSessionId={}, refreshSessionId={}",
+                    userId, accessSessionId, refreshSessionId);
+
             TokenResultVO tokenResult = new TokenResultVO();
             tokenResult.setAccessToken(accessToken);
             tokenResult.setRefreshToken(refreshToken);
-            tokenResult.setExpiresIn(RedisConstants.LOGIN_TOKEN_TTL * 60L); // 转换为秒
-            
-            log.info("双Token机制：Token生成并存储完成: userId={}, accessTokenKey={}, refreshTokenKey={}, 覆盖旧Token={}", 
-                userId, tokenKey, refreshKey, (hasOldToken || hasOldRefreshToken));
-            
+            tokenResult.setExpiresIn(RedisConstants.SESSION_TTL);
             return tokenResult;
-            
+
         } catch (RuntimeException e) {
-            // 重新抛出RuntimeException
             throw e;
         } catch (Exception e) {
-            log.error("Token生成或存储异常: userId={}, error={}", userId, e.getMessage(), e);
+            log.error("Session Token 生成或存储异常: userId={}, error={}", userId, e.getMessage(), e);
             throw new RuntimeException("Token生成失败: " + e.getMessage(), e);
         }
     }
     
+    /**
+     * Session 直写策略：将单个字段同步到当前用户的 access session。
+     *
+     * <p>适用于非安全敏感字段（username、phone）的用户数据变更场景。
+     * 用户保持登录状态，Gateway 下次请求即可注入最新值到请求头。
+     *
+     * <p>安全敏感的 accountStatus 变更（封禁/停用）不走此方法，
+     * 而是调用 {@code forceLogoutUser}（通过 Admin 服务），强制删除整个 session。
+     */
+    private void syncSessionField(String userId, String field, String value) {
+        if (!org.springframework.util.StringUtils.hasText(userId)) {
+            return;
+        }
+        try {
+            String sessionIndexKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
+            String accessSessionId = stringRedisTemplate.opsForValue().get(sessionIndexKey);
+            if (org.springframework.util.StringUtils.hasText(accessSessionId)) {
+                String sessionKey = RedisConstants.SESSION_KEY + accessSessionId;
+                stringRedisTemplate.opsForHash().put(sessionKey, field, value != null ? value : "");
+                log.info("Session 字段已直写更新: userId={}, field={}", userId, field);
+            }
+        } catch (Exception e) {
+            log.warn("同步 session 字段失败（非致命）: userId={}, field={}, error={}", userId, field, e.getMessage());
+        }
+    }
+
+    // ========== 管理端内部方法 ==========
+
+    @Override
+    public UserInternalDTO getUserByIdInternal(String userId) {
+        String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
+        UserInternalDTO dto = cacheUtil.getWithFallback(
+            cacheKey,
+            RedisConstants.CACHE_USER_INFO_TTL * 60,
+            UserInternalDTO.class,
+            () -> {
+                User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new BusinessException("用户不存在"));
+                return userInternalDTOConverter.toInternalDTO(user);
+            }
+        );
+        // 修复缓存中可能存在的 accountStatus 为 null 的旧数据
+        if (dto != null && (dto.getAccountStatus() == null || dto.getAccountStatus().trim().isEmpty())) {
+            dto.setAccountStatus("ACTIVE");
+            cacheUtil.set(cacheKey, dto, RedisConstants.CACHE_USER_INFO_TTL * 60);
+        }
+        return dto;
+    }
+
+    @Override
+    public List<UserInternalDTO> getUsersByIdsInternal(List<String> userIds) {
+        List<User> users = userRepository.findAllById(userIds);
+        return userInternalDTOConverter.toUserInternalDTOList(users);
+    }
+
+    @Override
+    public Map<String, Object> listUsersInternal(Integer page, Integer size,
+                                                  String keyword, String accountStatus,
+                                                  String sortProp, String sortOrder) {
+        org.springframework.data.domain.Pageable pageable = PageRequest.of(
+            Math.max(0, page - 1), size,
+            Sort.by(
+                "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC,
+                StringUtils.hasText(sortProp) ? sortProp : "registerTime"
+            )
+        );
+
+        Specification<User> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(keyword)) {
+                String kw = keyword.trim();
+                predicates.add(cb.or(
+                    cb.like(root.get("username"), "%" + kw + "%"),
+                    cb.like(root.get("primaryPhone"), "%" + kw + "%"),
+                    cb.like(root.get("userId"), "%" + kw + "%")
+                ));
+            }
+            if (StringUtils.hasText(accountStatus)) {
+                predicates.add(cb.equal(root.get("accountStatus"), accountStatus.trim()));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<User> userPage = userRepository.findAll(spec, pageable);
+        List<UserInternalDTO> userDTOs = userInternalDTOConverter.toUserInternalDTOList(userPage.getContent());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("content", userDTOs);
+        result.put("totalElements", userPage.getTotalElements());
+        result.put("totalPages", userPage.getTotalPages());
+        result.put("number", userPage.getNumber());
+        result.put("size", userPage.getSize());
+        return result;
+    }
+
+    @Override
+    public void updateUserFullInternal(String userId, Map<String, Object> payload) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+
+        Object username = payload.get("username");
+        if (username instanceof String && StringUtils.hasText((String) username)) {
+            user.setUsername(((String) username).trim());
+        }
+        Object primaryPhone = payload.get("primaryPhone");
+        if (primaryPhone instanceof String && StringUtils.hasText((String) primaryPhone)) {
+            user.setPrimaryPhone(((String) primaryPhone).trim());
+        }
+        Object accountStatus = payload.get("accountStatus");
+        if (accountStatus instanceof String && StringUtils.hasText((String) accountStatus)) {
+            String newStatus = ((String) accountStatus).trim();
+            Set<String> allowed = new HashSet<>(Arrays.asList("ACTIVE", "SUSPENDED", "BANNED"));
+            if (allowed.contains(newStatus)) {
+                user.setAccountStatus(newStatus);
+            }
+        }
+
+        UserProfile profile = userProfileRepository.findByUserId(userId).orElse(null);
+        if (profile == null) {
+            profile = new UserProfile();
+            profile.setProfileId("PROFILE_" + System.currentTimeMillis());
+            profile.setUserId(userId);
+        }
+        Object nickname = payload.get("nickname");
+        if (nickname instanceof String && StringUtils.hasText((String) nickname)) {
+            profile.setNickname(((String) nickname).trim());
+        }
+        Object avatar = payload.get("avatar");
+        if (avatar instanceof String && StringUtils.hasText((String) avatar)) {
+            profile.setAvatar(((String) avatar).trim());
+        }
+
+        userRepository.save(user);
+        userProfileRepository.save(profile);
+
+        // Cache Aside：先更新数据库，再删缓存
+        cacheUtil.delete(RedisConstants.CACHE_USER_INFO_KEY + userId);
+        cacheUtil.delete(RedisConstants.CACHE_USER_PROFILE_KEY + userId);
+        log.info("已删除用户信息和档案缓存（Cache Aside模式）: userId={}", userId);
+    }
+
+    @Override
+    public void deleteUserInternal(String userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BusinessException("用户不存在"));
+        user.setAccountStatus("DELETED");
+        userRepository.save(user);
+
+        cacheUtil.delete(RedisConstants.CACHE_USER_INFO_KEY + userId);
+        cacheUtil.delete(RedisConstants.CACHE_USER_PROFILE_KEY + userId);
+        log.info("已删除用户信息和档案缓存: userId={}", userId);
+    }
+
     /**
      * 根据账户状态获取用户友好的提示信息
      */

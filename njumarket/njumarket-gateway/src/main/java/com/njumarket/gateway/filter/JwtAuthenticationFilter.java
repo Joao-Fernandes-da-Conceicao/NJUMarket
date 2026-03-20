@@ -71,88 +71,63 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return unauthorizedResponse(exchange, "Token无效或已过期，请重新登录");
         }
 
-        // 3. 从Token中获取用户ID
-        String userId = jwtUtils.getUserIdFromToken(token);
-        if (!StringUtils.hasText(userId)) {
-            log.warn("Token中无法获取用户ID: {}", requestURI);
-            return unauthorizedResponse(exchange, "Token格式错误，请重新登录");
+        // 3. 新版 Session Token（JWT 内是 sid，不是 userId）
+        String sessionId = jwtUtils.getSessionIdFromToken(token);
+        if (StringUtils.hasText(sessionId)) {
+            String sessionKey = RedisConstants.SESSION_KEY + sessionId;
+            return reactiveStringRedisTemplate.opsForHash().get(sessionKey, "userId")
+                    .map(Object::toString)
+                    .defaultIfEmpty("")
+                    .flatMap(userId -> {
+                        if (!StringUtils.hasText(userId)) {
+                            log.warn("Session不存在或已过期: sessionId={}, uri={}", sessionId, requestURI);
+                            return unauthorizedResponse(exchange, "Token已失效，请重新登录");
+                        }
+                        String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
+                        return reactiveStringRedisTemplate.opsForValue().get(tokenKey)
+                                .defaultIfEmpty("")
+                                .flatMap(currentSessionId -> {
+                                    // 单设备策略：login:token:{userId} 必须指向当前 sid
+                                    if (!sessionId.equals(currentSessionId)) {
+                                        log.warn("Session不匹配（可能已在其他设备登录）: userId={}, uri={}, sid={}, redisSid={}",
+                                                userId, requestURI, sessionId, currentSessionId);
+                                        return unauthorizedResponse(exchange, "Token已失效，请重新登录");
+                                    }
+                                    ServerHttpRequest modifiedRequest = request.mutate()
+                                            .header("X-User-Id", userId)
+                                            .header("X-Authenticated", "true")
+                                            .build();
+                                    return chain.filter(exchange.mutate().request(modifiedRequest).build());
+                                });
+                    })
+                    .onErrorResume(e -> {
+                        log.error("Session模式Token验证失败: sessionId={}, uri={}, error={}", sessionId, requestURI, e.getMessage(), e);
+                        return unauthorizedResponse(exchange, "Token验证失败，请重新登录");
+                    });
         }
 
-        // 调试：打印userId的详细信息
-        log.info("从Token解码得到的userId: [{}], 长度={}, 字符数组={}", 
-            userId, userId.length(), java.util.Arrays.toString(userId.toCharArray()));
-
-        // 4. 验证Redis中的Token（检查是否被撤销或登出）- 响应式方式
+        // 4. 兼容旧版 Token（JWT 内含 userId；Redis 中存的是原 token 字符串）
+        String userId = jwtUtils.getUserIdFromToken(token);
+        if (!StringUtils.hasText(userId)) {
+            log.warn("Token中无法获取用户ID或SessionID: {}", requestURI);
+            return unauthorizedResponse(exchange, "Token格式错误，请重新登录");
+        }
         String tokenKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
-        
-        log.info("开始查询Redis中的Token: userId=[{}], tokenKey=[{}], requestToken长度={}, requestToken前10字符={}...", 
-            userId, tokenKey, token.length(), token.length() > 10 ? token.substring(0, 10) : token);
-        
-        // 直接读取Token值（简化逻辑，避免hasKey和get的时序问题）
         return reactiveStringRedisTemplate.opsForValue().get(tokenKey)
-                .doOnSubscribe(subscription -> {
-                    log.info("开始订阅Redis查询: userId={}, tokenKey={}", userId, tokenKey);
-                })
-                .doOnNext(cachedToken -> {
-                    log.info("从Redis读取到Token: userId={}, tokenKey={}, cachedToken长度={}, cachedToken前10字符={}...", 
-                        userId, tokenKey, 
-                        cachedToken != null ? cachedToken.length() : 0,
-                        cachedToken != null && cachedToken.length() > 10 ? cachedToken.substring(0, 10) : (cachedToken != null ? cachedToken : "null"));
-                })
-                .doOnError(error -> {
-                    log.error("Redis读取Token时发生错误: userId={}, tokenKey={}, error={}", userId, tokenKey, error.getMessage(), error);
-                })
-                .defaultIfEmpty("")  // 如果key不存在，返回空字符串，避免触发switchIfEmpty
+                .defaultIfEmpty("")
                 .flatMap(cachedToken -> {
-                    // 如果Redis中没有Token值（空字符串），说明key不存在或用户已登出
-                    if (cachedToken == null || cachedToken.trim().isEmpty()) {
-                        log.warn("Token已被撤销或用户已登出（Redis中不存在该key或值为空）: userId={}, uri={}, tokenKey={}", 
-                            userId, requestURI, tokenKey);
-                        
-                        // 使用 hasKey 再次验证（用于调试）
-                        return reactiveStringRedisTemplate.hasKey(tokenKey)
-                                .flatMap(exists -> {
-                                    if (Boolean.TRUE.equals(exists)) {
-                                        log.error("异常：hasKey返回true但get()返回空: userId={}, tokenKey={}", userId, tokenKey);
-                                    } else {
-                                        log.warn("确认：hasKey返回false，key确实不存在: userId={}, tokenKey={}", userId, tokenKey);
-                                    }
-                                    return unauthorizedResponse(exchange, "Token已失效，请重新登录");
-                                });
-                    }
-
-                    // 5. 验证Redis中的Token是否与请求中的Token一致（防止Token被替换）
-                    if (!token.equals(cachedToken)) {
-                        log.warn("Token不匹配（可能在其他设备登录）: userId={}, uri={}, requestToken长度={}, cachedToken长度={}, requestToken前10字符={}..., cachedToken前10字符={}...", 
-                            userId, requestURI, token.length(), cachedToken.length(),
-                            token.length() > 10 ? token.substring(0, 10) : token,
-                            cachedToken.length() > 10 ? cachedToken.substring(0, 10) : cachedToken);
+                    if (!StringUtils.hasText(cachedToken) || !token.equals(cachedToken)) {
+                        log.warn("旧版Token不匹配或已失效: userId={}, uri={}", userId, requestURI);
                         return unauthorizedResponse(exchange, "Token已失效，请重新登录");
                     }
-
-                    // 6. 将用户ID添加到请求头，传递给后端服务
-                    // 确保使用正确的userId（从外部作用域捕获，应该是正确的）
-                    final String finalUserId = userId; // 使用final变量确保值不被修改
-                    
-                    // 使用finalUserId记录日志，确保显示正确的值
-                    log.info("Token验证成功: userId=[{}], tokenKey=[{}], userId长度={}, tokenKey长度={}, finalUserId=[{}]", 
-                        finalUserId, tokenKey, finalUserId.length(), tokenKey.length(), finalUserId);
-                    
-                    log.info("设置请求头X-User-Id: [{}], 长度={}", finalUserId, finalUserId.length());
-                    
                     ServerHttpRequest modifiedRequest = request.mutate()
-                            .header("X-User-Id", finalUserId)
+                            .header("X-User-Id", userId)
                             .header("X-Authenticated", "true")
                             .build();
-                    
-                    log.info("请求头已设置，准备转发到后端服务: X-User-Id=[{}]", finalUserId);
-
-                    // 直接返回 chain.filter 的结果，不需要额外包装
                     return chain.filter(exchange.mutate().request(modifiedRequest).build());
                 })
                 .onErrorResume(e -> {
-                    log.error("Redis查询Token失败: userId={}, uri={}, tokenKey={}, error={}, errorType={}", 
-                        userId, requestURI, tokenKey, e.getMessage(), e.getClass().getName(), e);
+                    log.error("旧版Token验证失败: userId={}, uri={}, error={}", userId, requestURI, e.getMessage(), e);
                     return unauthorizedResponse(exchange, "Token验证失败，请重新登录");
                 });
     }

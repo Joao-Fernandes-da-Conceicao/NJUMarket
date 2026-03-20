@@ -41,29 +41,6 @@
           </div>
         </div>
       </el-form-item>
-      <el-form-item label="信用分">
-        <UnifiedInput v-model="form.creditScore" type="number" placeholder="0-100" />
-      </el-form-item>
-      <el-form-item label="买家评分">
-        <UnifiedInput v-model="form.buyerRating" type="number" placeholder="0-5" />
-      </el-form-item>
-      <el-form-item label="卖家评分">
-        <UnifiedInput v-model="form.sellerRating" type="number" placeholder="0-5" />
-      </el-form-item>
-      <el-form-item label="卖出次数">
-        <UnifiedInput v-model="form.totalSales" type="number" placeholder="整数" />
-      </el-form-item>
-      <el-form-item label="购入次数">
-        <UnifiedInput v-model="form.totalPurchases" type="number" placeholder="整数" />
-      </el-form-item>
-      <el-form-item label="会员等级">
-        <UnifiedSelect 
-          v-model="form.vipLevel" 
-          :options="vipLevelOptions"
-          placeholder="请选择会员等级"
-        />
-      </el-form-item>
-
       <el-form-item>
         <UnifiedButton type="primary" @click="save">保存</UnifiedButton>
         <UnifiedButton @click="$router.back()">返回</UnifiedButton>
@@ -198,22 +175,13 @@ export default {
     return {
       form: {
         userId: '', username: '', primaryPhone: '', accountStatus: '',
-        nickname: '', avatar: '', creditScore: '', buyerRating: '', sellerRating: '',
-        totalSales: '', totalPurchases: '', vipLevel: ''
+        nickname: '', avatar: ''
       },
       // 状态选择器选项
       accountStatusOptions: [
         { label: '正常', value: 'ACTIVE' },
         { label: '已暂停', value: 'SUSPENDED' },
         { label: '已封禁', value: 'BANNED' }
-      ],
-      // 会员等级选择器选项
-      vipLevelOptions: [
-        { label: '普通', value: 'NORMAL' },
-        { label: '青铜', value: 'BRONZE' },
-        { label: '白银', value: 'SILVER' },
-        { label: '黄金', value: 'GOLD' },
-        { label: '铂金', value: 'PLATINUM' }
       ],
       // 头像上传配置
       uploadUrl: 'http://localhost:8080/api/user/profile/avatar',
@@ -264,12 +232,6 @@ export default {
       const p = u.profile || {}
       this.form.nickname = p.nickname || ''
       this.form.avatar = p.avatar || ''
-      this.form.creditScore = p.creditScore ?? ''
-      this.form.buyerRating = p.buyerRating ?? ''
-      this.form.sellerRating = p.sellerRating ?? ''
-      this.form.totalSales = p.totalSales ?? ''
-      this.form.totalPurchases = p.totalPurchases ?? ''
-      this.form.vipLevel = p.vipLevel || ''
     }
 
     await this.loadAddresses()

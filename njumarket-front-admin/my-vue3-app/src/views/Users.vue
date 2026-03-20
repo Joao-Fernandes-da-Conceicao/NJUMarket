@@ -33,23 +33,6 @@
         </template>
       </el-table-column>
       <el-table-column prop="registerTime" label="注册时间" width="180" sortable="custom"/>
-      <el-table-column label="信用/评分" width="200">
-        <template #default="{ row }">
-          信用: {{ row.profile?.creditScore ?? '-' }} / 买: {{ row.profile?.buyerRating ?? '-' }} / 卖: {{ row.profile?.sellerRating ?? '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column label="成交统计" width="160">
-        <template #default="{ row }">
-          卖出: {{ row.profile?.totalSales ?? '-' }} / 购入: {{ row.profile?.totalPurchases ?? '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column label="会员等级" width="120">
-        <template #default="{ row }">
-          <UnifiedTag :type="vipLevelType(row.profile?.vipLevel)">
-            {{ vipLevelText(row.profile?.vipLevel) }}
-          </UnifiedTag>
-        </template>
-      </el-table-column>
       <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <UnifiedButton size="small" @click="disable(row)">禁用</UnifiedButton>
@@ -162,30 +145,6 @@ export default {
         'BANNED': 'danger'
       }
       return map[status] || 'info'
-    },
-    // ✅ 会员等级文本映射
-    vipLevelText(vipLevel) {
-      if (!vipLevel) return '-'
-      const map = {
-        'NORMAL': '普通',
-        'BRONZE': '青铜',
-        'SILVER': '白银',
-        'GOLD': '黄金',
-        'PLATINUM': '铂金'
-      }
-      return map[vipLevel] || vipLevel
-    },
-    // ✅ 会员等级类型映射（用于 tag 颜色）
-    vipLevelType(vipLevel) {
-      if (!vipLevel) return 'info'
-      const map = {
-        'NORMAL': 'info',
-        'BRONZE': 'default',
-        'SILVER': '',
-        'GOLD': 'warning',
-        'PLATINUM': 'success'
-      }
-      return map[vipLevel] || 'info'
     }
   },
   computed:{}

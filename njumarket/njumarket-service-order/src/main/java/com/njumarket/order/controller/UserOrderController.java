@@ -2,12 +2,15 @@ package com.njumarket.order.controller;
 
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.order.dto.OrderDTO;
-import com.njumarket.order.service.OrderService;
+import com.njumarket.order.dto.OrderSnapshotDTO;
+import com.njumarket.order.dto.UpdateOrderAddressDTO;
+import com.njumarket.order.service.OrderLifecycleService;
+import com.njumarket.order.service.OrderManageService;
+import com.njumarket.order.service.OrderQueryService;
+import com.njumarket.order.service.OrderReturnService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -20,270 +23,173 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserOrderController {
 
-    private final OrderService orderService;
+    private final OrderLifecycleService lifecycleService;
+    private final OrderQueryService queryService;
+    private final OrderReturnService returnService;
+    private final OrderManageService manageService;
 
-    @Operation(summary = "创建订单", description = "买家创建新订单")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "创建成功"),
-        @ApiResponse(responseCode = "400", description = "参数错误"),
-        @ApiResponse(responseCode = "404", description = "商品不存在")
-    })
+    // ===== 生命周期 =====
+
+    @Operation(summary = "创建订单")
     @PostMapping("/create")
     public Result createOrder(@Valid @RequestBody OrderDTO orderDTO) {
-        return orderService.createOrder(orderDTO);
+        return lifecycleService.createOrder(orderDTO);
     }
 
-    @Operation(summary = "支付订单", description = "买家支付订单")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "支付成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许支付"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
+    @Operation(summary = "支付订单")
     @PostMapping("/{orderId}/pay")
     public Result payOrder(@Parameter(description = "订单ID", required = true) @PathVariable String orderId) {
-        return orderService.payOrder(orderId);
+        return lifecycleService.payOrder(orderId);
     }
 
-    @Operation(summary = "确认收货", description = "买家确认收货")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "确认成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许确认收货"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
+    @Operation(summary = "确认收货")
     @PostMapping("/{orderId}/confirm")
-    public Result confirmOrder(@Parameter(description = "订单ID", required = true) @PathVariable String orderId) {
-        return orderService.confirmOrder(orderId);
+    public Result confirmOrder(@PathVariable String orderId) {
+        return lifecycleService.confirmOrder(orderId);
     }
 
-    @Operation(summary = "取消订单", description = "买家取消订单")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "取消成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许取消"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
+    @Operation(summary = "取消订单")
     @PostMapping("/{orderId}/cancel")
-    public Result cancelOrder(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                            @Parameter(description = "取消原因") @RequestParam(required = false) String reason) {
-        return orderService.cancelOrder(orderId, reason);
+    public Result cancelOrder(@PathVariable String orderId,
+                              @RequestParam(required = false) String reason) {
+        return lifecycleService.cancelOrder(orderId, reason);
     }
 
-    @Operation(summary = "发货", description = "卖家发货")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "发货成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许发货"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
+    @Operation(summary = "发货")
     @PostMapping("/{orderId}/ship")
-    public Result shipOrder(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                          @Parameter(description = "快递单号") @RequestParam(required = false) String trackingNumber) {
-        return orderService.shipOrder(orderId, trackingNumber);
+    public Result shipOrder(@PathVariable String orderId,
+                            @RequestParam(required = false) String trackingNumber) {
+        return lifecycleService.shipOrder(orderId, trackingNumber);
     }
 
-    @Operation(summary = "查询原商品信息", description = "基于商品快照查询原商品信息")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "查询成功"),
-        @ApiResponse(responseCode = "404", description = "订单或商品不存在")
-    })
-    @GetMapping("/{orderId}/query-commodity")
-    public Result queryOriginalCommodity(@Parameter(description = "订单ID", required = true) @PathVariable String orderId) {
-        return orderService.queryOriginalCommodity(orderId);
-    }
-    
-    @Operation(summary = "基于快照创建新订单", description = "使用订单快照创建新订单")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "创建成功"),
-        @ApiResponse(responseCode = "400", description = "参数错误"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
+    @Operation(summary = "基于快照创建新订单")
     @PostMapping("/{orderId}/create-from-snapshot")
-    public Result createOrderFromSnapshot(@Parameter(description = "订单ID", required = true) @PathVariable String orderId, 
-                                         @Valid @RequestBody com.njumarket.order.dto.OrderSnapshotDTO orderSnapshotDTO) {
-        return orderService.createOrderFromSnapshot(orderId, orderSnapshotDTO);
+    public Result createOrderFromSnapshot(@PathVariable String orderId,
+                                          @Valid @RequestBody OrderSnapshotDTO orderSnapshotDTO) {
+        return lifecycleService.createOrderFromSnapshot(orderId, orderSnapshotDTO);
     }
 
-    @Operation(summary = "获取买家订单列表", description = "获取当前用户的买家订单列表")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "获取成功"),
-        @ApiResponse(responseCode = "401", description = "用户未登录")
-    })
-    @GetMapping("/buyer")
-    public Result getBuyerOrders(@Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
-                               @Parameter(description = "每页数量", example = "10") @RequestParam(defaultValue = "10") Integer size,
-                               @Parameter(description = "订单状态") @RequestParam(required = false) String status) {
-        return orderService.getBuyerOrders(page, size, status);
-    }
+    // ===== 查询 =====
 
-    @Operation(summary = "获取卖家订单列表", description = "获取当前用户的卖家订单列表")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "获取成功"),
-        @ApiResponse(responseCode = "401", description = "用户未登录")
-    })
-    @GetMapping("/seller")
-    public Result getSellerOrders(@Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
-                                @Parameter(description = "每页数量", example = "10") @RequestParam(defaultValue = "10") Integer size,
-                                @Parameter(description = "订单状态") @RequestParam(required = false) String status) {
-        return orderService.getSellerOrders(page, size, status);
-    }
-
-    @Operation(summary = "获取订单详情", description = "获取指定订单的详细信息")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "获取成功"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
+    @Operation(summary = "获取订单详情")
     @GetMapping("/{orderId}")
-    public Result getOrderDetail(@Parameter(description = "订单ID", required = true) @PathVariable String orderId) {
-        return orderService.getOrderDetail(orderId);
+    public Result getOrderDetail(@PathVariable String orderId) {
+        return queryService.getOrderDetail(orderId);
     }
 
-    @Operation(summary = "申请退款", description = "买家申请退款")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "申请成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许申请退款"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PostMapping("/{orderId}/refund")
-    public Result requestRefund(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                              @Parameter(description = "退款原因", required = true) @RequestParam String reason) {
-        return orderService.requestRefund(orderId, reason);
+    @Operation(summary = "获取买家订单列表")
+    @GetMapping("/buyer")
+    public Result getBuyerOrders(@RequestParam(defaultValue = "1") Integer page,
+                                 @RequestParam(defaultValue = "10") Integer size,
+                                 @RequestParam(required = false) String status) {
+        return queryService.getBuyerOrders(page, size, status);
     }
 
-    @Operation(summary = "处理退款申请", description = "卖家处理退款申请")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "处理成功"),
-        @ApiResponse(responseCode = "400", description = "参数错误"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PostMapping("/{orderId}/refund/handle")
-    public Result handleRefund(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                             @Parameter(description = "处理决定", required = true, example = "APPROVE") @RequestParam String decision,
-                             @Parameter(description = "备注") @RequestParam(required = false) String remark) {
-        return orderService.handleRefund(orderId, decision, remark);
+    @Operation(summary = "获取卖家订单列表")
+    @GetMapping("/seller")
+    public Result getSellerOrders(@RequestParam(defaultValue = "1") Integer page,
+                                  @RequestParam(defaultValue = "10") Integer size,
+                                  @RequestParam(required = false) String status) {
+        return queryService.getSellerOrders(page, size, status);
     }
 
-    @Operation(summary = "修改订单可见性", description = "同时设置卖家和买家可见性")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "修改成功"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PutMapping("/{orderId}/visibility")
-    public Result updateOrderVisibility(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                                      @Parameter(description = "可见性", required = true, example = "PUBLIC") @RequestParam String visibility) {
-        return orderService.updateOrderVisibility(orderId, visibility);
-    }
-
-    @Operation(summary = "修改订单卖家可见性", description = "修改订单对卖家的可见性")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "修改成功"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PutMapping("/{orderId}/seller-visibility")
-    public Result updateOrderSellerVisibility(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                                           @Parameter(description = "卖家可见性", required = true, example = "PUBLIC") @RequestParam String sellerVisibility) {
-        return orderService.updateOrderSellerVisibility(orderId, sellerVisibility);
-    }
-
-    @Operation(summary = "修改订单买家可见性", description = "修改订单对买家的可见性")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "修改成功"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PutMapping("/{orderId}/buyer-visibility")
-    public Result updateOrderBuyerVisibility(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                                          @Parameter(description = "买家可见性", required = true, example = "PUBLIC") @RequestParam String buyerVisibility) {
-        return orderService.updateOrderBuyerVisibility(orderId, buyerVisibility);
-    }
-
-    @Operation(summary = "申请退货", description = "买家申请退货")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "申请成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许申请退货"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PostMapping("/{orderId}/return")
-    public Result requestReturn(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                              @Parameter(description = "退货原因", required = true) @RequestParam String returnReason) {
-        return orderService.requestReturn(orderId, returnReason);
-    }
-
-    @Operation(summary = "审批退货申请", description = "卖家审批退货申请")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "审批成功"),
-        @ApiResponse(responseCode = "400", description = "参数错误"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PutMapping("/{orderId}/return/approve")
-    public Result approveReturnRequest(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                                    @Parameter(description = "是否批准", required = true) @RequestParam Boolean approved,
-                                    @Parameter(description = "拒绝原因") @RequestParam(required = false) String rejectionReason) {
-        return orderService.approveReturnRequest(orderId, approved, rejectionReason);
-    }
-
-    @Operation(summary = "确认退货发货", description = "买家确认退货发货")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "确认成功"),
-        @ApiResponse(responseCode = "400", description = "参数错误"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PutMapping("/{orderId}/return/shipment")
-    public Result confirmReturnShipment(@Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-                                     @Parameter(description = "退货快递单号", required = true) @RequestParam String returnTrackingNumber) {
-        return orderService.confirmReturnShipment(orderId, returnTrackingNumber);
-    }
-
-    @Operation(summary = "完成退货", description = "卖家完成退货处理")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "完成成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许完成退货"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
-    @PutMapping("/{orderId}/return/complete")
-    public Result completeReturn(@Parameter(description = "订单ID", required = true) @PathVariable String orderId) {
-        return orderService.completeReturn(orderId);
-    }
-
-    @Operation(summary = "获取退货申请列表", description = "卖家获取退货申请列表")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "获取成功"),
-        @ApiResponse(responseCode = "401", description = "用户未登录")
-    })
-    @GetMapping("/returns")
-    public Result getReturnRequests(@Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
-                                 @Parameter(description = "每页数量", example = "10") @RequestParam(defaultValue = "10") Integer size,
-                                 @Parameter(description = "状态") @RequestParam(required = false) String status) {
-        return orderService.getReturnRequests(page, size, status);
-    }
-
-    @Operation(summary = "获取我的退货记录", description = "买家获取退货记录")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "获取成功"),
-        @ApiResponse(responseCode = "401", description = "用户未登录")
-    })
-    @GetMapping("/my-returns")
-    public Result getMyReturnRecords(@Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
-                                   @Parameter(description = "每页数量", example = "10") @RequestParam(defaultValue = "10") Integer size,
-                                   @Parameter(description = "状态") @RequestParam(required = false) String status) {
-        return orderService.getMyReturnRecords(page, size, status);
-    }
-    
-    // ✅ 批量查询订单状态（用于聊天界面，轻量级查询）
-    @Operation(summary = "批量查询订单状态", description = "批量查询订单基本信息，用于聊天界面显示，只返回轻量级信息")
+    @Operation(summary = "批量查询订单状态（聊天界面）")
     @PostMapping("/batch-status")
     public Result getOrdersBatchStatus(@RequestBody List<String> orderIds) {
-        return orderService.getOrdersBatchStatus(orderIds);
+        return queryService.getOrdersBatchStatus(orderIds);
     }
-    
-    @Operation(summary = "更新订单收货地址", description = "买家或卖家更新订单收货地址（只能更新订单快照，不影响商品）。只有本人，且订单在未发货和未支付阶段，可以更改地址")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "更新成功"),
-        @ApiResponse(responseCode = "400", description = "订单状态不允许修改地址"),
-        @ApiResponse(responseCode = "403", description = "无权限修改此订单的地址"),
-        @ApiResponse(responseCode = "404", description = "订单不存在")
-    })
+
+    @Operation(summary = "查询原商品信息（基于快照）")
+    @GetMapping("/{orderId}/query-commodity")
+    public Result queryOriginalCommodity(@PathVariable String orderId) {
+        return queryService.queryOriginalCommodity(orderId);
+    }
+
+    // ===== 退款退货 =====
+
+    @Operation(summary = "申请退款")
+    @PostMapping("/{orderId}/refund")
+    public Result requestRefund(@PathVariable String orderId,
+                                @RequestParam String reason) {
+        return returnService.requestRefund(orderId, reason);
+    }
+
+    @Operation(summary = "处理退款申请（卖家）")
+    @PostMapping("/{orderId}/refund/handle")
+    public Result handleRefund(@PathVariable String orderId,
+                               @RequestParam String decision,
+                               @RequestParam(required = false) String remark) {
+        return returnService.handleRefund(orderId, decision, remark);
+    }
+
+    @Operation(summary = "申请退货（买家）")
+    @PostMapping("/{orderId}/return")
+    public Result requestReturn(@PathVariable String orderId,
+                                @RequestParam String returnReason) {
+        return returnService.requestReturn(orderId, returnReason);
+    }
+
+    @Operation(summary = "审批退货申请（卖家）")
+    @PutMapping("/{orderId}/return/approve")
+    public Result approveReturnRequest(@PathVariable String orderId,
+                                       @RequestParam Boolean approved,
+                                       @RequestParam(required = false) String rejectionReason) {
+        return returnService.approveReturnRequest(orderId, approved, rejectionReason);
+    }
+
+    @Operation(summary = "确认退货发货（买家）")
+    @PutMapping("/{orderId}/return/shipment")
+    public Result confirmReturnShipment(@PathVariable String orderId,
+                                        @RequestParam String returnTrackingNumber) {
+        return returnService.confirmReturnShipment(orderId, returnTrackingNumber);
+    }
+
+    @Operation(summary = "完成退货（卖家）")
+    @PutMapping("/{orderId}/return/complete")
+    public Result completeReturn(@PathVariable String orderId) {
+        return returnService.completeReturn(orderId);
+    }
+
+    @Operation(summary = "获取退货申请列表（卖家）")
+    @GetMapping("/returns")
+    public Result getReturnRequests(@RequestParam(defaultValue = "1") Integer page,
+                                    @RequestParam(defaultValue = "10") Integer size,
+                                    @RequestParam(required = false) String status) {
+        return returnService.getReturnRequests(page, size, status);
+    }
+
+    @Operation(summary = "获取我的退货记录（买家）")
+    @GetMapping("/my-returns")
+    public Result getMyReturnRecords(@RequestParam(defaultValue = "1") Integer page,
+                                     @RequestParam(defaultValue = "10") Integer size,
+                                     @RequestParam(required = false) String status) {
+        return returnService.getMyReturnRecords(page, size, status);
+    }
+
+    // ===== 属性管理 =====
+
+    @Operation(summary = "修改订单可见性（卖家和买家同时）")
+    @PutMapping("/{orderId}/visibility")
+    public Result updateOrderVisibility(@PathVariable String orderId, @RequestParam String visibility) {
+        return manageService.updateOrderVisibility(orderId, visibility);
+    }
+
+    @Operation(summary = "修改订单卖家可见性")
+    @PutMapping("/{orderId}/seller-visibility")
+    public Result updateOrderSellerVisibility(@PathVariable String orderId, @RequestParam String sellerVisibility) {
+        return manageService.updateOrderSellerVisibility(orderId, sellerVisibility);
+    }
+
+    @Operation(summary = "修改订单买家可见性")
+    @PutMapping("/{orderId}/buyer-visibility")
+    public Result updateOrderBuyerVisibility(@PathVariable String orderId, @RequestParam String buyerVisibility) {
+        return manageService.updateOrderBuyerVisibility(orderId, buyerVisibility);
+    }
+
+    @Operation(summary = "更新订单收货地址")
     @PutMapping("/{orderId}/shipping-address")
-    public Result updateOrderShippingAddress(
-            @Parameter(description = "订单ID", required = true) @PathVariable String orderId,
-            @Valid @RequestBody com.njumarket.order.dto.UpdateOrderAddressDTO addressDTO) {
-        return orderService.updateOrderShippingAddress(orderId, addressDTO);
+    public Result updateOrderShippingAddress(@PathVariable String orderId,
+                                             @Valid @RequestBody UpdateOrderAddressDTO addressDTO) {
+        return manageService.updateOrderShippingAddress(orderId, addressDTO);
     }
 }
-

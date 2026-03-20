@@ -30,8 +30,43 @@ public class JwtUtils {
     private static final SecretKey key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
 
     /**
-     * 生成JWT Token
+     * 生成 Session Token（薄 JWT：只携带 sessionId）
+     * 用户信息不再嵌入 JWT，统一存入 Redis Session。
      */
+    public String generateSessionToken(String sessionId) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("sid", sessionId);
+        claims.put("type", "access");
+        return createToken(claims, sessionId, EXPIRATION_TIME);
+    }
+
+    /**
+     * 生成 Session Refresh Token（薄 JWT：只携带 refreshSessionId）
+     */
+    public String generateSessionRefreshToken(String refreshSessionId) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("sid", refreshSessionId);
+        claims.put("type", "refresh");
+        return createToken(claims, refreshSessionId, REFRESH_EXPIRATION_TIME);
+    }
+
+    /**
+     * 从 Session Token 中取出 sessionId
+     */
+    public String getSessionIdFromToken(String token) {
+        try {
+            Claims claims = getClaimsFromToken(token);
+            return claims.get("sid", String.class);
+        } catch (Exception e) {
+            log.error("获取 sessionId 失败: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * @deprecated 旧接口：生成含 userId+phone 的 JWT（不含 session 概念）。新代码请用 generateSessionToken。
+     */
+    @Deprecated
     public String generateToken(String userId, String phone) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
@@ -42,8 +77,9 @@ public class JwtUtils {
     }
 
     /**
-     * 生成刷新Token
+     * @deprecated 旧接口：生成含 userId 的刷新 Token。新代码请用 generateSessionRefreshToken。
      */
+    @Deprecated
     public String generateRefreshToken(String userId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);

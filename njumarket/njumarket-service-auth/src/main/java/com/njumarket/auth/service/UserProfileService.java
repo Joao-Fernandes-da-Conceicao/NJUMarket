@@ -1,9 +1,8 @@
 package com.njumarket.auth.service;
 
 import com.njumarket.njumarket.dto.Result;
-import com.njumarket.auth.dto.UserProfileDTO;
+import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
 import com.njumarket.auth.dto.UserProfileUpdateDTO;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -43,49 +42,19 @@ public interface UserProfileService {
     Result createUserProfile(String userId, String nickname);
     
     /**
-     * 上传头像
+     * 设置头像 URL（前端先调 Image 服务上传，拿到 imageUrl 后调此方法写入档案）
      */
-    Result uploadAvatar(String userId, MultipartFile file);
-    
+    Result setAvatarUrl(String userId, String imageUrl);
+
     /**
-     * 删除头像
+     * 删除头像（清空档案中的头像 URL；物理文件由 Image 服务侧管理）
      */
     Result deleteAvatar(String userId);
-    
-    /**
-     * 更新用户评分
-     */
-    Result updateUserRating(String userId, Double rating, String role);
-    
-    /**
-     * 更新信用分
-     */
-    Result updateCreditScore(String userId, Integer scoreChange, String reason);
-    
-    /**
-     * 更新交易统计
-     */
-    Result updateTradeStatistics(String userId, String type, Integer count);
-    
-    /**
-     * 升级VIP等级
-     */
-    Result upgradeVipLevel(String userId);
-    
-    /**
-     * 获取用户排行榜
-     */
-    Result getUserRankings(String type, Integer limit);
     
     /**
      * 搜索用户档案
      */
     Result searchUserProfiles(String keyword, Integer page, Integer size);
-    
-    /**
-     * 获取VIP等级统计
-     */
-    Result getVipLevelStatistics();
     
     /**
      * 检查用户是否有档案
@@ -114,5 +83,12 @@ public interface UserProfileService {
      * @param role 角色（"SELLER" 或 "BUYER"）
      */
     void clearOrderReminderStatus(String userId, String role);
+
+    // ========== 内部方法 ==========
+
+    /**
+     * 批量查询用户档案（带缓存，供服务间调用）
+     */
+    List<UserProfileInternalDTO> getUserProfilesByIdsInternal(List<String> userIds);
 }
 

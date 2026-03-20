@@ -24,22 +24,6 @@ spring:
     uris: ${ELASTICSEARCH_URIS:http://elasticsearch:9200}
     username: ${ELASTICSEARCH_USERNAME:elastic}
     password: ${ELASTICSEARCH_PASSWORD:changeme}
-# LangChain4j 配置（用于 Doubao API）
-langchain4j:
-  open-ai:
-    # 火山引擎 Doubao API 配置（兼容 OpenAI API）
-    # API Key 通过环境变量 DOUBAO_API_KEY 设置
-    api-key: ${DOUBAO_API_KEY:8736b46e-a38e-4d2c-8859-0460a1167310}
-    # 火山引擎 API base-url
-    # LangChain4j 会自动在 base-url 后添加 /chat/completions 或 /embeddings
-    # 官方文档示例：https://ark.cn-beijing.volces.com/api/v3/chat/completions
-    base-url: ${DOUBAO_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
-    # Chat 模型配置（官方提供的模型ID）
-    chat-model: ${DOUBAO_CHAT_MODEL:doubao-seed-1-6-250615}
-    timeout: 60s
-    # Embedding 模型配置
-    embedding-model: ${DOUBAO_EMBEDDING_MODEL:doubao-embedding-text-240715}
-    # 注意：Doubao embedding 模型实际返回 2560 维，代码中会将向量截断到 2000 维（HNSW 索引限制）
 
 eureka:
   client:
@@ -56,6 +40,3 @@ commodity:
     sync:
       auto-reindex-on-startup: ${COMMODITY_SEARCH_AUTO_REINDEX:false}
       page-size: ${COMMODITY_SEARCH_SYNC_PAGE_SIZE:200}
-
-# Spring AI 配置
-

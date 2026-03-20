@@ -59,17 +59,23 @@ public class RedisConstants {
     public static final String COMMODITY_GEO_KEY = "commodity:geo:";
     public static final String USER_SIGN_KEY = "sign:";
 
+    // 点击量 Write-Behind：INCR 增量暂存，由定时任务批量刷回 DB
+    public static final String CLICK_COUNT_DELTA_KEY = "click:count:delta:";       // 单商品增量 key 前缀
+    public static final String CLICK_COUNT_DELTA_PATTERN = "click:count:delta:*";  // SCAN 匹配模式
+
     // 限流相关
     public static final String RATE_LIMIT_KEY = "rate:limit:";
     public static final Long RATE_LIMIT_TTL = 1L; // 限流1分钟
 
-    // ✅ 增量轮询相关：商品和订单变更记录
-    public static final String COMMODITY_CHANGE_KEY = "chat:commodity:change:"; // 商品变更记录
-    public static final String ORDER_CHANGE_KEY = "chat:order:change:"; // 订单变更记录
-    public static final Long CHANGE_RECORD_TTL = 24 * 60 * 60L; // 变更记录保留24小时（秒）
-
     // ✅ WebSocket消息推送重试队列
-    public static final String WEBSOCKET_RETRY_QUEUE_KEY = "websocket:retry:queue"; // WebSocket重试队列
-    public static final Long WEBSOCKET_RETRY_TTL = 90 * 60L; // 重试消息保留90分钟（秒）- 针对高负载环境增加TTL以应对传输延迟
+    public static final String WEBSOCKET_RETRY_QUEUE_KEY = "websocket:retry:queue";
+    public static final Long WEBSOCKET_RETRY_TTL = 90 * 60L; // 重试消息保留90分钟（秒）
+
+    // ✅ 分布式 Session（Session ID 模式）
+    // JWT 只携带 sessionId；用户信息存入 Redis Hash：session:{sessionId}
+    public static final String SESSION_KEY = "session:";
+    public static final Long SESSION_TTL = 24 * 60 * 60L; // 24 小时（秒），可滑动续期
+    public static final Long SESSION_REFRESH_TTL = 7 * 24 * 60 * 60L; // Refresh Session 7 天（秒）
+    public static final String SESSION_REFRESH_KEY = "session:refresh:";
 }
 

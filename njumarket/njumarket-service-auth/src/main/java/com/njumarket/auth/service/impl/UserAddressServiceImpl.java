@@ -1,10 +1,12 @@
 package com.njumarket.auth.service.impl;
 
 import com.njumarket.auth.dto.UserAddressDTO;
+import com.njumarket.auth.dto.internal.AddressInternalDTOConverter;
 import com.njumarket.auth.entity.UserAddress;
 import com.njumarket.auth.repository.UserAddressRepository;
 import com.njumarket.auth.service.UserAddressService;
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.AddressInternalDTO;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.util.stream.Collectors;
 public class UserAddressServiceImpl implements UserAddressService {
     
     private final UserAddressRepository userAddressRepository;
+    private final AddressInternalDTOConverter addressInternalDTOConverter;
     
     @Override
     @Transactional
@@ -260,28 +263,18 @@ public class UserAddressServiceImpl implements UserAddressService {
     // ========== 内部方法 ==========
     
     @Override
-    public UserAddressDTO getAddressByIdInternal(String addressId) {
+    public AddressInternalDTO getAddressByIdInternal(String addressId) {
         UserAddress address = userAddressRepository.findById(addressId)
-            .orElse(null);
-        
-        if (address == null) {
-            return null;
-        }
-        
-        return convertToDTO(address);
+            .orElseThrow(() -> new BusinessException("地址不存在"));
+        return addressInternalDTOConverter.toInternalDTO(address);
     }
-    
+
     @Override
-    public UserAddressDTO getDefaultAddressInternal(String userId) {
-        UserAddress address = userAddressRepository
+    public AddressInternalDTO getDefaultAddressInternal(String userId) {
+        return userAddressRepository
             .findByUserIdAndIsDefaultTrueAndIsActiveTrue(userId)
+            .map(addressInternalDTOConverter::toInternalDTO)
             .orElse(null);
-        
-        if (address == null) {
-            return null;
-        }
-        
-        return convertToDTO(address);
     }
     
     // ========== 私有方法 ==========

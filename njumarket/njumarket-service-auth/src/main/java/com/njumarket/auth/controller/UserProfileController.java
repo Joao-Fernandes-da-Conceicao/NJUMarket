@@ -4,7 +4,6 @@ import com.njumarket.njumarket.dto.Result;
 import com.njumarket.auth.dto.UserProfileUpdateDTO;
 import com.njumarket.njumarket.model.IUser;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserProfileService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,7 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 用户档案控制器
@@ -61,18 +59,18 @@ public class UserProfileController {
         return userProfileService.updateCurrentUserProfile(updateDTO);
     }
 
-    @Operation(summary = "上传头像", description = "上传用户头像图片")
+    @Operation(summary = "设置头像 URL", description = "前端先调 /api/user/image/upload-avatar 上传文件，拿到 imageUrl 后调此接口写入档案")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "上传成功"),
-        @ApiResponse(responseCode = "400", description = "文件格式错误"),
+        @ApiResponse(responseCode = "200", description = "设置成功"),
+        @ApiResponse(responseCode = "400", description = "参数错误"),
         @ApiResponse(responseCode = "401", description = "用户未登录")
     })
-    @PostMapping(value = "/avatar", consumes = "multipart/form-data")
-    public Result uploadAvatar(
+    @PostMapping("/avatar")
+    public Result setAvatarUrl(
         @AuthenticationPrincipal IUser user,
-        @Parameter(description = "头像文件", required = true)
-        @RequestParam("file") MultipartFile file) {
-        return userProfileService.uploadAvatar(user.getUserId(), file);
+        @Parameter(description = "图片 URL", required = true)
+        @RequestParam("imageUrl") String imageUrl) {
+        return userProfileService.setAvatarUrl(user.getUserId(), imageUrl);
     }
 
     @Operation(summary = "删除头像", description = "删除用户当前头像")
@@ -101,28 +99,6 @@ public class UserProfileController {
         return userProfileService.searchUserProfiles(keyword, page, size);
     }
 
-    @Operation(summary = "获取用户排行榜", description = "获取买家或卖家评分排行榜")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "获取成功")
-    })
-    @GetMapping("/rankings")
-    public Result getUserRankings(
-        @Parameter(description = "排行榜类型", required = true, example = "seller")
-        @RequestParam String type,
-        @Parameter(description = "返回数量")
-        @RequestParam(defaultValue = "10") Integer limit) {
-        return userProfileService.getUserRankings(type, limit);
-    }
-
-    @Operation(summary = "获取VIP等级统计", description = "获取各VIP等级的用户数量统计")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "获取成功")
-    })
-    @GetMapping("/vip-statistics")
-    public Result getVipLevelStatistics() {
-        return userProfileService.getVipLevelStatistics();
-    }
-    
     // ✅ v1.3.x: 订单提醒相关接口（向后兼容）
     @Operation(summary = "获取订单提醒状态", description = "获取当前用户的订单提醒状态")
     @ApiResponses({

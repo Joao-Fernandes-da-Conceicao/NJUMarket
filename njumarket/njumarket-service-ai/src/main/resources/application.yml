@@ -14,28 +14,37 @@ server:
 spring:
   application:
     name: njumarket-service-ai
-  # ✅ Spring Cloud Config Client 配置
-  # Docker 环境通过环境变量 SPRING_CONFIG_IMPORT 覆盖，本地开发使用 localhost
-  config:
-    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
-    fail-fast: false  # Config Server 不可用时，使用本地配置
-  # 本地数据源配置（作为 Config Server 不可用时的后备）
-  datasource:
-    driver-class-name: org.postgresql.Driver
-    url: ${AI_DATASOURCE_URL:jdbc:postgresql://localhost:5432/njumarket?currentSchema=nju_market}
-    username: ${AI_DATASOURCE_USERNAME:postgres}
-    password: ${AI_DATASOURCE_PASSWORD:Hqz20050316}
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+  cloud:
+    config:
+      # 本地开发默认不使用 Config Server（需要时可通过环境变量开启）
+      enabled: ${CONFIG_SERVER_ENABLED:false}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
       password: ${REDIS_PASSWORD:hqz20050316}
       database: ${AI_REDIS_DATABASE:3}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
+
+njumarket:
+  ai:
+    milvus:
+      enabled: ${MILVUS_ENABLED:true}
+      uri: ${MILVUS_URI:http://localhost:19530}
+      token: ${MILVUS_TOKEN:}
+      db-name: ${MILVUS_DB_NAME:default}
+      commodity-collection: ${MILVUS_COMMODITY_COLLECTION:commodity_vectors}
+      user-profile-collection: ${MILVUS_USER_PROFILE_COLLECTION:user_profile_vectors}
+      conversation-collection: ${MILVUS_CONVERSATION_COLLECTION:conversation_memory_vectors}
+      dimension: ${MILVUS_DIMENSION:1024}
+      top-k: ${MILVUS_TOP_K:10}
+      metric-type: ${MILVUS_METRIC_TYPE:COSINE}
+      memory-top-k: ${MILVUS_MEMORY_TOP_K:12}
 

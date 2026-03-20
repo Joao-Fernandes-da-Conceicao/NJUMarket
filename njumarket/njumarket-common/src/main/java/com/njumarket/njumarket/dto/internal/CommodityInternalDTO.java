@@ -25,7 +25,6 @@ public class CommodityInternalDTO implements Serializable {
     private String category;
     private String conditionLevel;
     private String status;
-    private String sellerVisibility;
     private String buyerVisibility;
     private String location; // 保留原有字段，用于兼容
     
@@ -42,6 +41,7 @@ public class CommodityInternalDTO implements Serializable {
     private Double latitude; // 纬度
     
     private String images; // ✅ 添加图片字段（JSON格式的图片URL列表）
+    private Integer clickCount;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
     // 不包含 User、Order、ImageReference 等关联对象

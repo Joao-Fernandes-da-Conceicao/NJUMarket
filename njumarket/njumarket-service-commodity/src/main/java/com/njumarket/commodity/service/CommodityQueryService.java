@@ -1,10 +1,12 @@
 package com.njumarket.commodity.service;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.CommodityInternalDTO;
 import com.njumarket.commodity.entity.Commodity;
 import com.njumarket.commodity.entity.User; // User 实体（Commodity Service专用）
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 商品查询服务接口
@@ -80,14 +82,6 @@ public interface CommodityQueryService {
      */
     Result recordView(String commodityId, String sessionId);
     
-    /**
-     * AI语义搜索
-     * @param query 搜索查询
-     * @param location 位置偏好
-     * @return 搜索结果
-     */
-    Result aiSearch(String query, String location);
-    
     // ========== 用户相关查询 ==========
     
     /**
@@ -145,5 +139,26 @@ public interface CommodityQueryService {
      * @return 商品基本信息列表
      */
     Result getCommoditiesBatchStatus(List<String> commodityIds);
+
+    // ========== 内部接口（供服务间调用） ==========
+
+    /**
+     * 根据ID查询商品（内部，无可见性过滤）
+     */
+    CommodityInternalDTO getCommodityByIdInternal(String commodityId);
+
+    /**
+     * 批量查询商品（内部，无可见性过滤）
+     */
+    List<CommodityInternalDTO> getCommoditiesByIdsInternal(List<String> commodityIds);
+
+    /**
+     * 分页查询商品列表（管理端）
+     */
+    Map<String, Object> listCommoditiesInternal(Integer page, Integer size,
+                                                 String keyword, String category,
+                                                 String conditionLevel, String status,
+                                                 String buyerVisibility,
+                                                 String sortProp, String sortOrder);
 }
 

@@ -50,7 +50,6 @@ public class CommodityDTO {
     
     private LocalDateTime publishTime;
     private String commodityStatus;
-    private String sellerVisibility;
     private String buyerVisibility;
     private String category;
     private String conditionLevel;

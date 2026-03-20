@@ -22,9 +22,9 @@
     <!-- 空状态 -->
     <div v-if="commodities.length === 0 && !loading" class="empty-state">
       <el-empty :description="emptyText">
-        <UnifiedButton v-if="showEmptyAction" type="primary" @click="handleEmptyAction">
+        <el-button v-if="showEmptyAction" type="primary" @click="handleEmptyAction">
           {{ emptyActionText }}
-        </UnifiedButton>
+        </el-button>
       </el-empty>
     </div>
     
@@ -46,7 +46,6 @@
 import { defineProps, defineEmits } from 'vue'
 import CommodityCard from './CommodityCard.vue'
 import BrowseCommodityCard from './BrowseCommodityCard.vue'
-import UnifiedButton from '../common/UnifiedButton.vue'
 
 defineProps({
   commodities: {

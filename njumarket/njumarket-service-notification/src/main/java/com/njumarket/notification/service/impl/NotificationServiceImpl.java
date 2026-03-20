@@ -126,17 +126,6 @@ public class NotificationServiceImpl implements NotificationService {
     }
     
     @Override
-    public void pushCommodityChange(String userId, String commodityId, String operation) {
-        Map<String, Object> messageData = new HashMap<>();
-        messageData.put("type", "COMMODITY_CHANGE");
-        messageData.put("commodityId", commodityId);
-        messageData.put("operation", operation);
-        messageData.put("timestamp", java.time.LocalDateTime.now().toString());
-        
-        webSocketRetryService.pushWithRetry(userId, messageData, "COMMODITY_CHANGE");
-    }
-    
-    @Override
     public void pushMessage(String userId, Object messageData) {
         // ✅ 从messageData中提取messageId（如果存在）
         String messageId = null;

@@ -31,6 +31,7 @@ import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import com.njumarket.njumarket.model.IAdmin;
 import com.njumarket.njumarket.exception.BusinessException;
 import jakarta.servlet.http.HttpSession;
@@ -68,9 +69,13 @@ public class AdminServiceImpl implements AdminService {
     private final JwtUtils jwtUtils;
     private final ObjectMapper objectMapper;
     
-    // ✅ CacheUtil 可选注入（如果 Redis 未配置，则为 null）
+    // ✅ CacheUtil 可选注入（Cache Aside 模式：Cache Aside 缓存的 JSON 对象）
     @Autowired(required = false)
     private CacheUtil cacheUtil;
+
+    // ✅ StringRedisTemplate：用于操作纯字符串结构（session Hash、login:token 等）
+    @Autowired(required = false)
+    private StringRedisTemplate stringRedisTemplate;
 
     @Override
     public Result login(AdminLoginDTO loginDTO, HttpSession session) {
@@ -850,13 +855,19 @@ public class AdminServiceImpl implements AdminService {
             userRepository.save(user);
             
             // ✅ Cache Aside模式：先更新数据库，再删除缓存
-            // 删除用户信息缓存（账户状态变更后需要清除缓存）
             if (cacheUtil != null) {
                 String cacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
                 cacheUtil.delete(cacheKey);
                 log.info("已删除用户信息缓存（Cache Aside模式）: userId={}, reason=accountStatus变更, cacheKey={}", userId, cacheKey);
             }
-            
+
+            // ✅ Session 与用户缓存分离：accountStatus 变更时强踢 session
+            // session 中的 accountStatus 是登录时写入的快照，Cache Aside 只失效 cache:user:info
+            // 若不强踢 session，被封禁/停用的用户在 session TTL 内仍可通过 Gateway 鉴权
+            if (!"ACTIVE".equals(status)) {
+                forceLogoutUser(userId);
+            }
+
             // ✅ 设置Profile到User实体（确保toSimpleUser能正确获取Profile）
             Optional<UserProfile> profileOpt = userProfileRepository.findByUserId(userId);
             if (profileOpt.isPresent()) {
@@ -985,17 +996,9 @@ public class AdminServiceImpl implements AdminService {
                 .orElse(null);
             
             if (profile == null) {
-                // 如果确实不存在，创建新的档案
                 profile = new UserProfile();
                 profile.setProfileId("PROFILE_" + System.currentTimeMillis());
                 profile.setUserId(user.getUserId());
-                // 设置默认值
-                profile.setCreditScore(100);
-                profile.setBuyerRating(5.0);
-                profile.setSellerRating(5.0);
-                profile.setTotalSales(0);
-                profile.setTotalPurchases(0);
-                profile.setVipLevel("NORMAL");
             }
             
             // 更新字段（如果payload中有提供）
@@ -1008,103 +1011,36 @@ public class AdminServiceImpl implements AdminService {
             if (avatar instanceof String && StringUtils.hasText((String) avatar)) {
                 profile.setAvatar(((String) avatar).trim());
             }
-            
-            // ✅ 信用分：支持 Number 和 String 类型
-            Object creditScore = payload.get("creditScore");
-            if (creditScore != null) {
-                try {
-                    int score = creditScore instanceof Number 
-                        ? ((Number) creditScore).intValue() 
-                        : Integer.parseInt(creditScore.toString().trim());
-                    if (score >= 0 && score <= 100) {
-                        profile.setCreditScore(score);
-                    }
-                } catch (NumberFormatException | NullPointerException ignored) {
-                    // 忽略无效值
-                }
-            }
-            
-            // ✅ 买家评分：支持 Number 和 String 类型
-            Object buyerRating = payload.get("buyerRating");
-            if (buyerRating != null) {
-                try {
-                    double rating = buyerRating instanceof Number 
-                        ? ((Number) buyerRating).doubleValue() 
-                        : Double.parseDouble(buyerRating.toString().trim());
-                    if (rating >= 0 && rating <= 5) {
-                        profile.setBuyerRating(rating);
-                    }
-                } catch (NumberFormatException | NullPointerException ignored) {
-                    // 忽略无效值
-                }
-            }
-            
-            // ✅ 卖家评分：支持 Number 和 String 类型
-            Object sellerRating = payload.get("sellerRating");
-            if (sellerRating != null) {
-                try {
-                    double rating = sellerRating instanceof Number 
-                        ? ((Number) sellerRating).doubleValue() 
-                        : Double.parseDouble(sellerRating.toString().trim());
-                    if (rating >= 0 && rating <= 5) {
-                        profile.setSellerRating(rating);
-                    }
-                } catch (NumberFormatException | NullPointerException ignored) {
-                    // 忽略无效值
-                }
-            }
-            
-            // ✅ 卖出次数：支持 Number 和 String 类型
-            Object totalSales = payload.get("totalSales");
-            if (totalSales != null) {
-                try {
-                    int sales = totalSales instanceof Number 
-                        ? ((Number) totalSales).intValue() 
-                        : Integer.parseInt(totalSales.toString().trim());
-                    if (sales >= 0) {
-                        profile.setTotalSales(sales);
-                    }
-                } catch (NumberFormatException | NullPointerException ignored) {
-                    // 忽略无效值
-                }
-            }
-            
-            // ✅ 购入次数：支持 Number 和 String 类型
-            Object totalPurchases = payload.get("totalPurchases");
-            if (totalPurchases != null) {
-                try {
-                    int purchases = totalPurchases instanceof Number 
-                        ? ((Number) totalPurchases).intValue() 
-                        : Integer.parseInt(totalPurchases.toString().trim());
-                    if (purchases >= 0) {
-                        profile.setTotalPurchases(purchases);
-                    }
-                } catch (NumberFormatException | NullPointerException ignored) {
-                    // 忽略无效值
-                }
-            }
-            
-            Object vipLevel = payload.get("vipLevel");
-            if (vipLevel instanceof String && StringUtils.hasText((String) vipLevel)) {
-                String lvl = ((String) vipLevel).trim();
-                java.util.Set<String> allowedLvl = new java.util.HashSet<>(java.util.Arrays.asList("NORMAL","BRONZE","SILVER","GOLD","PLATINUM"));
-                if (!allowedLvl.contains(lvl)) {
-                    throw new BusinessException("非法的会员等级");
-                }
-                profile.setVipLevel(lvl);
-            }
 
             userRepository.save(user);
             userProfileRepository.save(profile);
             
             // ✅ Cache Aside模式：先更新数据库，再删除缓存
-            // 删除用户信息和档案缓存（username、primaryPhone、accountStatus或档案信息变更后需要清除缓存）
             if (cacheUtil != null) {
                 String userInfoCacheKey = RedisConstants.CACHE_USER_INFO_KEY + userId;
                 String userProfileCacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
                 cacheUtil.delete(userInfoCacheKey);
                 cacheUtil.delete(userProfileCacheKey);
                 log.info("已删除用户信息和档案缓存（Cache Aside模式）: userId={}, userInfoChanged={}", userId, userInfoChanged);
+            }
+
+            // ✅ Session 直写策略：username / phone 变更时直接更新 session 对应字段
+            // （用户保持登录，Gateway 注入头即时生效；不需要重新登录）
+            Object newUsername = payload.get("username");
+            if (newUsername instanceof String && StringUtils.hasText((String) newUsername)) {
+                syncSessionField(userId, "username", ((String) newUsername).trim());
+            }
+            Object newPhone = payload.get("primaryPhone");
+            if (newPhone instanceof String && StringUtils.hasText((String) newPhone)) {
+                syncSessionField(userId, "phone", ((String) newPhone).trim());
+            }
+
+            // ✅ Session 与用户缓存分离：accountStatus 变更为非 ACTIVE 时强踢 session
+            // （封禁/停用 → 整个 session 删除，下次请求 Gateway 返回 401）
+            Object newAccountStatus = payload.get("accountStatus");
+            if (newAccountStatus instanceof String
+                    && !"ACTIVE".equals(((String) newAccountStatus).trim())) {
+                forceLogoutUser(userId);
             }
 
             return Result.ok("更新成功", toSimpleUser(user));
@@ -1883,13 +1819,6 @@ public class AdminServiceImpl implements AdminService {
         dto.setUserId(profile.getUserId());
         dto.setNickname(profile.getNickname());
         dto.setAvatar(profile.getAvatar());
-        dto.setCreditScore(profile.getCreditScore());
-        dto.setBuyerRating(profile.getBuyerRating());
-        dto.setSellerRating(profile.getSellerRating());
-        // UserProfileInternalDTO可能没有这些字段，暂时注释
-        // dto.setTotalSales(profile.getTotalSales());
-        // dto.setTotalPurchases(profile.getTotalPurchases());
-        // dto.setVipLevel(profile.getVipLevel());
         return dto;
     }
     
@@ -1904,12 +1833,6 @@ public class AdminServiceImpl implements AdminService {
             Map<String, Object> p = new HashMap<>();
             p.put("nickname", u.getUserProfile().getNickname());
             p.put("avatar", normalizeImageUrl(u.getUserProfile().getAvatar()));
-            p.put("creditScore", u.getUserProfile().getCreditScore());
-            p.put("buyerRating", u.getUserProfile().getBuyerRating());
-            p.put("sellerRating", u.getUserProfile().getSellerRating());
-            p.put("totalSales", u.getUserProfile().getTotalSales());
-            p.put("totalPurchases", u.getUserProfile().getTotalPurchases());
-            p.put("vipLevel", u.getUserProfile().getVipLevel());
             m.put("profile", p);
         }
         return m;
@@ -3113,6 +3036,62 @@ public class AdminServiceImpl implements AdminService {
         }
         if (lon != null && lat != null) {
             address.setLocation(lon, lat);
+        }
+    }
+
+    /**
+     * Session 直写策略：将单个字段同步到当前用户的 access session。
+     *
+     * <p>适用于非安全敏感字段（username、phone）的变更场景。
+     * 用户保持登录状态，Gateway 下次请求即可注入最新值到请求头。
+     */
+    private void syncSessionField(String userId, String field, String value) {
+        if (stringRedisTemplate == null || !StringUtils.hasText(userId)) {
+            return;
+        }
+        try {
+            String sessionIndexKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
+            String accessSessionId = stringRedisTemplate.opsForValue().get(sessionIndexKey);
+            if (StringUtils.hasText(accessSessionId)) {
+                String sessionKey = RedisConstants.SESSION_KEY + accessSessionId;
+                stringRedisTemplate.opsForHash().put(sessionKey, field, value != null ? value : "");
+                log.info("Session 字段已直写更新（管理侧）: userId={}, field={}", userId, field);
+            }
+        } catch (Exception e) {
+            log.warn("同步 session 字段失败（非致命）: userId={}, field={}, error={}", userId, field, e.getMessage());
+        }
+    }
+
+    /**
+     * 强制下线用户（Session 与用户缓存分离策略）
+     *
+     * <p>当用户 accountStatus 变更为非 ACTIVE（封禁/停用）时调用。
+     * Gateway 的 JwtAuthenticationFilter 依赖 session 中的 accountStatus 做鉴权判断，
+     * Cache Aside 只失效 cache:user:info:{userId}，不会更新 session 中的快照数据。
+     * 因此必须主动删除 session，让用户下次请求在 Gateway 收到 401/403，强制重新登录。
+     *
+     * <p>通过 login:token:{userId} 找到当前 accessSessionId，然后同时删除：
+     * <ul>
+     *   <li>{@code login:token:{userId}} — 会话索引（防止刷新 Token 重建旧 session）</li>
+     *   <li>{@code session:{accessSessionId}} — access session Hash</li>
+     * </ul>
+     */
+    private void forceLogoutUser(String userId) {
+        if (stringRedisTemplate == null || !StringUtils.hasText(userId)) {
+            return;
+        }
+        try {
+            String sessionIndexKey = RedisConstants.LOGIN_TOKEN_KEY + userId;
+            String accessSessionId = stringRedisTemplate.opsForValue().get(sessionIndexKey);
+            if (StringUtils.hasText(accessSessionId)) {
+                String sessionKey = RedisConstants.SESSION_KEY + accessSessionId;
+                stringRedisTemplate.delete(sessionKey);
+                log.info("已强踢用户 session（Session 与缓存分离策略）: userId={}, sessionKey={}", userId, sessionKey);
+            }
+            stringRedisTemplate.delete(sessionIndexKey);
+            log.info("已删除用户 session 索引: userId={}, key={}", userId, sessionIndexKey);
+        } catch (Exception e) {
+            log.warn("强踢用户 session 失败（非致命）: userId={}, error={}", userId, e.getMessage());
         }
     }
 }

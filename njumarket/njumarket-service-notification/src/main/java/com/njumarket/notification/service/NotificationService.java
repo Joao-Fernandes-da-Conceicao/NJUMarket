@@ -15,14 +15,6 @@ public interface NotificationService {
     void pushOrderChange(String userId, String orderId, String operation);
     
     /**
-     * 推送商品变更通知
-     * @param userId 用户ID
-     * @param commodityId 商品ID
-     * @param operation 操作类型（CREATE, UPDATE, SHELF, UNSHELF等）
-     */
-    void pushCommodityChange(String userId, String commodityId, String operation);
-    
-    /**
      * 推送聊天消息通知
      * @param userId 用户ID
      * @param messageData 消息数据

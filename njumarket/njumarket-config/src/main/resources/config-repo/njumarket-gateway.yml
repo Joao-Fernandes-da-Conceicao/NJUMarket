@@ -44,6 +44,10 @@ spring:
           uri: lb://njumarket-service-message
           predicates:
             - Path=/api/contact/**
+        - id: image-service-user
+          uri: lb://njumarket-service-image
+          predicates:
+            - Path=/api/user/image/**
         - id: auth-service-user
           uri: lb://njumarket-service-auth
           predicates:

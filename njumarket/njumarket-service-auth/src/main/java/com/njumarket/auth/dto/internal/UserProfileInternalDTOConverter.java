@@ -32,9 +32,6 @@ public class UserProfileInternalDTOConverter {
         dto.setBio(null);
         dto.setSellerOrderHasNew(profile.getSellerOrderHasNew());
         dto.setBuyerOrderHasNew(profile.getBuyerOrderHasNew());
-        dto.setCreditScore(profile.getCreditScore());
-        dto.setBuyerRating(profile.getBuyerRating());
-        dto.setSellerRating(profile.getSellerRating());
         return dto;
     }
     

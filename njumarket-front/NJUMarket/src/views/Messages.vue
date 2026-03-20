@@ -7,8 +7,8 @@
         <h2>请先登录</h2>
         <p>登录后即可查看和发送消息</p>
         <div class="prompt-actions">
-          <UnifiedButton type="primary" @click="$router.push('/login')">立即登录</UnifiedButton>
-          <UnifiedButton @click="$router.push('/register')">注册账号</UnifiedButton>
+          <el-button type="primary" @click="$router.push('/login')">立即登录</el-button>
+          <el-button @click="$router.push('/register')">注册账号</el-button>
         </div>
       </div>
     </div>
@@ -72,7 +72,6 @@ import { formatTime } from '../utils/formatUtils'
 import { isMobile as globalIsMobile, detectMobile } from '../config/responsive'
 import { commodityAPI, orderAPI, chatAPI } from '../api'
 import { getProfileFromStorage, saveProfileToStorage, initProfileCache } from '../utils/profileCache'
-import UnifiedButton from '../components/common/UnifiedButton.vue'
 import ConversationList from '../components/messages/ConversationList.vue'
 import ChatWindow from '../components/messages/ChatWindow.vue'
 
@@ -80,7 +79,6 @@ export default {
   name: 'MessagesPage',
   components: {
     ChatDotRound,
-    UnifiedButton,
     ConversationList,
     ChatWindow
   },

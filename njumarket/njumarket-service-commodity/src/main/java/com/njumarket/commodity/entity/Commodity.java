@@ -35,6 +35,9 @@ public class Commodity {
     @Column(name = "price", nullable = false)
     private Double price;
     
+    // TODO: 库存设计重构 —— stock 字段当前存于商品表，由商品服务直接管理，存在跨服务扣减的耦合问题。
+    //   后续规划：将库存拆分为独立的 commodity_inventory 表，归属于订单服务；
+    //   商品服务仅保留商品基础信息（快照），超卖防护由订单服务本地完成。
     @Column(name = "stock", nullable = false)
     private Integer stock;
     
@@ -87,12 +90,15 @@ public class Commodity {
     
     @Column(name = "commodity_status", length = 20, nullable = false)
     private String commodityStatus; // DRAFT, PUBLISHED, ON_SHELF, OFF_SHELF
-    
-    @Column(name = "seller_visibility", length = 20, nullable = false)
-    private String sellerVisibility = "PUBLIC"; // PUBLIC, PRIVATE, HIDDEN
-    
+
+    /**
+     * 管理端软隐藏标志。
+     * PUBLIC  = 正常对买家可见（配合 ON_SHELF 状态）
+     * HIDDEN  = 管理端强制屏蔽，不出现在任何买家查询结果中
+     * 注意：卖家可见性由 sellerId 过滤保证，不需要单独字段控制。
+     */
     @Column(name = "buyer_visibility", length = 20, nullable = false)
-    private String buyerVisibility = "PUBLIC"; // PUBLIC, PRIVATE, HIDDEN
+    private String buyerVisibility = "PUBLIC"; // PUBLIC, HIDDEN
     
     @Column(name = "category", length = 50)
     private String category;
@@ -110,18 +116,7 @@ public class Commodity {
     private Integer reportCount = 0;
     
     /**
-     * 检查商品合规性
-     * @return 是否合规
-     */
-    public Boolean checkCompliance() {
-        // 业务逻辑：检查商品标题、描述、图片等是否合规
-        return true;
-    }
-    
-    /**
-     * 更新库存
-     * @param num 库存变化数量（正数增加，负数减少）
-     * @return 更新是否成功
+     * 更新库存（正数增加，负数减少）。
      */
     public Boolean updateStock(Integer num) {
         if (this.stock + num >= 0) {
@@ -129,88 +124,6 @@ public class Commodity {
             return true;
         }
         return false;
-    }
-    
-    /**
-     * 发布商品
-     * @return 发布是否成功
-     */
-    public Boolean publish() {
-        if (checkCompliance()) {
-            this.commodityStatus = "PUBLISHED";
-            return true;
-        }
-        return false;
-    }
-    
-    /**
-     * 下架商品
-     * @return 下架是否成功
-     */
-    public Boolean unpublish() {
-        this.commodityStatus = "DRAFT";
-        this.sellerVisibility = "PRIVATE";
-        this.buyerVisibility = "HIDDEN";
-        return true;
-    }
-    
-    /**
-     * 设置卖家可见性
-     * @param sellerVisibility 卖家可见性状态
-     * @return 设置是否成功
-     */
-    public Boolean setSellerVisibility(String sellerVisibility) {
-        if ("PUBLIC".equals(sellerVisibility) || "PRIVATE".equals(sellerVisibility) || "HIDDEN".equals(sellerVisibility)) {
-            this.sellerVisibility = sellerVisibility;
-            return true;
-        }
-        return false;
-    }
-    
-    /**
-     * 设置买家可见性
-     * @param buyerVisibility 买家可见性状态
-     * @return 设置是否成功
-     */
-    public Boolean setBuyerVisibility(String buyerVisibility) {
-        if ("PUBLIC".equals(buyerVisibility) || "PRIVATE".equals(buyerVisibility) || "HIDDEN".equals(buyerVisibility)) {
-            this.buyerVisibility = buyerVisibility;
-            return true;
-        }
-        return false;
-    }
-    
-    /**
-     * 设置可见性（兼容旧接口）
-     * @param visibility 可见性状态
-     * @return 设置是否成功
-     */
-    public Boolean setVisibility(String visibility) {
-        return setSellerVisibility(visibility) && setBuyerVisibility(visibility);
-    }
-    
-    /**
-     * 检查商品对卖家是否可见
-     * @return 是否可见
-     */
-    public Boolean isVisibleToSeller() {
-        return "PUBLIC".equals(this.sellerVisibility) && ("PUBLISHED".equals(this.commodityStatus) || "ON_SHELF".equals(this.commodityStatus));
-    }
-    
-    /**
-     * 检查商品对买家是否可见
-     * @return 是否可见
-     */
-    public Boolean isVisibleToBuyer() {
-        return "PUBLIC".equals(this.buyerVisibility) && "ON_SHELF".equals(this.commodityStatus);
-    }
-    
-    /**
-     * 检查商品是否可见（兼容旧接口）
-     * @return 是否可见
-     */
-    public Boolean isVisible() {
-        return isVisibleToSeller() && isVisibleToBuyer();
     }
 }
 

@@ -5,9 +5,9 @@
         <div class="page-header">
           <h1>创建新订单</h1>
           <div class="header-actions">
-            <UnifiedButton @click="$router.back()">
+            <el-button @click="$router.back()">
               返回
-            </UnifiedButton>
+            </el-button>
           </div>
         </div>
 
@@ -47,24 +47,24 @@
                 
                 <!-- 状态提示 -->
                 <div class="commodity-status-tag">
-                  <UnifiedTag
+                  <el-tag
                     v-if="!commodityExists || !commodityOnShelf"
                     type="warning"
                   >
                     {{ statusMessage }}
-                  </UnifiedTag>
-                  <UnifiedTag
+                  </el-tag>
+                  <el-tag
                     v-else-if="currentStock <= 0"
                     type="danger"
                   >
                     已售罄
-                  </UnifiedTag>
-                  <UnifiedTag
+                  </el-tag>
+                  <el-tag
                     v-else
                     type="success"
                   >
                     正常可购买
-                  </UnifiedTag>
+                  </el-tag>
                 </div>
               </div>
             </div>
@@ -75,7 +75,7 @@
             <h3 class="section-title">订单信息</h3>
             <el-form :model="orderForm" :rules="orderRules" ref="orderFormRef" label-position="left" class="order-form">
               <el-form-item label="购买数量" prop="quantity">
-                <UnifiedInput
+                <el-input
                   v-model="orderForm.quantity"
                   type="number"
                   placeholder="请输入购买数量（件）"
@@ -99,7 +99,7 @@
                   @change="handleAddressChange"
                 />
                 <!-- 保留原有字段用于兼容（隐藏） -->
-                <UnifiedInput
+                <el-input
                   v-model="orderForm.shippingAddress"
                   placeholder="请输入收货地址（如果未选择地址）"
                   :disabled="!commodityExists || !commodityOnShelf || currentStock <= 0"
@@ -109,7 +109,7 @@
               </el-form-item>
               
               <el-form-item label="备注" prop="remark">
-                <UnifiedInput
+                <el-input
                   v-model="orderForm.remark"
                   type="textarea"
                   placeholder="请输入备注信息（可选）"
@@ -132,8 +132,8 @@
 
           <!-- 提交按钮 -->
           <div class="form-actions">
-            <UnifiedButton size="large" @click="$router.back()">取消</UnifiedButton>
-            <UnifiedButton
+            <el-button size="large" @click="$router.back()">取消</el-button>
+            <el-button
               type="primary"
               size="large"
               :disabled="!canCreateOrder"
@@ -141,13 +141,13 @@
               @click="handleCreateOrder"
             >
               {{ !canCreateOrder ? (currentStock <= 0 ? '已售罄' : '无法下单') : '确认下单' }}
-            </UnifiedButton>
+            </el-button>
           </div>
         </div>
 
         <div v-else class="empty-state">
           <el-empty description="商品信息加载失败">
-            <UnifiedButton @click="$router.back()">返回</UnifiedButton>
+            <el-button @click="$router.back()">返回</el-button>
           </el-empty>
         </div>
       </div>
@@ -162,17 +162,11 @@ import { useUserStore } from '../stores/user'
 import { orderAPI, imageAPI, commodityAPI, profileAPI } from '../api'
 import { ElMessage } from 'element-plus'
 import { validateQuantity, canCreateOrder as checkCanCreateOrder } from '../utils/orderRules'
-import UnifiedButton from '../components/common/UnifiedButton.vue'
-import UnifiedTag from '../components/common/UnifiedTag.vue'
-import UnifiedInput from '../components/common/UnifiedInput.vue'
 import AddressSelector from '../components/address/AddressSelector.vue'
 
 export default {
   name: 'CreateOrder',
   components: {
-    UnifiedButton,
-    UnifiedTag,
-    UnifiedInput,
     AddressSelector
   },
   setup() {

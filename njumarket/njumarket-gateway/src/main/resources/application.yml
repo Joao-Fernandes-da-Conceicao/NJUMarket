@@ -8,12 +8,119 @@ server:
 spring:
   application:
     name: njumarket-gateway
-  # ✅ Spring Cloud Config Client 配置
-  # Docker 环境通过环境变量 SPRING_CONFIG_IMPORT 覆盖，本地开发使用 localhost
-  config:
-    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
-    fail-fast: false  # Config Server 不可用时，使用本地配置（需要时可在本地添加完整配置）
   # Gateway 必须使用响应式模式
   main:
     web-application-type: reactive
+  cloud:
+    config:
+      enabled: ${CONFIG_SERVER_ENABLED:false}
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: ai-service-user
+          uri: lb://njumarket-service-ai
+          predicates:
+            - Path=/api/user/ai-agent/**
+        - id: commodity-service-public
+          uri: lb://njumarket-service-commodity
+          predicates:
+            - Path=/api/public/commodity/**
+        - id: commodity-service-user
+          uri: lb://njumarket-service-commodity
+          predicates:
+            - Path=/api/user/commodity/**
+        - id: notification-service-chat
+          uri: lb://njumarket-service-notification
+          predicates:
+            - Path=/api/user/chat/**
+        - id: order-service
+          uri: lb://njumarket-service-order
+          predicates:
+            - Path=/api/user/order/**,/api/user/complaint/**
+        - id: message-service-user
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/user/message/**
+        - id: message-service-contact
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/contact/**
+        - id: image-service-user
+          uri: lb://njumarket-service-image
+          predicates:
+            - Path=/api/user/image/**
+        - id: auth-service-user
+          uri: lb://njumarket-service-auth
+          predicates:
+            - Path=/api/user/**
+        - id: auth-service-auth
+          uri: lb://njumarket-service-auth
+          predicates:
+            - Path=/api/auth/**
+        # WebSocket/SockJS（保持原 config-server 的 HTTP 路由：兼容 SockJS 的 info/xhr_streaming/iframe 等请求）
+        - id: websocket-notification-service
+          uri: lb://njumarket-service-notification
+          predicates:
+            - Path=/api/ws/**
+          filters:
+            - StripPrefix=1
+        - id: image-service
+          uri: lb://njumarket-service-image
+          predicates:
+            - Path=/api/images/**
+        - id: admin-service
+          uri: lb://njumarket-service-admin
+          predicates:
+            - Path=/api/admin/**
+      globalcors:
+        cors-configurations:
+          '[/api/user/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: [ GET, POST, PUT, DELETE, OPTIONS ]
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/contact/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: [ GET, POST, PUT, DELETE, OPTIONS ]
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/admin/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: [ GET, POST, PUT, DELETE, OPTIONS ]
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/public/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: [ GET, POST, PUT, DELETE, OPTIONS ]
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/images/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: [ GET, POST, PUT, DELETE, OPTIONS ]
+            allowedHeaders: "*"
+            allowCredentials: true
+          '[/api/auth/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: [ GET, POST, PUT, DELETE, OPTIONS ]
+            allowedHeaders: "*"
+            allowCredentials: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      # 与 auth-service 写入 session 的 Redis DB 对齐（默认 DB1）
+      database: ${GATEWAY_REDIS_DATABASE:1}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
 

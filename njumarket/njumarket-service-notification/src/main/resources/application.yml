@@ -8,9 +8,27 @@ server:
 spring:
   application:
     name: njumarket-service-notification
-  # ✅ Spring Cloud Config Client 配置
-  # Docker 环境通过环境变量 SPRING_CONFIG_IMPORT 覆盖，本地开发使用 localhost
-  config:
-    import: ${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}
-    fail-fast: false  # Config Server 不可用时，使用本地配置（需要时可在本地添加完整配置）
+  cloud:
+    config:
+      enabled: ${CONFIG_SERVER_ENABLED:false}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD:hqz20050316}
+      database: ${NOTIFICATION_REDIS_DATABASE:7}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
 

@@ -34,14 +34,6 @@ public class PublicController {
         return commodityQueryService.searchCommodities(keyword, page, size, location, minPrice, maxPrice, category, sortBy);
     }
 
-    @Operation(summary = "AI语义搜索", description = "使用AI进行智能商品搜索和推荐")
-    @GetMapping("/commodity/ai-search")
-    public Result aiSearch(
-            @Parameter(description = "搜索查询", example = "我想买一个性价比高的手机") @RequestParam String query,
-            @Parameter(description = "位置偏好", example = "仙林校区") @RequestParam(required = false) String location) {
-        return commodityQueryService.aiSearch(query, location);
-    }
-
     @Operation(summary = "获取商品详情", description = "根据商品ID获取商品的详细信息")
     @GetMapping("/commodity/{commodityId}")
     public Result getCommodityDetail(

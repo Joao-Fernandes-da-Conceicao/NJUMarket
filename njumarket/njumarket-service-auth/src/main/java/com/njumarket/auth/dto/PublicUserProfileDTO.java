@@ -23,24 +23,6 @@ public class PublicUserProfileDTO {
     @Schema(description = "头像URL", example = "https://example.com/avatar.jpg")
     private String avatar;
 
-    @Schema(description = "信用分", example = "100")
-    private Integer creditScore;
-
-    @Schema(description = "买家评分", example = "4.8")
-    private Double buyerRating;
-
-    @Schema(description = "卖家评分", example = "4.9")
-    private Double sellerRating;
-
-    @Schema(description = "总销售数", example = "15")
-    private Integer totalSales;
-
-    @Schema(description = "总购买数", example = "23")
-    private Integer totalPurchases;
-
-    @Schema(description = "VIP等级", example = "GOLD")
-    private String vipLevel;
-
     @Schema(description = "公开用户基本信息（不含敏感信息）")
     private PublicUserDTO userInfo;
 

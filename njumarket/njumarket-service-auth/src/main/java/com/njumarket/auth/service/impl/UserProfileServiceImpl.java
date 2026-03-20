@@ -1,17 +1,18 @@
 package com.njumarket.auth.service.impl;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
 import com.njumarket.auth.dto.UserDTO;
 import com.njumarket.auth.dto.PublicUserDTO;
 import com.njumarket.auth.dto.UserProfileDTO;
 import com.njumarket.auth.dto.PublicUserProfileDTO;
 import com.njumarket.auth.dto.UserProfileUpdateDTO;
+import com.njumarket.auth.dto.internal.UserProfileInternalDTOConverter;
 import com.njumarket.auth.entity.User;
 import com.njumarket.auth.entity.UserProfile;
 import com.njumarket.auth.repository.UserRepository;
 import com.njumarket.auth.repository.UserProfileRepository;
 import com.njumarket.auth.service.UserProfileService;
-import com.njumarket.auth.client.ImageClient;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.njumarket.utils.BusinessValidator;
 import com.njumarket.njumarket.utils.SecurityUtils;
@@ -20,7 +21,7 @@ import com.njumarket.njumarket.utils.RedisConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -35,8 +36,8 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     private final UserProfileRepository userProfileRepository;
     private final UserRepository userRepository;
-    private final ImageClient imageClient;
     private final CacheUtil cacheUtil;
+    private final UserProfileInternalDTOConverter userProfileInternalDTOConverter;
 
     @Override
     public Result getUserProfile(String userId) {
@@ -164,12 +165,6 @@ public class UserProfileServiceImpl implements UserProfileService {
         profile.setProfileId(generateProfileId());
         profile.setUserId(userId);
         profile.setNickname(nickname != null ? nickname : "用户" + userId.substring(5, 10));
-        profile.setCreditScore(100);
-        profile.setBuyerRating(5.0);
-        profile.setSellerRating(5.0);
-        profile.setTotalSales(0);
-        profile.setTotalPurchases(0);
-        profile.setVipLevel("NORMAL");
 
         UserProfile savedProfile = userProfileRepository.save(profile);
         
@@ -178,220 +173,42 @@ public class UserProfileServiceImpl implements UserProfileService {
     }
 
     @Override
-    public Result uploadAvatar(String userId, MultipartFile file) {
-        // 1. 验证用户是否存在
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
-        
-        // 2. 通过Feign Client调用commodity-service上传头像
-        try {
-            Result uploadResult = imageClient.uploadAvatar(userId, file);
-            if (!uploadResult.getSuccess() || uploadResult.getData() == null) {
-                throw new BusinessException(uploadResult.getErrorMsg() != null ? uploadResult.getErrorMsg() : "头像上传失败");
-            }
-            
-            // 3. 更新用户档案中的头像URL
-            // ⚠️ 注意：不直接引用 ImageUploadDTO，避免跨服务依赖
-            // 从 Result.getData() 中提取 imageUrl（Feign Client 返回的是 LinkedHashMap）
-            String imageUrl;
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> dataMap = (Map<String, Object>) uploadResult.getData();
-                Object imageUrlObj = dataMap.get("imageUrl");
-                if (imageUrlObj == null) {
-                    throw new BusinessException("图片上传响应中缺少 imageUrl 字段");
-                }
-                imageUrl = imageUrlObj.toString();
-            } catch (ClassCastException e) {
-                log.error("解析图片上传响应失败: error={}", e.getMessage(), e);
-                throw new BusinessException("图片上传信息解析失败");
-            }
-            
-            profile.setAvatar(imageUrl);
-            userProfileRepository.save(profile);
-            
-            // ✅ Cache Aside模式：先更新数据库，再删除缓存
-            // ⚠️ 注意：只删除自己的缓存，不要误删别人的
-            evictUserProfileCache(userId, "头像变更");
-            
-            // 返回上传结果（只包含必要的字段，不依赖 ImageUploadDTO）
-            Map<String, Object> uploadResponse = new HashMap<>();
-            uploadResponse.put("imageUrl", imageUrl);
-            uploadResponse.put("success", true);
-            uploadResponse.put("message", "头像上传成功");
-            
-            return Result.ok("头像上传成功", uploadResponse);
-        } catch (Exception e) {
-            log.error("头像上传失败: userId={}, error={}", userId, e.getMessage(), e);
-            throw new BusinessException("头像上传失败: " + e.getMessage());
+    public Result setAvatarUrl(String userId, String imageUrl) {
+        if (!StringUtils.hasText(imageUrl)) {
+            throw new BusinessException("头像 URL 不能为空");
         }
+        UserProfile profile = userProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new BusinessException("用户档案不存在"));
+
+        profile.setAvatar(imageUrl.trim());
+        userProfileRepository.save(profile);
+
+        // ✅ Cache Aside：更新 DB 后删除缓存
+        evictUserProfileCache(userId, "头像变更");
+
+        log.info("用户头像 URL 已更新: userId={}", userId);
+        return Result.ok("头像更新成功", Map.of("imageUrl", imageUrl.trim()));
     }
 
     @Override
     public Result deleteAvatar(String userId) {
-        // 1. 验证用户是否存在
         UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
-        
-        String currentAvatarUrl = profile.getAvatar();
-        
-        // 2. 如果没有头像，直接返回成功
-        if (currentAvatarUrl == null || currentAvatarUrl.trim().isEmpty()) {
+                .orElseThrow(() -> new BusinessException("用户档案不存在"));
+
+        if (!StringUtils.hasText(profile.getAvatar())) {
             return Result.ok("用户没有头像，无需删除");
         }
-        
-        // 3. 通过Feign Client调用commodity-service删除头像文件
-        try {
-            Result deleteResult = imageClient.deleteAvatarByUrl(currentAvatarUrl);
-            if (!deleteResult.getSuccess()) {
-                log.warn("头像文件删除失败: userId={}, avatarUrl={}", userId, currentAvatarUrl);
-            }
-        } catch (Exception e) {
-            log.warn("头像文件删除异常: userId={}, avatarUrl={}, error={}", userId, currentAvatarUrl, e.getMessage());
-        }
-        
-        // 4. 清空用户档案中的头像URL
+
+        // Auth 服务只负责档案元数据：清空 URL 即可
+        // 物理文件由 Image 服务侧管理（新上传时自动覆盖旧文件）
         profile.setAvatar(null);
         userProfileRepository.save(profile);
-        
-        // ✅ Cache Aside模式：先更新数据库，再删除缓存
-        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
+
+        // ✅ Cache Aside：更新 DB 后删除缓存
         evictUserProfileCache(userId, "头像删除");
-        
+
+        log.info("用户头像 URL 已清空: userId={}", userId);
         return Result.ok("头像删除成功");
-    }
-
-    @Override
-    public Result updateUserRating(String userId, Double rating, String role) {
-        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
-        if (rating == null || rating < 0 || rating > 5) {
-            throw new BusinessException("评分必须在0-5之间");
-        }
-        if (!"buyer".equals(role) && !"seller".equals(role)) {
-            throw new BusinessException("角色类型错误");
-        }
-
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
-
-        if ("buyer".equals(role)) {
-            profile.setBuyerRating(rating);
-        } else {
-            profile.setSellerRating(rating);
-        }
-
-        userProfileRepository.save(profile);
-        
-        // ✅ Cache Aside模式：先更新数据库，再删除缓存
-        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
-        evictUserProfileCache(userId, "评分变更");
-        
-        return Result.ok("评分更新成功");
-    }
-
-    @Override
-    public Result updateCreditScore(String userId, Integer scoreChange, String reason) {
-        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
-        if (scoreChange == null || scoreChange == 0) {
-            throw new BusinessException("分数变化不能为空或0");
-        }
-
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
-
-        int newScore = profile.getCreditScore() + scoreChange;
-        
-        // 信用分不能低于0
-        if (newScore < 0) {
-            newScore = 0;
-        }
-        
-        profile.setCreditScore(newScore);
-        userProfileRepository.save(profile);
-        
-        // ✅ Cache Aside模式：先更新数据库，再删除缓存
-        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
-        evictUserProfileCache(userId, "信用分变更");
-        
-        return Result.ok("信用分更新成功，当前分数：" + newScore);
-    }
-
-    @Override
-    public Result updateTradeStatistics(String userId, String type, Integer count) {
-        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
-        if (!"sale".equals(type) && !"purchase".equals(type)) {
-            throw new BusinessException("交易类型错误");
-        }
-        if (count == null || count <= 0) {
-            throw new BusinessException("数量必须大于0");
-        }
-
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
-
-        if ("sale".equals(type)) {
-            profile.setTotalSales(profile.getTotalSales() + count);
-        } else {
-            profile.setTotalPurchases(profile.getTotalPurchases() + count);
-        }
-
-        userProfileRepository.save(profile);
-        
-        // 检查是否需要升级VIP
-        checkAndUpgradeVip(profile);
-        
-        // ✅ Cache Aside模式：先更新数据库，再删除缓存
-        // ⚠️ 注意：只删除自己的缓存，不要误删别人的
-        evictUserProfileCache(userId, "交易统计变更");
-        
-        return Result.ok("交易统计更新成功");
-    }
-
-    @Override
-    public Result upgradeVipLevel(String userId) {
-        BusinessValidator.requireNotBlank(userId, "用户ID不能为空");
-
-        UserProfile profile = userProfileRepository.findByUserId(userId)
-            .orElseThrow(() -> new BusinessException("用户档案不存在"));
-
-        String newLevel = calculateVipLevel(profile);
-        
-        if (!newLevel.equals(profile.getVipLevel())) {
-            profile.setVipLevel(newLevel);
-            userProfileRepository.save(profile);
-            
-            // ✅ Cache Aside模式：先更新数据库，再删除缓存
-            // ⚠️ 注意：只删除自己的缓存，不要误删别人的
-            evictUserProfileCache(userId, "VIP等级变更");
-            
-            return Result.ok("VIP等级升级为：" + newLevel);
-        }
-        
-        return Result.ok("当前已是最高等级：" + profile.getVipLevel());
-    }
-
-    @Override
-    public Result getUserRankings(String type, Integer limit) {
-        if (!"seller".equals(type) && !"buyer".equals(type)) {
-            throw new BusinessException("排行榜类型错误");
-        }
-        if (limit == null || limit <= 0) {
-            limit = 10;
-        }
-
-        List<UserProfile> profiles;
-        if ("seller".equals(type)) {
-            profiles = userProfileRepository.findTopSellersByRating();
-        } else {
-            profiles = userProfileRepository.findTopBuyersByRating();
-        }
-
-        List<UserProfileDTO> rankings = profiles.stream()
-            .limit(limit)
-            .map(this::convertToDTO)
-            .collect(Collectors.toList());
-
-        return Result.ok(rankings);
     }
 
     @Override
@@ -428,20 +245,6 @@ public class UserProfileServiceImpl implements UserProfileService {
     }
 
     @Override
-    public Result getVipLevelStatistics() {
-        List<Object[]> statistics = userProfileRepository.countByVipLevel();
-        Map<String, Long> result = new HashMap<>();
-        
-        for (Object[] stat : statistics) {
-            String level = (String) stat[0];
-            Long count = (Long) stat[1];
-            result.put(level, count);
-        }
-        
-        return Result.ok(result);
-    }
-
-    @Override
     public boolean hasUserProfile(String userId) {
         return userProfileRepository.existsByUserId(userId);
     }
@@ -457,12 +260,6 @@ public class UserProfileServiceImpl implements UserProfileService {
         dto.setUserId(profile.getUserId());
         dto.setNickname(profile.getNickname());
         dto.setAvatar(profile.getAvatar());
-        dto.setCreditScore(profile.getCreditScore());
-        dto.setBuyerRating(profile.getBuyerRating());
-        dto.setSellerRating(profile.getSellerRating());
-        dto.setTotalSales(profile.getTotalSales());
-        dto.setTotalPurchases(profile.getTotalPurchases());
-        dto.setVipLevel(profile.getVipLevel());
         
         // 获取用户基本信息
         Optional<User> userOpt = userRepository.findById(profile.getUserId());
@@ -474,43 +271,6 @@ public class UserProfileServiceImpl implements UserProfileService {
             userDTO.setAccountStatus(user.getAccountStatus());
             userDTO.setRegisterTime(user.getRegisterTime());
             dto.setUserInfo(userDTO);
-        }
-        
-        return dto;
-    }
-    
-    /**
-     * 转换为公开DTO（不包含敏感信息）
-     * 从 UserProfile 实体转换
-     */
-    private PublicUserProfileDTO convertToPublicDTO(UserProfile profile) {
-        PublicUserProfileDTO dto = new PublicUserProfileDTO();
-        dto.setProfileId(profile.getProfileId());
-        dto.setUserId(profile.getUserId());
-        dto.setNickname(profile.getNickname());
-        dto.setAvatar(profile.getAvatar());
-        dto.setCreditScore(profile.getCreditScore());
-        dto.setBuyerRating(profile.getBuyerRating());
-        dto.setSellerRating(profile.getSellerRating());
-        dto.setTotalSales(profile.getTotalSales());
-        dto.setTotalPurchases(profile.getTotalPurchases());
-        dto.setVipLevel(profile.getVipLevel());
-        
-        // 获取用户基本信息（不含敏感数据）
-        Optional<User> userOpt = userRepository.findById(profile.getUserId());
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            PublicUserDTO publicUserDTO = new PublicUserDTO();
-            publicUserDTO.setUserId(user.getUserId());
-            publicUserDTO.setAccountStatus(user.getAccountStatus());
-            publicUserDTO.setRegisterTime(user.getRegisterTime());
-            publicUserDTO.setNickname(profile.getNickname());
-            publicUserDTO.setAvatar(profile.getAvatar());
-            publicUserDTO.setCreditScore(profile.getCreditScore());
-            publicUserDTO.setBuyerRating(profile.getBuyerRating());
-            publicUserDTO.setSellerRating(profile.getSellerRating());
-            publicUserDTO.setVipLevel(profile.getVipLevel());
-            dto.setUserInfo(publicUserDTO);
         }
         
         return dto;
@@ -530,12 +290,6 @@ public class UserProfileServiceImpl implements UserProfileService {
         dto.setUserId(profileDTO.getUserId());
         dto.setNickname(profileDTO.getNickname());
         dto.setAvatar(profileDTO.getAvatar());
-        dto.setCreditScore(profileDTO.getCreditScore());
-        dto.setBuyerRating(profileDTO.getBuyerRating());
-        dto.setSellerRating(profileDTO.getSellerRating());
-        dto.setTotalSales(profileDTO.getTotalSales());
-        dto.setTotalPurchases(profileDTO.getTotalPurchases());
-        dto.setVipLevel(profileDTO.getVipLevel());
         
         // 转换用户基本信息（不含敏感数据）
         if (profileDTO.getUserInfo() != null) {
@@ -544,13 +298,8 @@ public class UserProfileServiceImpl implements UserProfileService {
             publicUserDTO.setUserId(userInfo.getUserId());
             publicUserDTO.setAccountStatus(userInfo.getAccountStatus());
             publicUserDTO.setRegisterTime(userInfo.getRegisterTime());
-            // 从 profileDTO 中获取公开信息（不包含 primaryPhone 等敏感信息）
             publicUserDTO.setNickname(profileDTO.getNickname());
             publicUserDTO.setAvatar(profileDTO.getAvatar());
-            publicUserDTO.setCreditScore(profileDTO.getCreditScore());
-            publicUserDTO.setBuyerRating(profileDTO.getBuyerRating());
-            publicUserDTO.setSellerRating(profileDTO.getSellerRating());
-            publicUserDTO.setVipLevel(profileDTO.getVipLevel());
             dto.setUserInfo(publicUserDTO);
         }
         
@@ -564,44 +313,6 @@ public class UserProfileServiceImpl implements UserProfileService {
         return "PROFILE_" + System.currentTimeMillis() + "_" + new Random().nextInt(1000);
     }
 
-    /**
-     * 计算VIP等级
-     */
-    private String calculateVipLevel(UserProfile profile) {
-        int totalTrades = profile.getTotalSales() + profile.getTotalPurchases();
-        double avgRating = (profile.getBuyerRating() + profile.getSellerRating()) / 2;
-        int creditScore = profile.getCreditScore();
-
-        if (totalTrades >= 100 && avgRating >= 4.8 && creditScore >= 150) {
-            return "PLATINUM";
-        } else if (totalTrades >= 50 && avgRating >= 4.5 && creditScore >= 120) {
-            return "GOLD";
-        } else if (totalTrades >= 20 && avgRating >= 4.0 && creditScore >= 100) {
-            return "SILVER";
-        } else if (totalTrades >= 5 && avgRating >= 3.5 && creditScore >= 80) {
-            return "BRONZE";
-        } else {
-            return "NORMAL";
-        }
-    }
-
-    /**
-     * 检查并升级VIP
-     */
-    private void checkAndUpgradeVip(UserProfile profile) {
-        String newLevel = calculateVipLevel(profile);
-        if (!newLevel.equals(profile.getVipLevel())) {
-            profile.setVipLevel(newLevel);
-            userProfileRepository.save(profile);
-            log.info("用户VIP等级自动升级: userId={}, newLevel={}", profile.getUserId(), newLevel);
-            
-            // ✅ Cache Aside模式：先更新数据库，再删除缓存
-            // ⚠️ 注意：只删除自己的缓存，不要误删别人的
-            // 注意：此方法在 updateTradeStatistics 中被调用，但 updateTradeStatistics 已经删除了缓存
-            // 这里也删除一次，确保即使单独调用此方法也能清除缓存
-            evictUserProfileCache(profile.getUserId(), "VIP等级自动升级");
-        }
-    }
     
     /**
      * 清除用户档案缓存（Cache Aside模式）
@@ -678,6 +389,38 @@ public class UserProfileServiceImpl implements UserProfileService {
     @Override
     public void clearOrderReminderStatus(String userId, String role) {
         setOrderReminderStatus(userId, role, false);
+    }
+
+    // ========== 内部方法 ==========
+
+    @Override
+    public List<UserProfileInternalDTO> getUserProfilesByIdsInternal(List<String> userIds) {
+        List<UserProfileInternalDTO> result = new ArrayList<>();
+        List<String> missingUserIds = new ArrayList<>();
+
+        // 先从缓存读取
+        for (String userId : userIds) {
+            String cacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + userId;
+            UserProfileInternalDTO cached = cacheUtil.get(cacheKey, UserProfileInternalDTO.class);
+            if (cached != null) {
+                result.add(cached);
+            } else {
+                missingUserIds.add(userId);
+            }
+        }
+
+        // 缓存缺失的批量查数据库，并回写缓存
+        if (!missingUserIds.isEmpty()) {
+            List<UserProfile> profiles = userProfileRepository.findByUserIdIn(missingUserIds);
+            List<UserProfileInternalDTO> newDtos = userProfileInternalDTOConverter.toUserProfileInternalDTOList(profiles);
+            for (UserProfileInternalDTO dto : newDtos) {
+                String cacheKey = RedisConstants.CACHE_USER_PROFILE_KEY + dto.getUserId();
+                cacheUtil.set(cacheKey, dto, RedisConstants.CACHE_USER_PROFILE_TTL * 60);
+            }
+            result.addAll(newDtos);
+        }
+
+        return result;
     }
 }
 

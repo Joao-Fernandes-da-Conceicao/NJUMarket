@@ -6,7 +6,7 @@
       <span class="pagination-total">共 {{ total }} 条</span>
       
       <!-- 每页显示数量选择器 -->
-      <UnifiedSelect
+      <el-select
         v-model="localPageSize"
         :options="pageSizeOptions"
         :placeholder="`每页 ${localPageSize} 条`"
@@ -67,7 +67,6 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { defineProps, defineEmits } from 'vue'
-import UnifiedSelect from './UnifiedSelect.vue'
 
 const props = defineProps({
   total: { type: Number, required: true },

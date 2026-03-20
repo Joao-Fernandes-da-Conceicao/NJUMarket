@@ -1,11 +1,15 @@
 package com.njumarket.auth.service;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.UserInternalDTO;
 import com.njumarket.auth.dto.UserDTO;
 import com.njumarket.auth.dto.LoginFormDTO;
 import com.njumarket.auth.dto.RegisterDTO;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * 用户服务接口
@@ -41,7 +45,7 @@ public interface UserService {
     /**
      * 第三方登录
      */
-    Result loginThirdParty(String type, String code, HttpSession session);
+    // Result loginThirdParty(String type, String code, HttpSession session);
     
     /**
      * 用户登出
@@ -124,5 +128,34 @@ public interface UserService {
      * 绑定手机号到唯一用户
      */
     Boolean bindPhoneToUniqueUser(String userId, String phone);
+
+    // ========== 管理端内部方法 ==========
+
+    /**
+     * 根据ID查询单个用户（带缓存）
+     */
+    UserInternalDTO getUserByIdInternal(String userId);
+
+    /**
+     * 批量查询用户
+     */
+    List<UserInternalDTO> getUsersByIdsInternal(List<String> userIds);
+
+    /**
+     * 分页查询用户列表（管理端）
+     */
+    Map<String, Object> listUsersInternal(Integer page, Integer size,
+                                          String keyword, String accountStatus,
+                                          String sortProp, String sortOrder);
+
+    /**
+     * 更新用户完整信息（管理端），含缓存失效
+     */
+    void updateUserFullInternal(String userId, Map<String, Object> payload);
+
+    /**
+     * 软删除用户（管理端），含缓存失效
+     */
+    void deleteUserInternal(String userId);
 }
 

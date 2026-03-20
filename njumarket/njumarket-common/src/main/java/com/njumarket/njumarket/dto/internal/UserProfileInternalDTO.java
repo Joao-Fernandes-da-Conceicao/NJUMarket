@@ -22,9 +22,6 @@ public class UserProfileInternalDTO implements Serializable {
     private String bio;
     private Boolean sellerOrderHasNew;
     private Boolean buyerOrderHasNew;
-    private Integer creditScore;
-    private Double buyerRating;
-    private Double sellerRating;
     // 不包含 User 关联对象
 }
 

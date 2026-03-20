@@ -35,7 +35,7 @@ public class CommoditySearchDocument {
     @Field(type = FieldType.Text, analyzer = "zh_max", searchAnalyzer = "zh_smart")
     private String title;
 
-    @Field(type = FieldType.Text, analyzer = "zh_smart", searchAnalyzer = "zh_smart")
+    @Field(type = FieldType.Text, analyzer = "zh_max", searchAnalyzer = "zh_smart")
     private String description;
 
     @Field(type = FieldType.Keyword)
@@ -51,9 +51,6 @@ public class CommoditySearchDocument {
     private String commodityStatus;
 
     @Field(type = FieldType.Keyword)
-    private String sellerVisibility;
-
-    @Field(type = FieldType.Keyword)
     private String buyerVisibility;
 
     @Field(type = FieldType.Integer)
@@ -62,7 +59,7 @@ public class CommoditySearchDocument {
     @Field(type = FieldType.Long)
     private Long clickCount;
 
-    @Field(type = FieldType.Text, analyzer = "zh_smart", searchAnalyzer = "zh_smart")
+    @Field(type = FieldType.Text, analyzer = "zh_max", searchAnalyzer = "zh_smart")
     private String addressSnapshotFull;
 
     @Field(type = FieldType.Keyword)
@@ -71,7 +68,7 @@ public class CommoditySearchDocument {
     @Field(type = FieldType.Date, format = DateFormat.date_optional_time)
     private LocalDateTime publishTime;
 
-    @Field(type = FieldType.Text, analyzer = "zh_smart", searchAnalyzer = "zh_smart")
+    @Field(type = FieldType.Text, analyzer = "zh_max", searchAnalyzer = "zh_smart")
     private String keywordPayload;
 
     public static CommoditySearchDocument fromCommodity(Commodity commodity) {
@@ -84,7 +81,6 @@ public class CommoditySearchDocument {
         document.setPrice(commodity.getPrice());
         document.setConditionLevel(commodity.getConditionLevel());
         document.setCommodityStatus(commodity.getCommodityStatus());
-        document.setSellerVisibility(commodity.getSellerVisibility());
         document.setBuyerVisibility(commodity.getBuyerVisibility());
         document.setStock(commodity.getStock());
         document.setClickCount(Optional.ofNullable(commodity.getClickCount()).map(Integer::longValue).orElse(0L));
@@ -108,6 +104,23 @@ public class CommoditySearchDocument {
                 Optional.ofNullable(commodity.getAddressSnapshotFull()).orElse("")
         );
         document.setKeywordPayload(keywordPayload);
+        return document;
+    }
+
+    /**
+     * 从商品实体构建搜索文档，并可选用 AI 丰度增强后的 keywordPayload。
+     * 当 enrichedKeywordPayload 非空时，将其与原标题等合并作为 keywordPayload，否则与 {@link #fromCommodity(Commodity)} 一致。
+     */
+    public static CommoditySearchDocument fromCommodity(Commodity commodity, String enrichedKeywordPayload) {
+        CommoditySearchDocument document = fromCommodity(commodity);
+        if (enrichedKeywordPayload != null && !enrichedKeywordPayload.isBlank()) {
+            String base = String.join(" ",
+                    Optional.ofNullable(commodity.getTitle()).orElse(""),
+                    Optional.ofNullable(commodity.getCategory()).orElse(""),
+                    Optional.ofNullable(commodity.getAddressSnapshotFull()).orElse("")
+            );
+            document.setKeywordPayload(base + " " + enrichedKeywordPayload.trim());
+        }
         return document;
     }
 }

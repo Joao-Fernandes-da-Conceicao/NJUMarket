@@ -1,9 +1,10 @@
 package com.njumarket.commodity.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.CommodityInternalDTO;
 import com.njumarket.commodity.dto.CommodityDTO;
+import com.njumarket.commodity.dto.internal.CommodityInternalDTOConverter;
 import com.njumarket.commodity.vo.CommodityPageResultVO;
 import com.njumarket.commodity.vo.CommodityDetailVO;
 import com.njumarket.njumarket.dto.internal.UserProfileInternalDTO;
@@ -12,22 +13,24 @@ import com.njumarket.commodity.entity.User; // User 实体（Commodity Service�
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.commodity.repository.CommodityRepository;
 import com.njumarket.commodity.service.CommodityQueryService;
-import com.njumarket.commodity.client.AuthClient;
+import com.njumarket.commodity.service.UserCacheService;
 import com.njumarket.njumarket.utils.SecurityUtils;
 import com.njumarket.njumarket.utils.CacheUtil;
 import com.njumarket.njumarket.utils.RedisConstants;
 import com.njumarket.commodity.search.CommoditySearchResult;
 import com.njumarket.commodity.search.CommoditySearchService;
-import com.njumarket.commodity.vector.AISearchService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import jakarta.persistence.criteria.Predicate;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.HashMap;
@@ -36,7 +39,6 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Arrays;
-import java.util.function.Function;
 
 /**
  * 商品查询服务实现类
@@ -48,11 +50,11 @@ import java.util.function.Function;
 public class CommodityQueryServiceImpl implements CommodityQueryService {
     
     private final CommodityRepository commodityRepository;
-    private final AuthClient authClient;
-    private final ObjectMapper objectMapper;
+    private final CommodityInternalDTOConverter commodityInternalDTOConverter;
+    private final UserCacheService userCacheService;
     private final CacheUtil cacheUtil;
     private final CommoditySearchService commoditySearchService;
-    private final AISearchService aiSearchService;
+    private final RedisTemplate<String, Object> redisTemplate;
     
     // ========== 公开商品查询实现 ==========
     
@@ -79,8 +81,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                 commodityPage = commodityRepository.findByCategoryAndVisible(category.trim(), pageable);
             } else {
                 // 如果没有关键词和分类，返回所有公开商品
-                commodityPage = commodityRepository.findByCommodityStatusAndSellerVisibilityAndBuyerVisibility(
-                    "ON_SHELF", "PUBLIC", "PUBLIC", pageable
+                commodityPage = commodityRepository.findByCommodityStatusAndBuyerVisibility(
+                    "ON_SHELF", "PUBLIC", pageable
                 );
             }
             
@@ -171,8 +173,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                 }
             );
             
-            // 异步更新点击量（不影响缓存读取）
-            updateClickCountAsync(commodityId);
+            // 点击量 Write-Behind：INCR 写入 Redis，由 ClickCountFlushJob 定时批量刷回 DB
+            redisTemplate.opsForValue().increment(RedisConstants.CLICK_COUNT_DELTA_KEY + commodityId);
             
             return Result.ok("获取商品详情成功", commodityDTO);
             
@@ -182,27 +184,6 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         }
     }
     
-    /**
-     * 异步更新点击量（不影响主流程）
-     */
-    private void updateClickCountAsync(String commodityId) {
-        try {
-            // 使用新线程异步更新点击量
-            new Thread(() -> {
-                try {
-                    Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
-                    if (commodity != null) {
-                        commodity.setClickCount(commodity.getClickCount() + 1);
-                        commodityRepository.save(commodity);
-                    }
-                } catch (Exception e) {
-                    log.error("异步更新点击量失败: commodityId={}, error={}", commodityId, e.getMessage());
-                }
-            }).start();
-        } catch (Exception e) {
-            log.error("启动异步更新点击量线程失败: commodityId={}, error={}", commodityId, e.getMessage());
-        }
-    }
     
     @Override
     public Result getHotCommodities(Integer limit) {
@@ -307,52 +288,18 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
     @Override
     public Result recordView(String commodityId, String sessionId) {
         try {
-            log.info("记录商品浏览 - commodityId: {}, sessionId: {}", commodityId, sessionId);
-            
-            Commodity commodity = commodityRepository.findById(commodityId).orElse(null);
-            if (commodity == null) {
-                throw new BusinessException("商品不存在");
-            }
-            
-            // 增加点击量
-            commodity.setClickCount(commodity.getClickCount() + 1);
-            commodityRepository.save(commodity);
-            
+            log.debug("记录商品浏览 - commodityId: {}, sessionId: {}", commodityId, sessionId);
+
+            // Write-Behind：将点击增量写入 Redis，由 ClickCountFlushJob 定时批量刷回 DB
+            // 不再直接 SELECT + UPDATE，彻底避免高并发行锁争用
+            String deltaKey = RedisConstants.CLICK_COUNT_DELTA_KEY + commodityId;
+            redisTemplate.opsForValue().increment(deltaKey);
+
             return Result.ok("记录浏览成功");
-            
+
         } catch (Exception e) {
             log.error("记录商品浏览失败: {}", e.getMessage(), e);
             throw new BusinessException("记录浏览失败");
-        }
-    }
-    
-    @Override
-    public Result aiSearch(String query, String location) {
-        try {
-            log.info("AI语义搜索 - query: {}, location: {}", query, location);
-            
-            // 获取当前用户ID（如果已登录）
-            String userId = SecurityUtils.getCurrentUserId();
-            
-            // 使用向量相似度搜索
-            List<Commodity> commodities = aiSearchService.search(query, location, 20, userId);
-            
-            // 转换为DTO
-            List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
-            
-            // 构建分页结果
-            CommodityPageResultVO result = new CommodityPageResultVO();
-            result.setCommodities(commodityDTOs);
-            result.setTotal((long) commodityDTOs.size());
-            result.setPages(1);
-            result.setCurrent(1);
-            result.setSize(commodityDTOs.size());
-            
-            return Result.ok("AI搜索成功", result);
-            
-        } catch (Exception e) {
-            log.error("AI语义搜索失败: {}", e.getMessage(), e);
-            throw new BusinessException("AI搜索失败: " + e.getMessage());
         }
     }
     
@@ -483,9 +430,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             return false;
         }
         
-        // 商品必须是公开可见
-        if (!"PUBLIC".equals(commodity.getSellerVisibility()) || 
-            !"PUBLIC".equals(commodity.getBuyerVisibility())) {
+        // 商品必须未被管理端隐藏
+        if (!"PUBLIC".equals(commodity.getBuyerVisibility())) {
             return false;
         }
         
@@ -507,9 +453,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             return true;
         }
         
-        // 其他用户只能查询公开的商品（包括下架商品）
-        return "PUBLIC".equals(commodity.getSellerVisibility()) && 
-               "PUBLIC".equals(commodity.getBuyerVisibility());
+        // 其他用户只能查询未被管理端隐藏的商品
+        return "PUBLIC".equals(commodity.getBuyerVisibility());
     }
     
     /**
@@ -675,11 +620,11 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         if (commodityIds == null || commodityIds.isEmpty()) {
             return buildEmptyPageResult(searchResult.totalHits(), safePage, safeSize);
         }
-        List<Commodity> commodities = fetchCommoditiesByOrderedIds(commodityIds);
+        List<CommodityInternalDTO> commodities = fetchCommoditiesByOrderedIds(commodityIds);
         if (commodities.isEmpty() && searchResult.totalHits() > 0) {
             return null;
         }
-        List<CommodityDTO> commodityDTOs = convertCommoditiesToDTOWithBatchProfile(commodities);
+        List<CommodityDTO> commodityDTOs = convertInternalDTOsWithBatchProfile(commodities);
         CommodityPageResultVO result = new CommodityPageResultVO();
         result.setCommodities(commodityDTOs);
         result.setTotal(searchResult.totalHits());
@@ -689,18 +634,20 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         return result;
     }
 
-    private List<Commodity> fetchCommoditiesByOrderedIds(List<String> commodityIds) {
+    /**
+     * 按 ES 返回的 ID 顺序批量获取商品，优先读缓存（Cache Aside）。
+     * 去重后查询，最终结果按原 commodityIds 顺序排列。
+     */
+    private List<CommodityInternalDTO> fetchCommoditiesByOrderedIds(List<String> commodityIds) {
         if (commodityIds == null || commodityIds.isEmpty()) {
             return Collections.emptyList();
         }
         List<String> uniqueIds = new ArrayList<>(new LinkedHashSet<>(commodityIds));
-        List<Commodity> found = commodityRepository.findAllById(uniqueIds);
-        Map<String, Commodity> commodityMap = found.stream()
-                .collect(Collectors.toMap(Commodity::getCommodityId, Function.identity()));
+        Map<String, CommodityInternalDTO> commodityMap = batchFetchCommoditiesWithCache(uniqueIds);
         return commodityIds.stream()
-                .map(commodityMap::get)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+            .map(commodityMap::get)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
     }
 
     private CommodityPageResultVO buildEmptyPageResult(long totalHits, int page, int size) {
@@ -735,24 +682,8 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         
-        // ✅ 批量查询所有卖家的 Profile（使用内部 DTO）
-        Map<String, UserProfileInternalDTO> profileMap = new HashMap<>();
-        if (!sellerIds.isEmpty()) {
-            Result profilesResult = authClient.getUserProfilesByIds(new ArrayList<>(sellerIds));
-            if (profilesResult.getSuccess() && profilesResult.getData() != null) {
-                try {
-                    // 使用ObjectMapper正确转换类型为内部 DTO
-                    List<UserProfileInternalDTO> profiles = objectMapper.convertValue(
-                        profilesResult.getData(),
-                        new TypeReference<List<UserProfileInternalDTO>>() {}
-                    );
-                    profileMap = profiles.stream()
-                            .collect(Collectors.toMap(UserProfileInternalDTO::getUserId, p -> p));
-                } catch (Exception e) {
-                    log.error("转换UserProfileInternalDTO列表失败: {}", e.getMessage(), e);
-                }
-            }
-        }
+        // ✅ 批量查询所有卖家的 Profile（Redis → Feign 回退）
+        Map<String, UserProfileInternalDTO> profileMap = userCacheService.getUserProfilesByIds(sellerIds);
         
         // ✅ 转换为 DTO，并从 Map 中获取卖家信息
         final Map<String, UserProfileInternalDTO> finalProfileMap = profileMap;
@@ -798,7 +729,6 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         
         dto.setPublishTime(commodity.getPublishTime());
         dto.setCommodityStatus(commodity.getCommodityStatus());
-        dto.setSellerVisibility(commodity.getSellerVisibility());
         dto.setBuyerVisibility(commodity.getBuyerVisibility());
         dto.setCategory(commodity.getCategory());
         dto.setConditionLevel(commodity.getConditionLevel());
@@ -815,6 +745,102 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
         return dto;
     }
     
+    /**
+     * 批量从缓存（Cache Aside）获取商品基础数据，缓存缺失的批量查数据库并回写。
+     * 使用 CACHE_COMMODITY_KEY 缓存 CommodityInternalDTO（不含卖家信息）。
+     *
+     * @return Map&lt;commodityId, CommodityInternalDTO&gt;，保留原始顺序
+     */
+    private Map<String, CommodityInternalDTO> batchFetchCommoditiesWithCache(Collection<String> ids) {
+        if (ids == null || ids.isEmpty()) return Collections.emptyMap();
+
+        Map<String, CommodityInternalDTO> result = new LinkedHashMap<>();
+        List<String> missingIds = new ArrayList<>();
+
+        for (String id : ids) {
+            CommodityInternalDTO cached = cacheUtil.get(
+                RedisConstants.CACHE_COMMODITY_KEY + id, CommodityInternalDTO.class);
+            if (cached != null) {
+                result.put(id, cached);
+            } else {
+                missingIds.add(id);
+            }
+        }
+
+        if (!missingIds.isEmpty()) {
+            List<Commodity> commodities = commodityRepository.findAllById(missingIds);
+            for (Commodity c : commodities) {
+                CommodityInternalDTO dto = commodityInternalDTOConverter.toInternalDTO(c);
+                cacheUtil.set(RedisConstants.CACHE_COMMODITY_KEY + c.getCommodityId(),
+                    dto, RedisConstants.CACHE_COMMODITY_TTL * 60);
+                result.put(c.getCommodityId(), dto);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * 将 CommodityInternalDTO 列表转换为 CommodityDTO 列表，并批量填充卖家信息。
+     */
+    private List<CommodityDTO> convertInternalDTOsWithBatchProfile(List<CommodityInternalDTO> internalDTOs) {
+        if (internalDTOs == null || internalDTOs.isEmpty()) return new ArrayList<>();
+
+        Set<String> sellerIds = internalDTOs.stream()
+            .map(CommodityInternalDTO::getSellerId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+
+        Map<String, UserProfileInternalDTO> profileMap = userCacheService.getUserProfilesByIds(sellerIds);
+
+        return internalDTOs.stream()
+            .map(internalDto -> {
+                CommodityDTO dto = convertInternalDTOtoCommodityDTO(internalDto);
+                UserProfileInternalDTO profile = profileMap.get(internalDto.getSellerId());
+                if (profile != null) {
+                    dto.setSellerNickname(profile.getNickname());
+                    dto.setSellerAvatar(profile.getAvatar());
+                }
+                return dto;
+            })
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * CommodityInternalDTO → CommodityDTO 字段映射。
+     */
+    private CommodityDTO convertInternalDTOtoCommodityDTO(CommodityInternalDTO src) {
+        CommodityDTO dto = new CommodityDTO();
+        dto.setCommodityId(src.getCommodityId());
+        dto.setSellerId(src.getSellerId());
+        dto.setTitle(src.getTitle());
+        dto.setDescription(src.getDescription());
+        dto.setPrice(src.getPrice() != null ? src.getPrice().doubleValue() : null);
+        dto.setStock(src.getStock());
+        dto.setLocation(src.getLocation());
+        dto.setAddressId(src.getAddressId());
+        dto.setAddressSnapshotProvince(src.getAddressSnapshotProvince());
+        dto.setAddressSnapshotCity(src.getAddressSnapshotCity());
+        dto.setAddressSnapshotDistrict(src.getAddressSnapshotDistrict());
+        dto.setAddressSnapshotStreet(src.getAddressSnapshotStreet());
+        dto.setAddressSnapshotDetail(src.getAddressSnapshotDetail());
+        dto.setAddressSnapshotFull(src.getAddressSnapshotFull());
+        dto.setLongitude(src.getLongitude());
+        dto.setLatitude(src.getLatitude());
+        dto.setPublishTime(src.getCreateTime()); // InternalDTO 中 createTime 对应 publishTime
+        dto.setCommodityStatus(src.getStatus()); // InternalDTO 中 status 对应 commodityStatus
+        dto.setBuyerVisibility(src.getBuyerVisibility());
+        dto.setCategory(src.getCategory());
+        dto.setConditionLevel(src.getConditionLevel());
+        dto.setClickCount(src.getClickCount());
+        if (src.getImages() != null && !src.getImages().isEmpty()) {
+            dto.setImages(Arrays.asList(src.getImages().split(",")));
+        } else {
+            dto.setImages(new ArrayList<>());
+        }
+        return dto;
+    }
+
     /**
      * 根据排序参数创建Pageable
      * @param page 页码
@@ -856,85 +882,135 @@ public class CommodityQueryServiceImpl implements CommodityQueryService {
             if (commodityIds == null || commodityIds.isEmpty()) {
                 return Result.ok("批量查询成功", Collections.emptyList());
             }
-            
-            // 去重
-            Set<String> uniqueIds = new HashSet<>(commodityIds);
-            
-            // 批量查询商品
-            List<Commodity> commodities = commodityRepository.findAllById(uniqueIds);
-            
-            // ✅ 批量查询所有卖家的 Profile（避免 N+1 查询）
-            Set<String> sellerIds = commodities.stream()
-                    .map(Commodity::getSellerId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
-            
-            Map<String, UserProfileInternalDTO> profileMap = new HashMap<>();
-            if (!sellerIds.isEmpty()) {
-                Result profilesResult = authClient.getUserProfilesByIds(new ArrayList<>(sellerIds));
-                if (profilesResult.getSuccess() && profilesResult.getData() != null) {
-                    try {
-                        // 使用ObjectMapper正确转换类型为内部 DTO
-                        List<UserProfileInternalDTO> profiles = objectMapper.convertValue(
-                            profilesResult.getData(),
-                            new TypeReference<List<UserProfileInternalDTO>>() {}
-                        );
-                        profileMap = profiles.stream()
-                                .collect(Collectors.toMap(UserProfileInternalDTO::getUserId, p -> p));
-                    } catch (Exception e) {
-                        log.error("转换UserProfileInternalDTO列表失败: {}", e.getMessage(), e);
-                    }
-                }
-            }
-            
-            // ✅ 转换为包含完整信息的DTO（用于聊天界面显示）
-            final Map<String, UserProfileInternalDTO> finalProfileMap = profileMap;
-            List<Map<String, Object>> result = commodities.stream()
-                .map(commodity -> {
+
+            // ✅ Cache Aside：批量读缓存，缺失的从数据库补充并回写
+            Set<String> uniqueIds = new LinkedHashSet<>(commodityIds);
+            Map<String, CommodityInternalDTO> commodityMap = batchFetchCommoditiesWithCache(uniqueIds);
+
+            // ✅ 批量查询卖家 Profile（Redis → Feign 回退）
+            Set<String> sellerIds = commodityMap.values().stream()
+                .map(CommodityInternalDTO::getSellerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+            Map<String, UserProfileInternalDTO> profileMap = userCacheService.getUserProfilesByIds(sellerIds);
+
+            List<Map<String, Object>> result = commodityMap.values().stream()
+                .map(c -> {
                     Map<String, Object> item = new HashMap<>();
-                    // 基本信息
-                    item.put("commodityId", commodity.getCommodityId());
-                    item.put("sellerId", commodity.getSellerId());
-                    item.put("title", commodity.getTitle());
-                    item.put("description", commodity.getDescription());
-                    item.put("price", commodity.getPrice());
-                    item.put("commodityStatus", commodity.getCommodityStatus());
-                    item.put("stock", commodity.getStock());
-                    item.put("location", commodity.getLocation());
-                    item.put("category", commodity.getCategory());
-                    item.put("conditionLevel", commodity.getConditionLevel());
-                    item.put("publishTime", commodity.getPublishTime() != null ? commodity.getPublishTime().toString() : null);
-                    
-                    // ✅ 图片数组（完整列表，而不是只返回第一张）
-                    if (StringUtils.hasText(commodity.getImages())) {
-                        // 解析逗号分隔的图片字符串为数组
-                        String[] imageArray = commodity.getImages().split(",");
-                        List<String> imagesList = Arrays.stream(imageArray)
-                                .map(String::trim)
-                                .filter(StringUtils::hasText)
-                                .collect(Collectors.toList());
+                    item.put("commodityId", c.getCommodityId());
+                    item.put("sellerId", c.getSellerId());
+                    item.put("title", c.getTitle());
+                    item.put("description", c.getDescription());
+                    item.put("price", c.getPrice() != null ? c.getPrice().doubleValue() : null);
+                    item.put("commodityStatus", c.getStatus());
+                    item.put("stock", c.getStock());
+                    item.put("location", c.getLocation());
+                    item.put("category", c.getCategory());
+                    item.put("conditionLevel", c.getConditionLevel());
+                    item.put("publishTime", c.getCreateTime() != null ? c.getCreateTime().toString() : null);
+
+                    if (StringUtils.hasText(c.getImages())) {
+                        List<String> imagesList = Arrays.stream(c.getImages().split(","))
+                            .map(String::trim)
+                            .filter(StringUtils::hasText)
+                            .collect(Collectors.toList());
                         item.put("images", imagesList);
                     } else {
                         item.put("images", new ArrayList<>());
                     }
-                    
-                    // ✅ 卖家信息（从批量查询的 Map 中获取，使用内部 DTO）
-                    UserProfileInternalDTO sellerProfile = finalProfileMap.get(commodity.getSellerId());
-                    if (sellerProfile != null) {
-                        item.put("sellerNickname", sellerProfile.getNickname());
-                        item.put("sellerAvatar", sellerProfile.getAvatar());
+
+                    UserProfileInternalDTO profile = profileMap.get(c.getSellerId());
+                    if (profile != null) {
+                        item.put("sellerNickname", profile.getNickname());
+                        item.put("sellerAvatar", profile.getAvatar());
                     }
-                    
                     return item;
                 })
                 .collect(Collectors.toList());
-            
+
             log.info("Batch query commodity status successful - queried {} commodities, returned {} commodities", uniqueIds.size(), result.size());
             return Result.ok("Batch query successful", result);
-            
+
         } catch (Exception e) {
             log.error("Failed to batch query commodity status: {}", e.getMessage(), e);
             throw new BusinessException("Batch query failed");
         }
+    }
+
+    // ========== 内部接口实现 ==========
+
+    @Override
+    public CommodityInternalDTO getCommodityByIdInternal(String commodityId) {
+        return cacheUtil.getWithFallback(
+            RedisConstants.CACHE_COMMODITY_KEY + commodityId,
+            RedisConstants.CACHE_COMMODITY_TTL * 60,
+            CommodityInternalDTO.class,
+            () -> {
+                Commodity commodity = commodityRepository.findById(commodityId)
+                    .orElseThrow(() -> new BusinessException("商品不存在"));
+                return commodityInternalDTOConverter.toInternalDTO(commodity);
+            }
+        );
+    }
+
+    @Override
+    public List<CommodityInternalDTO> getCommoditiesByIdsInternal(List<String> commodityIds) {
+        if (commodityIds == null || commodityIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<String, CommodityInternalDTO> resultMap = batchFetchCommoditiesWithCache(commodityIds);
+        return new ArrayList<>(resultMap.values());
+    }
+
+    @Override
+    public Map<String, Object> listCommoditiesInternal(Integer page, Integer size,
+                                                        String keyword, String category,
+                                                        String conditionLevel, String status,
+                                                        String buyerVisibility,
+                                                        String sortProp, String sortOrder) {
+        Sort sort = Sort.by(Sort.Direction.DESC, "createTime");
+        if (StringUtils.hasText(sortProp)) {
+            Sort.Direction direction = "desc".equalsIgnoreCase(sortOrder)
+                ? Sort.Direction.DESC : Sort.Direction.ASC;
+            sort = Sort.by(direction, sortProp);
+        }
+        Pageable pageable = PageRequest.of(Math.max(0, page - 1), size, sort);
+
+        Specification<Commodity> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(keyword)) {
+                String kw = keyword.trim().toLowerCase();
+                predicates.add(cb.or(
+                    cb.like(cb.lower(root.get("title")), "%" + kw + "%"),
+                    cb.like(cb.lower(root.get("description")), "%" + kw + "%"),
+                    cb.like(cb.lower(root.get("commodityId")), "%" + kw + "%")
+                ));
+            }
+            if (StringUtils.hasText(category)) {
+                predicates.add(cb.equal(root.get("category"), category.trim()));
+            }
+            if (StringUtils.hasText(conditionLevel)) {
+                predicates.add(cb.equal(root.get("conditionLevel"), conditionLevel.trim()));
+            }
+            if (StringUtils.hasText(status)) {
+                predicates.add(cb.equal(root.get("commodityStatus"), status.trim()));
+            }
+            if (StringUtils.hasText(buyerVisibility)) {
+                predicates.add(cb.equal(root.get("buyerVisibility"), buyerVisibility.trim()));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<Commodity> commodityPage = commodityRepository.findAll(spec, pageable);
+        List<CommodityInternalDTO> dtos = commodityInternalDTOConverter
+            .toCommodityInternalDTOList(commodityPage.getContent());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("content", dtos);
+        result.put("totalElements", commodityPage.getTotalElements());
+        result.put("totalPages", commodityPage.getTotalPages());
+        result.put("number", commodityPage.getNumber());
+        result.put("size", commodityPage.getSize());
+        return result;
     }
 }

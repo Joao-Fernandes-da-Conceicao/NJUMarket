@@ -90,7 +90,7 @@ public class UserAuthController {
     public Result loginThirdParty(@RequestParam String type,
                                  @RequestParam String code,
                                  HttpSession session) {
-        return userService.loginThirdParty(type, code, session);
+        throw new BusinessException("第三方登录功能未实现");
     }
 
     @Operation(summary = "获取当前用户信息", description = "获取当前登录用户的基本信息和档案信息")

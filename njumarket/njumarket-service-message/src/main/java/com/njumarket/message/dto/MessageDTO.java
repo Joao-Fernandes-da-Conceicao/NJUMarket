@@ -18,8 +18,9 @@ public class MessageDTO {
     
     private String content;
     private String imageUrl;
-    private String commodityId; // 商品ID（实时查询，用于商品卡片）
-    private String orderId; // 订单ID（实时查询，用于订单卡片）
+    private String commodityId;
+    private CommoditySnapshotDTO commoditySnapshot; // 商品快照（COMMODITY_CARD 类型消息专用）
+    private String orderId;
     private Boolean isRead;
     private LocalDateTime readTime;
     private LocalDateTime createdAt;
@@ -150,6 +151,41 @@ public class MessageDTO {
 
     public void setIsMine(Boolean isMine) {
         this.isMine = isMine;
+    }
+
+    public CommoditySnapshotDTO getCommoditySnapshot() {
+        return commoditySnapshot;
+    }
+
+    public void setCommoditySnapshot(CommoditySnapshotDTO commoditySnapshot) {
+        this.commoditySnapshot = commoditySnapshot;
+    }
+
+    /**
+     * 商品快照 DTO（内嵌在 MessageDTO 中）
+     * 记录发送 COMMODITY_CARD 消息时商品的核心状态，永久保留，不随商品后续变更而改变。
+     */
+    public static class CommoditySnapshotDTO {
+        private String commodityId;
+        private String title;
+        private Double price;
+        private String imageUrl;
+        private String status;
+
+        public String getCommodityId() { return commodityId; }
+        public void setCommodityId(String commodityId) { this.commodityId = commodityId; }
+
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
+
+        public Double getPrice() { return price; }
+        public void setPrice(Double price) { this.price = price; }
+
+        public String getImageUrl() { return imageUrl; }
+        public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }
 

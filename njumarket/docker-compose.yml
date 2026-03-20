@@ -16,6 +16,62 @@ services:
     networks:
       - njumarket-network
 
+  # Milvus 依赖：etcd
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: njumarket-milvus-etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls=http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - milvus_etcd_data:/etcd
+    networks:
+      - njumarket-network
+
+  # Milvus 依赖：MinIO（对象存储）
+  milvus-minio:
+    image: minio/minio:latest
+    container_name: njumarket-milvus-minio
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: minio server /minio_data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - milvus_minio_data:/minio_data
+    networks:
+      - njumarket-network
+
+  # Milvus 向量数据库（Standalone）
+  milvus-standalone:
+    image: milvusdb/milvus:v2.4.15
+    container_name: njumarket-milvus
+    command: ["milvus", "run", "standalone"]
+    environment:
+      - ETCD_ENDPOINTS=milvus-etcd:2379
+      - MINIO_ADDRESS=milvus-minio:9000
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    volumes:
+      - milvus_data:/var/lib/milvus
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
   # Eureka 服务注册中心
   discovery:
     build:
@@ -178,6 +234,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
+      - ELASTICSEARCH_URIS=http://elasticsearch:9200
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
       # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
       - LANG=C.UTF-8
@@ -191,6 +248,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
       zipkin:
         condition: service_healthy
@@ -223,6 +282,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=admin
+      - RABBITMQ_PASSWORD=admin
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
       # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
       - LANG=C.UTF-8
@@ -236,6 +299,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       zipkin:
         condition: service_healthy
@@ -268,6 +333,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=admin
+      - RABBITMQ_PASSWORD=admin
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
       # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
       - LANG=C.UTF-8
@@ -281,6 +350,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       zipkin:
         condition: service_healthy
@@ -400,6 +471,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=admin
+      - RABBITMQ_PASSWORD=admin
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
       # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
       - LANG=C.UTF-8
@@ -411,6 +486,8 @@ services:
       config-server:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       zipkin:
         condition: service_healthy
@@ -437,9 +514,6 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - AI_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
-      - AI_DATASOURCE_USERNAME=postgres
-      - AI_DATASOURCE_PASSWORD=Hqz20050316
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
@@ -450,6 +524,14 @@ services:
       - DOUBAO_BASE_URL=${DOUBAO_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}
       - DOUBAO_CHAT_MODEL=${DOUBAO_CHAT_MODEL:-doubao-seed-1-6-250615}
       - DOUBAO_EMBEDDING_MODEL=${DOUBAO_EMBEDDING_MODEL:-doubao-embedding-text-240715}
+      - MILVUS_ENABLED=true
+      - MILVUS_URI=http://milvus-standalone:19530
+      - MILVUS_DB_NAME=default
+      - MILVUS_COMMODITY_COLLECTION=commodity_vectors
+      - MILVUS_USER_PROFILE_COLLECTION=user_profile_vectors
+      - MILVUS_CONVERSATION_COLLECTION=conversation_memory_vectors
+      - MILVUS_DIMENSION=${MILVUS_DIMENSION:-1024}
+      - MILVUS_MEMORY_TOP_K=${MILVUS_MEMORY_TOP_K:-12}
       # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
@@ -459,9 +541,9 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
       redis:
+        condition: service_healthy
+      milvus-standalone:
         condition: service_healthy
       zipkin:
         condition: service_healthy
@@ -666,6 +748,9 @@ volumes:
   postgres_data:
   es_data:
   es_logs:
+  milvus_etcd_data:
+  milvus_minio_data:
+  milvus_data:
 
 networks:
   njumarket-network:

@@ -24,8 +24,6 @@ public class OrderInternalDTO implements Serializable {
     private BigDecimal payAmount;
     private Integer quantity;
     private String trackingNumber;
-    private String sellerVisibility;
-    private String buyerVisibility;
     private LocalDateTime createTime;
     private LocalDateTime payTime;
     private LocalDateTime shippingTime;

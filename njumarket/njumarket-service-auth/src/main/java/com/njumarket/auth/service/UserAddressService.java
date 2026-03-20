@@ -1,6 +1,7 @@
 package com.njumarket.auth.service;
 
 import com.njumarket.njumarket.dto.Result;
+import com.njumarket.njumarket.dto.internal.AddressInternalDTO;
 import com.njumarket.auth.dto.UserAddressDTO;
 
 /**
@@ -69,17 +70,17 @@ public interface UserAddressService {
     // ========== 内部方法（供其他服务调用）==========
     
     /**
-     * 根据地址ID获取地址信息（内部调用）
+     * 根据地址ID获取地址信息（内部调用，返回服务间通信用 DTO）
      * @param addressId 地址ID
-     * @return 地址DTO
+     * @return AddressInternalDTO
      */
-    UserAddressDTO getAddressByIdInternal(String addressId);
-    
+    AddressInternalDTO getAddressByIdInternal(String addressId);
+
     /**
-     * 获取用户的默认地址（内部调用）
+     * 获取用户的默认地址（内部调用，返回服务间通信用 DTO）
      * @param userId 用户ID
-     * @return 地址DTO
+     * @return AddressInternalDTO，无默认地址时返回 null
      */
-    UserAddressDTO getDefaultAddressInternal(String userId);
+    AddressInternalDTO getDefaultAddressInternal(String userId);
 }
 

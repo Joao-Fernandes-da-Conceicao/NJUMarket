@@ -131,3 +131,18 @@ logging:
     com.njumarket.njumarket.resolver: INFO
     dev.langchain4j: INFO
 
+njumarket:
+  ai:
+    milvus:
+      enabled: ${MILVUS_ENABLED:true}
+      uri: ${MILVUS_URI:http://milvus-standalone:19530}
+      token: ${MILVUS_TOKEN:}
+      db-name: ${MILVUS_DB_NAME:default}
+      commodity-collection: ${MILVUS_COMMODITY_COLLECTION:commodity_vectors}
+      user-profile-collection: ${MILVUS_USER_PROFILE_COLLECTION:user_profile_vectors}
+      conversation-collection: ${MILVUS_CONVERSATION_COLLECTION:conversation_memory_vectors}
+      dimension: ${MILVUS_DIMENSION:1024}
+      top-k: ${MILVUS_TOP_K:10}
+      metric-type: ${MILVUS_METRIC_TYPE:COSINE}
+      memory-top-k: ${MILVUS_MEMORY_TOP_K:12}
+

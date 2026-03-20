@@ -129,25 +129,11 @@ public class UserCommodityController {
         return commodityService.copyCommodity(commodityId);
     }
 
-    @Operation(summary = "修改商品可见性", description = "修改商品的可见性设置")
+    @Operation(summary = "修改商品可见性", description = "PUBLIC = 正常可见；HIDDEN = 管理端软隐藏，买家不可见")
     @PutMapping("/{commodityId}/visibility")
     public Result updateCommodityVisibility(@PathVariable String commodityId,
                                           @RequestParam String visibility) {
         return commodityService.updateCommodityVisibility(commodityId, visibility);
-    }
-
-    @Operation(summary = "修改商品卖家可见性", description = "修改商品的卖家可见性设置")
-    @PutMapping("/{commodityId}/seller-visibility")
-    public Result updateCommoditySellerVisibility(@PathVariable String commodityId,
-                                               @RequestParam String sellerVisibility) {
-        return commodityService.updateCommoditySellerVisibility(commodityId, sellerVisibility);
-    }
-
-    @Operation(summary = "修改商品买家可见性", description = "修改商品的买家可见性设置")
-    @PutMapping("/{commodityId}/buyer-visibility")
-    public Result updateCommodityBuyerVisibility(@PathVariable String commodityId,
-                                              @RequestParam String buyerVisibility) {
-        return commodityService.updateCommodityBuyerVisibility(commodityId, buyerVisibility);
     }
     
     // ✅ 批量查询商品状态（用于聊天界面，轻量级查询）

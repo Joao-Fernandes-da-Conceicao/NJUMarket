@@ -32,8 +32,6 @@ public class OrderInternalDTOConverter {
         dto.setPayAmount(order.getPayAmount() != null ? java.math.BigDecimal.valueOf(order.getPayAmount()) : null);
         dto.setQuantity(order.getQuantity());
         dto.setTrackingNumber(order.getTrackingNumber());
-        dto.setSellerVisibility(order.getSellerVisibility());
-        dto.setBuyerVisibility(order.getBuyerVisibility());
         dto.setCreateTime(order.getCreateTime());
         dto.setPayTime(order.getPayTime());
         dto.setShippingTime(order.getShippingTime());

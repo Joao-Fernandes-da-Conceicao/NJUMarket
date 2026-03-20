@@ -56,16 +56,6 @@ export function createSafeUserState(userStore) {
     return !!(user.value?.nickname || user.value?.avatar)
   })
   
-  // 获取用户信用分
-  const getCreditScore = computed(() => {
-    return user.value?.creditScore || 100
-  })
-  
-  // 获取用户VIP等级
-  const getVipLevel = computed(() => {
-    return user.value?.vipLevel || 'NORMAL'
-  })
-  
   return {
     isLoggedIn,
     user,
@@ -73,9 +63,7 @@ export function createSafeUserState(userStore) {
     getUserAvatar,
     getUserId,
     getUserPhone,
-    hasProfileData,
-    getCreditScore,
-    getVipLevel
+    hasProfileData
   }
 }
 

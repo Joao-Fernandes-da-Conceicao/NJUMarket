@@ -3,8 +3,10 @@ package com.njumarket.commodity.search;
 import co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.json.JsonData;
+import com.njumarket.commodity.client.AIClient;
 import com.njumarket.commodity.entity.Commodity;
 import com.njumarket.commodity.repository.CommodityRepository;
+import com.njumarket.njumarket.dto.Result;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataRetrievalFailureException;
@@ -32,7 +34,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 /**
- * 商品搜索服务
+ * 商品搜索服务。
+ * 索引创建/重建时通过 Feign 调用 AI 服务单次 Chat 获取丰度更高的可检索文本，
+ * 写入 ES 的 keywordPayload，提升泛化词（如「笔记本」）的召回。
  */
 @Slf4j
 @Service
@@ -46,6 +50,7 @@ public class CommoditySearchService {
     private final ElasticsearchOperations elasticsearchOperations;
     private final CommodityRepository commodityRepository;
     private final CommoditySearchProperties properties;
+    private final AIClient aiClient;
 
     public boolean isEnabled() {
         return properties.isEnabled() && properties.getElasticsearch().isEnabled();
@@ -106,8 +111,8 @@ public class CommoditySearchService {
                             @Override
                             public String[] getIncludes() {
                                 // 只包含需要的字段，排除 publishTime
-                                return new String[]{"commodityId", "title", "description", "keywordPayload", 
-                                    "commodityStatus", "sellerVisibility", "buyerVisibility", "category", 
+                                return new String[]{"commodityId", "title", "description", "keywordPayload",
+                                    "commodityStatus", "buyerVisibility", "category",
                                     "price", "addressSnapshotFull"};
                             }
                             
@@ -155,9 +160,9 @@ public class CommoditySearchService {
                         // 采样检查前几条文档的状态
                         allHits.getSearchHits().stream().limit(3).forEach(hit -> {
                             CommoditySearchDocument doc = hit.getContent();
-                            log.debug("样本文档：id={}, status={}, sellerVis={}, buyerVis={}, title='{}'",
+                            log.debug("样本文档：id={}, status={}, buyerVis={}, title='{}'",
                                     doc.getCommodityId(), doc.getCommodityStatus(),
-                                    doc.getSellerVisibility(), doc.getBuyerVisibility(), doc.getTitle());
+                                    doc.getBuyerVisibility(), doc.getTitle());
                         });
                     }
                 } catch (Exception e) {
@@ -179,24 +184,24 @@ public class CommoditySearchService {
         }
     }
 
+    /**
+     * 同步商品到 ES 索引。
+     * 只有 ON_SHELF 状态的商品才写入索引；其他状态（DRAFT / PUBLISHED / OFF_SHELF）
+     * 直接从索引中删除，保持索引干净，避免无用文档占用空间。
+     */
     public void syncCommodity(Commodity commodity) {
         if (!isEnabled() || commodity == null) {
             return;
         }
+        // 非上架状态 → 从索引中移除（幂等，不存在时静默忽略）
+        if (!STATUS_ON_SHELF.equalsIgnoreCase(commodity.getCommodityStatus())) {
+            removeCommodity(commodity.getCommodityId());
+            return;
+        }
         try {
-            if (log.isDebugEnabled()) {
-                log.debug("准备同步商品到 ElasticSearch：id={}, title='{}', status={}, sellerVisibility={}, buyerVisibility={}, descPresent={}",
-                        commodity.getCommodityId(),
-                        commodity.getTitle(),
-                        commodity.getCommodityStatus(),
-                        commodity.getSellerVisibility(),
-                        commodity.getBuyerVisibility(),
-                        StringUtils.hasText(commodity.getDescription()));
-            }
-            commoditySearchRepository.save(CommoditySearchDocument.fromCommodity(commodity));
-            if (log.isDebugEnabled()) {
-                log.debug("商品同步完成：id={}", commodity.getCommodityId());
-            }
+            log.debug("同步商品到 ES：id={}, status={}", commodity.getCommodityId(), commodity.getCommodityStatus());
+            CommoditySearchDocument doc = buildSearchDocumentWithEnrichment(commodity);
+            commoditySearchRepository.save(doc);
         } catch (Exception e) {
             log.warn("商品同步到 ElasticSearch 失败: commodityId={}, error={}", commodity.getCommodityId(), e.getMessage());
         }
@@ -222,6 +227,59 @@ public class CommoditySearchService {
         }
     }
 
+    /**
+     * 构建搜索文档并同步向量：
+     * 1) 通过 AI 单次 Chat 生成增广文本；
+     * 2) 将增广文本（含结构化字段）发送给 AI 服务做向量化并写入 Milvus；
+     * 3) ES 仍保留基础关键词检索（不依赖增广文本）。
+     */
+    private CommoditySearchDocument buildSearchDocumentWithEnrichment(Commodity commodity) {
+        String enriched = null;
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("title", commodity.getTitle());
+            body.put("description", commodity.getDescription());
+            body.put("category", commodity.getCategory());
+            body.put("conditionLevel", commodity.getConditionLevel());
+            body.put("location", commodity.getLocation());
+            body.put("addressSnapshotFull", commodity.getAddressSnapshotFull());
+            Result result = aiClient.enrichCommodityForSearch(body);
+            if (result != null && Boolean.TRUE.equals(result.getSuccess()) && result.getData() instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) result.getData();
+                Object payload = data.get("enrichedKeywordPayload");
+                if (payload != null && payload.toString().length() > 0) {
+                    enriched = payload.toString().trim();
+                }
+            }
+        } catch (Exception e) {
+            log.debug("商品丰度增强跳过（将使用原标题与描述）: commodityId={}, error={}", commodity.getCommodityId(), e.getMessage());
+        }
+        try {
+            StringBuilder vectorText = new StringBuilder();
+            vectorText.append("标题: ").append(nullSafe(commodity.getTitle())).append('\n')
+                    .append("描述: ").append(nullSafe(commodity.getDescription())).append('\n')
+                    .append("类别: ").append(nullSafe(commodity.getCategory())).append('\n')
+                    .append("成色: ").append(nullSafe(commodity.getConditionLevel())).append('\n')
+                    .append("位置: ").append(nullSafe(commodity.getAddressSnapshotFull()));
+            if (enriched != null && !enriched.isEmpty()) {
+                vectorText.append('\n').append("增广文本: ").append(enriched);
+            }
+            Map<String, Object> vectorBody = new HashMap<>();
+            vectorBody.put("id", commodity.getCommodityId());
+            vectorBody.put("bizId", commodity.getCommodityId());
+            vectorBody.put("content", vectorText.toString());
+            aiClient.upsertCommodityVector(vectorBody);
+        } catch (Exception e) {
+            log.debug("写入商品 Milvus 向量失败（不影响主流程）: commodityId={}, error={}", commodity.getCommodityId(), e.getMessage());
+        }
+        return CommoditySearchDocument.fromCommodity(commodity);
+    }
+
+    private static String nullSafe(String text) {
+        return text == null ? "" : text;
+    }
+
     @Transactional(readOnly = true)
     public long rebuildIndex() {
         if (!isEnabled()) {
@@ -237,14 +295,15 @@ public class CommoditySearchService {
         Page<Commodity> commodityPage;
         do {
             Pageable pageable = PageRequest.of(page, batchSize, Sort.by(Sort.Direction.ASC, "commodityId"));
-            commodityPage = commodityRepository.findAll(pageable);
+            // 只重建 ON_SHELF 商品的索引，其他状态不应出现在搜索结果中
+            commodityPage = commodityRepository.findByCommodityStatus(STATUS_ON_SHELF, pageable);
             if (commodityPage.isEmpty()) {
                 log.info("重建索引：第 {} 批未查询到数据，提前结束", page);
                 break;
             }
 
             List<CommoditySearchDocument> documents = commodityPage.getContent().stream()
-                    .map(CommoditySearchDocument::fromCommodity)
+                    .map(c -> buildSearchDocumentWithEnrichment(c))
                     .collect(Collectors.toList());
             
             // 详细日志：检查写入前的数据完整性
@@ -260,7 +319,6 @@ public class CommoditySearchService {
                             doc.getKeywordPayload() != null ? (doc.getKeywordPayload().length() > 50 ? doc.getKeywordPayload().substring(0, 50) + "..." : doc.getKeywordPayload()) : "null",
                             doc.getKeywordPayload() == null ? 0 : doc.getKeywordPayload().length(),
                             doc.getCommodityStatus(),
-                            doc.getSellerVisibility(),
                             doc.getBuyerVisibility());
                 });
             }
@@ -316,17 +374,8 @@ public class CommoditySearchService {
             log.warn("索引刷新失败: {}", e.getMessage());
         }
         
-        log.info("ElasticSearch 索引重建完成，共索引 {} 条商品", total.get());
+        log.info("ElasticSearch 索引重建完成，共索引 {} 条 ON_SHELF 商品", total.get());
         return total.get();
-    }
-
-    private NativeQueryBuilder buildQueryBuilder(String keyword,
-                                                 String location,
-                                                 Double minPrice,
-                                                 Double maxPrice,
-                                                 String category,
-                                                 Pageable pageable) {
-        return buildQueryBuilder(keyword, location, minPrice, maxPrice, category, pageable, null);
     }
 
     private NativeQueryBuilder buildQueryBuilder(String keyword,
@@ -346,14 +395,6 @@ public class CommoditySearchService {
                                          String location,
                                          Double minPrice,
                                          Double maxPrice,
-                                         String category) {
-        return configureBoolQuery(keyword, location, minPrice, maxPrice, category, null);
-    }
-
-    private BoolQuery configureBoolQuery(String keyword,
-                                         String location,
-                                         Double minPrice,
-                                         Double maxPrice,
                                          String category,
                                          String userId) {
         return BoolQuery.of(bool -> {
@@ -367,7 +408,6 @@ public class CommoditySearchService {
 
             bool.filter(f -> f.term(t -> t.field("commodityStatus").value(STATUS_ON_SHELF)));
             bool.filter(f -> f.term(t -> t.field("buyerVisibility").value(VISIBILITY_PUBLIC)));
-            bool.filter(f -> f.term(t -> t.field("sellerVisibility").value(VISIBILITY_PUBLIC)));
             
             // 过滤掉库存为0的商品
             bool.filter(f -> f.range(r -> r.field("stock").gt(JsonData.of(0))));
@@ -423,15 +463,17 @@ public class CommoditySearchService {
         return result;
     }
 
+    /** 默认按相关度 _score 排序；外源指定 sortBy 时：price_asc/price_desc 按价格，latest 按发布时间，relevance 或未识别则按相关度。 */
     private Sort resolveSort(String sortBy) {
         if (!StringUtils.hasText(sortBy)) {
-            return Sort.by(Sort.Order.desc("publishTime"));
+            return Sort.by(Sort.Order.desc("_score"));
         }
         return switch (sortBy) {
             case "price_asc" -> Sort.by(Sort.Order.asc("price"));
             case "price_desc" -> Sort.by(Sort.Order.desc("price"));
             case "latest" -> Sort.by(Sort.Order.desc("publishTime"));
-            default -> Sort.by(Sort.Order.desc("publishTime"));
+            case "relevance" -> Sort.by(Sort.Order.desc("_score"));
+            default -> Sort.by(Sort.Order.desc("_score"));
         };
     }
 

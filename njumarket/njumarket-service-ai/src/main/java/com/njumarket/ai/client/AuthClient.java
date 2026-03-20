@@ -13,8 +13,4 @@ public interface AuthClient {
 
     @GetMapping("/user/{userId}")
     Result getUserById(@PathVariable String userId);
-    
-    @GetMapping("/user/{userId}/profile-vector")
-    Result getUserProfileVector(@PathVariable String userId);
 }
-

@@ -15,17 +15,17 @@ import java.util.List;
  * 用于Order Service调用Commodity Service的查询功能（公开接口和用户接口）
  * 启用 Resilience4j 熔断器保护
  */
-@FeignClient(name = "njumarket-service-commodity", 
+@FeignClient(name = "njumarket-service-commodity",
              contextId = "commodityQueryClient",
              fallback = CommodityQueryClientFallback.class)
 public interface CommodityQueryClient {
-    
+
     /**
-     * 根据ID查询商品详情（公开接口）
+     * 根据ID查询商品详情（内部接口，返回 CommodityInternalDTO，images 为 String，供下单等逻辑反序列化）
      */
-    @GetMapping("/api/public/commodity/{commodityId}")
+    @GetMapping("/api/internal/commodity/{commodityId}")
     Result getCommodityById(@PathVariable String commodityId);
-    
+
     /**
      * 批量查询商品状态（用户接口，用于聊天界面）
      */

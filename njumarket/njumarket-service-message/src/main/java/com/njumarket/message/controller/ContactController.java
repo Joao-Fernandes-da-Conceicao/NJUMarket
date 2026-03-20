@@ -3,7 +3,8 @@ package com.njumarket.message.controller;
 import com.njumarket.message.dto.SendMessageRequest;
 import com.njumarket.njumarket.dto.Result;
 import com.njumarket.njumarket.model.IUser;
-import com.njumarket.message.service.ContactService;
+import com.njumarket.message.service.ConversationService;
+import com.njumarket.message.service.MessageService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,8 +20,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RequestMapping("/api/contact")
 public class ContactController {
-    
-    private final ContactService contactService;
+
+    private final ConversationService conversationService;
+    private final MessageService messageService;
     
     @Operation(summary = "发送消息", description = "向对方发送消息")
     @ApiResponses({
@@ -31,7 +33,7 @@ public class ContactController {
     @PostMapping("/send")
     public Result sendMessage(@AuthenticationPrincipal IUser user,
                              @Valid @RequestBody SendMessageRequest request) {
-        return contactService.sendMessage(user.getUserId(), request);
+        return messageService.sendMessage(user.getUserId(), request);
     }
     
     @Operation(summary = "获取对话列表", description = "获取当前用户的所有对话列表")
@@ -44,7 +46,7 @@ public class ContactController {
             @AuthenticationPrincipal IUser user,
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页数量", example = "20") @RequestParam(defaultValue = "20") int size) {
-        return contactService.getConversations(user.getUserId(), page - 1, size);
+        return conversationService.getConversations(user.getUserId(), page - 1, size);
     }
     
     @Operation(summary = "获取对话详情", description = "获取对话详情及消息历史记录")
@@ -58,7 +60,7 @@ public class ContactController {
             @Parameter(description = "对话ID", required = true) @PathVariable String conversationId,
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页数量", example = "50") @RequestParam(defaultValue = "50") int size) {
-        return contactService.getConversationDetail(user.getUserId(), conversationId, page - 1, size);
+        return conversationService.getConversationDetail(user.getUserId(), conversationId, page - 1, size);
     }
     
     @Operation(summary = "获取历史消息", description = "获取指定时间之前的消息（用于无限滚动加载历史消息）")
@@ -72,7 +74,7 @@ public class ContactController {
             @Parameter(description = "对话ID", required = true) @PathVariable String conversationId,
             @Parameter(description = "时间戳（ISO格式）", required = true) @RequestParam String beforeTime,
             @Parameter(description = "每页数量", example = "50") @RequestParam(defaultValue = "50") int size) {
-        return contactService.getMessagesBefore(user.getUserId(), conversationId, beforeTime, size);
+        return conversationService.getMessagesBefore(user.getUserId(), conversationId, beforeTime, size);
     }
     
     @Operation(summary = "创建或获取对话", description = "创建新的对话或获取现有对话（基于用户对，确保唯一性）")
@@ -84,7 +86,7 @@ public class ContactController {
     public Result createConversation(
             @AuthenticationPrincipal IUser user,
             @Parameter(description = "对方用户ID", required = true) @RequestParam String otherUserId) {
-        return contactService.getOrCreateConversation(user.getUserId(), otherUserId);
+        return conversationService.getOrCreateConversation(user.getUserId(), otherUserId);
     }
     
     @Operation(summary = "标记对话为已读", description = "将对话中的所有消息标记为已读")
@@ -95,7 +97,7 @@ public class ContactController {
     @PostMapping("/conversations/{conversationId}/read")
     public Result markAsRead(@AuthenticationPrincipal IUser user,
                             @Parameter(description = "对话ID", required = true) @PathVariable String conversationId) {
-        return contactService.markConversationAsRead(user.getUserId(), conversationId);
+        return conversationService.markConversationAsRead(user.getUserId(), conversationId);
     }
     
     @Operation(summary = "获取未读消息总数", description = "获取当前用户的未读消息总数")
@@ -105,7 +107,7 @@ public class ContactController {
     })
     @GetMapping("/unread-count")
     public Result getUnreadCount(@AuthenticationPrincipal IUser user) {
-        return contactService.getUnreadCount(user.getUserId());
+        return conversationService.getUnreadCount(user.getUserId());
     }
     
     @Operation(summary = "删除对话", description = "删除指定的对话")
@@ -116,7 +118,7 @@ public class ContactController {
     @DeleteMapping("/conversations/{conversationId}")
     public Result deleteConversation(@AuthenticationPrincipal IUser user,
                                     @Parameter(description = "对话ID", required = true) @PathVariable String conversationId) {
-        return contactService.deleteConversation(user.getUserId(), conversationId);
+        return conversationService.deleteConversation(user.getUserId(), conversationId);
     }
     
     @Operation(summary = "删除消息", description = "删除指定的消息")
@@ -127,7 +129,7 @@ public class ContactController {
     @DeleteMapping("/messages/{messageId}")
     public Result deleteMessage(@AuthenticationPrincipal IUser user,
                                @Parameter(description = "消息ID", required = true) @PathVariable String messageId) {
-        return contactService.deleteMessage(user.getUserId(), messageId);
+        return messageService.deleteMessage(user.getUserId(), messageId);
     }
     
     @Operation(summary = "搜索消息", description = "在指定对话中搜索消息")
@@ -142,7 +144,7 @@ public class ContactController {
             @Parameter(description = "搜索关键词", required = true) @RequestParam String keyword,
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") int page,
             @Parameter(description = "每页数量", example = "20") @RequestParam(defaultValue = "20") int size) {
-        return contactService.searchMessages(user.getUserId(), conversationId, keyword, page - 1, size);
+        return messageService.searchMessages(user.getUserId(), conversationId, keyword, page - 1, size);
     }
     
     @Operation(summary = "获取与特定用户的对话", description = "获取与指定用户之间的对话")
@@ -154,7 +156,7 @@ public class ContactController {
     public Result getConversationWithUser(
             @AuthenticationPrincipal IUser user,
             @Parameter(description = "对方用户ID", required = true) @PathVariable String otherUserId) {
-        return contactService.getConversationWithUser(user.getUserId(), otherUserId);
+        return conversationService.getConversationWithUser(user.getUserId(), otherUserId);
     }
 }
 
