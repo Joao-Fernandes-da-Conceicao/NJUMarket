@@ -14,12 +14,12 @@
       
       <!-- 商品状态标签 -->
       <div v-if="commodity.commodityStatus !== 'ON_SHELF'" class="status-badge">
-        <el-tag 
+        <UnifiedTag 
           :type="getStatusTagType(commodity.commodityStatus)"
           size="small"
         >
           {{ getStatusText(commodity.commodityStatus) }}
-        </el-tag>
+        </UnifiedTag>
       </div>
     </div>
     
@@ -72,6 +72,7 @@ import { defineProps, defineEmits, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCommodityImageUrl, getAvatarUrl } from '../../utils/imageUtils'
 import { formatPrice, formatTime } from '../../utils/formatUtils'
+import UnifiedTag from '../common/UnifiedTag.vue'
 
 const router = useRouter()
 

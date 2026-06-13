@@ -21,24 +21,43 @@
               <div class="pill-info">
                 <h1 class="pill-username">{{ profileData?.nickname || '用户' }}</h1>
                 <div class="pill-user-id">用户ID: {{ profileData?.userId || '未知' }}</div>
+                <span class="pill-vip">{{ profileData?.vipLevel || '普通' }}</span>
               </div>
             </div>
             
             <!-- 其余信息 - 在下方居中且同行分布 -->
             <div class="profile-details">
+              <div class="stat-item">
+                <span class="stat-label">信用分：</span>
+                <span class="stat-value">{{ profileData?.creditScore || 0 }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">买家评分：</span>
+                <span class="stat-value">{{ profileData?.buyerRating || 0 }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">卖家评分：</span>
+                <span class="stat-value">{{ profileData?.sellerRating || 0 }}</span>
+              </div>
               <div class="stat-item register-time">
                 注册时间：{{ formatTime(profileData?.userInfo?.registerTime) }}
               </div>
             </div>
             
             <div class="profile-actions" v-if="isOwnProfile">
-              <el-button type="primary" @click="showAvatarDialog = true">更换头像</el-button>
-              <el-button type="primary" @click="goToEditProfile">编辑资料</el-button>
+              <UnifiedButton type="primary" class="profile-action-btn" @click="showAvatarDialog = true">
+                更换头像
+              </UnifiedButton>
+              <UnifiedButton type="primary" class="profile-action-btn" @click="goToEditProfile">
+                编辑资料
+              </UnifiedButton>
             </div>
-
+            
             <!-- 查看卖家主页入口（在最下面） -->
             <div class="view-commodities-section">
-              <el-button type="primary" @click="viewSellerCommodities">查看TA的主页</el-button>
+              <UnifiedButton type="primary" class="view-commodities-btn" @click="viewSellerCommodities">
+                查看TA的主页
+              </UnifiedButton>
             </div>
           </div>
         </div>
@@ -62,7 +81,7 @@
           :before-upload="beforeAvatarUpload"
           accept="image/*"
         >
-          <el-button type="primary">选择头像</el-button>
+          <UnifiedButton type="primary" class="pill-upload-btn">选择头像</UnifiedButton>
         </el-upload>
         <div class="upload-tip">
           <p>支持 JPG、PNG 格式，建议尺寸 200x200 像素</p>
@@ -70,7 +89,7 @@
       </div>
       
       <template #footer>
-        <el-button @click="showAvatarDialog = false">关闭</el-button>
+        <UnifiedButton @click="showAvatarDialog = false" class="pill-close-btn">关闭</UnifiedButton>
       </template>
     </el-dialog>
   </div>
@@ -83,10 +102,14 @@ import { useUserStore } from '../stores/user'
 import { profileAPI, imageAPI } from '../api'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
 
 export default {
   name: 'UserProfile',
-  components: { ArrowLeft },
+  components: {
+    ArrowLeft,
+    UnifiedButton
+  },
   setup() {
     const route = useRoute()
     const router = useRouter()
@@ -102,8 +125,8 @@ export default {
       return !userId || userId === user.value?.userId
     })
     
-    // 上传配置（第一步上传到 Image 服务，第二步由 handleAvatarSuccess 写入档案）
-    const uploadUrl = ref('http://localhost:8080/api/user/image/upload-avatar')
+    // 上传配置
+    const uploadUrl = ref('http://localhost:8080/api/user/profile/avatar')
     const uploadHeaders = computed(() => ({
       'Authorization': `Bearer ${userStore.token}`
     }))
@@ -160,23 +183,17 @@ export default {
       return true
     }
     
-    // 头像上传成功（el-upload 上传到 Image 服务后回调）
-    const handleAvatarSuccess = async (response) => {
-      if (!response.success) {
-        ElMessage.error(response.errorMsg || '头像上传失败')
-        return
-      }
-      // Image 服务返回 ImageUploadDTO，取 imageUrl 字段
-      const imageUrl = response.data?.imageUrl || response.data
-      try {
-        // 第二步：将 imageUrl 写入 Auth 服务的用户档案
-        await profileAPI.setAvatarUrl(imageUrl)
+    // 头像上传成功
+    const handleAvatarSuccess = (response) => {
+      if (response.success) {
+        ElMessage.success('头像更新成功')
+        // 后端返回的是ImageUploadDTO，包含imageUrl字段
+        const imageUrl = response.data.imageUrl || response.data
         profileData.value.avatar = imageUrl
         userStore.updateUser({ avatar: imageUrl })
         showAvatarDialog.value = false
-        ElMessage.success('头像更新成功')
-      } catch (err) {
-        ElMessage.error('头像 URL 保存失败，请重试')
+      } else {
+        ElMessage.error(response.errorMsg || '头像上传失败')
       }
     }
     

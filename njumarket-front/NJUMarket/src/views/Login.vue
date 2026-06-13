@@ -15,7 +15,7 @@
           @submit.prevent="handleLogin"
         >
           <el-form-item prop="identifier">
-            <el-input
+            <UnifiedInput
               v-model="loginForm.identifier"
               placeholder="请输入用户名或手机号"
               size="large"
@@ -24,7 +24,7 @@
           </el-form-item>
           
           <el-form-item prop="password">
-            <el-input
+            <UnifiedInput
               v-model="loginForm.password"
               type="password"
               placeholder="请输入密码"
@@ -35,7 +35,7 @@
           </el-form-item>
           
           <el-form-item>
-            <el-button
+            <UnifiedButton
               type="primary"
               size="large"
               class="login-btn"
@@ -43,19 +43,19 @@
               @click="handleLogin"
             >
               登录
-            </el-button>
+            </UnifiedButton>
           </el-form-item>
         </el-form>
         
         <div class="form-footer">
           <div class="login-methods">
-            <el-button
+            <UnifiedButton
               type="text"
               class="text-primary"
               @click="showCodeLogin = true"
             >
               验证码登录
-            </el-button>
+            </UnifiedButton>
           </div>
           
           <div class="register-link">
@@ -94,18 +94,18 @@
               placeholder="请输入验证码"
               prefix-icon="Message"
             />
-            <el-button
+            <UnifiedButton
               type="primary"
               :disabled="codeCountdown > 0"
               @click="sendCode"
             >
               {{ codeCountdown > 0 ? `${codeCountdown}s` : '发送验证码' }}
-            </el-button>
+            </UnifiedButton>
           </div>
         </el-form-item>
         
         <el-form-item>
-          <el-button
+          <UnifiedButton
             type="primary"
             size="large"
             class="login-btn"
@@ -113,7 +113,7 @@
             @click="handleCodeLogin"
           >
             登录
-          </el-button>
+          </UnifiedButton>
         </el-form-item>
       </el-form>
     </el-dialog>
@@ -125,10 +125,14 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { ElMessage } from 'element-plus'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
+import UnifiedInput from '../components/common/UnifiedInput.vue'
 
 export default {
   name: 'LoginPage',
   components: {
+    UnifiedButton,
+    UnifiedInput
   },
   setup() {
     const router = useRouter()

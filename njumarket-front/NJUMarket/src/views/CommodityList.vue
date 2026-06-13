@@ -19,7 +19,7 @@
         <!-- 筛选区域 -->
         <div class="filter-section">
           <!-- 商品种类选择器 -->
-          <el-select
+          <UnifiedSelect
             v-model="selectedCategory"
             :options="categoryOptions"
             :placeholder="getCategoryLabel(selectedCategory)"
@@ -28,14 +28,14 @@
           
           <!-- 价格区间输入框 -->
           <div class="filter-group price-group">
-            <el-input
+            <UnifiedInput
               v-model="minPrice"
               placeholder="最低价格"
               type="number"
               class="pill-input"
               @change="handleFilter"
             />
-            <el-input
+            <UnifiedInput
               v-model="maxPrice"
               placeholder="最高价格"
               type="number"
@@ -45,7 +45,7 @@
           </div>
           
           <!-- 排序方式选择器 -->
-          <el-select
+          <UnifiedSelect
             v-model="sortBy"
             :options="sortOptions"
             :placeholder="getSortLabel(sortBy)"
@@ -104,6 +104,8 @@ import { ElMessage } from 'element-plus'
 import SearchBox from '../components/search/SearchBox.vue'
 import CommodityGrid from '../components/commodity/CommodityGrid.vue'
 import Pagination from '../components/common/Pagination.vue'
+import UnifiedSelect from '../components/common/UnifiedSelect.vue'
+import UnifiedInput from '../components/common/UnifiedInput.vue'
 //import { ArrowDown } from '@element-plus/icons-vue'
 //import { User } from '@element-plus/icons-vue'
 //import { Search } from '@element-plus/icons-vue'
@@ -114,6 +116,8 @@ export default {
     SearchBox,
     CommodityGrid,
     Pagination,
+    UnifiedSelect,
+    UnifiedInput
   },
   setup() {
     const route = useRoute()

@@ -18,14 +18,14 @@
       >
         <!-- ✅ v1.3.x: 删除按钮（左滑显示） -->
         <div class="conversation-delete-action">
-          <el-button 
+          <UnifiedButton 
             type="danger" 
             size="small"
             @click.stop="handleDeleteConversation(conversation)"
             class="delete-button"
           >
             删除
-          </el-button>
+          </UnifiedButton>
         </div>
         
         <!-- 对话内容 -->
@@ -70,6 +70,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import UnreadBadge from '../common/UnreadBadge.vue'
+import UnifiedButton from '../common/UnifiedButton.vue'
 import { useMessageStore } from '../../stores/message'
 
 defineProps({

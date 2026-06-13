@@ -15,7 +15,7 @@
           @submit.prevent="handleRegister"
         >
           <el-form-item prop="username">
-            <el-input
+            <UnifiedInput
               v-model="registerForm.username"
               placeholder="请输入用户名"
               size="large"
@@ -23,7 +23,7 @@
           </el-form-item>
           
           <el-form-item prop="password">
-            <el-input
+            <UnifiedInput
               v-model="registerForm.password"
               type="password"
               placeholder="请输入密码"
@@ -33,7 +33,7 @@
           </el-form-item>
           
           <el-form-item prop="confirmPassword">
-            <el-input
+            <UnifiedInput
               v-model="registerForm.confirmPassword"
               type="password"
               placeholder="请再次输入密码"
@@ -43,7 +43,7 @@
           </el-form-item>
           
           <el-form-item prop="phone">
-            <el-input
+            <UnifiedInput
               v-model="registerForm.phone"
               placeholder="请输入手机号"
               size="large"
@@ -51,7 +51,7 @@
           </el-form-item>
           
           <el-form-item prop="email">
-            <el-input
+            <UnifiedInput
               v-model="registerForm.email"
               placeholder="请输入邮箱（可选）"
               size="large"
@@ -59,7 +59,7 @@
           </el-form-item>
           
           <el-form-item>
-            <el-button
+            <UnifiedButton
               type="primary"
               size="large"
               class="register-btn"
@@ -67,7 +67,7 @@
               @click="handleRegister"
             >
               注册
-            </el-button>
+            </UnifiedButton>
           </el-form-item>
         </el-form>
         
@@ -87,10 +87,14 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { ElMessage } from 'element-plus'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
+import UnifiedInput from '../components/common/UnifiedInput.vue'
 
 export default {
   name: 'RegisterPage',
   components: {
+    UnifiedButton,
+    UnifiedInput
   },
   setup() {
     const router = useRouter()

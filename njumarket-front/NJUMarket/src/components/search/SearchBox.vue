@@ -10,7 +10,10 @@
           @keyup.enter="$emit('search')"
         />
         <div class="search-buttons">
-          <button class="search-button" @click="$emit('search')" title="搜索">
+          <button class="ai-search-button" @click="$emit('ai-search')" title="AI搜索">
+            <span class="ai-search-text">AI搜索</span>
+          </button>
+          <button class="search-button" @click="$emit('search')" title="普通搜索">
             <el-icon><Search /></el-icon>
           </button>
         </div>
@@ -34,7 +37,7 @@ defineProps({
   }
 })
 
-defineEmits(['update:keyword', 'search'])
+defineEmits(['update:keyword', 'search', 'ai-search'])
 </script>
 
 <style scoped>
@@ -81,7 +84,7 @@ defineEmits(['update:keyword', 'search'])
   color: var(--text-primary);
   padding: 0;
   margin: 0;
-  margin-right: 55px;
+  margin-right: 120px;
 }
 
 .transparent-input::placeholder {
@@ -95,6 +98,39 @@ defineEmits(['update:keyword', 'search'])
   transform: translateY(-50%);
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+.ai-search-button {
+  height: 40px;
+  padding: 0 16px;
+  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+  border: none;
+  border-radius: 20px;
+  color: #333;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(255, 215, 0, 0.3);
+}
+
+.ai-search-button:hover {
+  background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.ai-search-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(255, 215, 0, 0.3);
+}
+
+.ai-search-text {
+  white-space: nowrap;
 }
 
 .search-button {
@@ -128,7 +164,13 @@ defineEmits(['update:keyword', 'search'])
   
   .transparent-input {
     font-size: 14px;
-    margin-right: 50px;
+    margin-right: 100px;
+  }
+  
+  .ai-search-button {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 12px;
   }
   
   .search-button {
@@ -139,7 +181,16 @@ defineEmits(['update:keyword', 'search'])
 
 @media (max-width: 600px) {
   .transparent-input {
-    margin-right: 46px;
+    margin-right: 90px;
+  }
+  
+  .ai-search-button {
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  
+  .search-buttons {
+    gap: 6px;
   }
 }
 </style>

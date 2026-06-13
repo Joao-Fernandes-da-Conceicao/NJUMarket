@@ -46,14 +46,14 @@
             <h1 class="commodity-title">
               {{ commodity.title }}
               <!-- 显示商品状态 -->
-              <el-tag 
+              <UnifiedTag 
                 v-if="!buyCheck.canOrder" 
                 type="warning" 
                 size="large"
                 style="margin-left: 12px;"
               >
                 {{ buyCheck.reason }}
-              </el-tag>
+              </UnifiedTag>
             </h1>
             <div class="price-section">
               <span class="price text-primary">¥{{ commodity.price }}</span>
@@ -96,7 +96,7 @@
 
             <!-- 操作按钮 -->
             <div class="action-section">
-              <el-button
+              <UnifiedButton
                 type="primary"
                 size="large"
                 :disabled="!buyCheck.canOrder"
@@ -104,15 +104,15 @@
                 class="buy-btn"
               >
                 {{ buyCheck.reason || '立即购买' }}
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 size="large"
                 :disabled="!contactCheck.canContact"
                 @click="handleContact"
                 class="contact-btn"
               >
                 {{ contactCheck.reason || '联系卖家' }}
-              </el-button>
+              </UnifiedButton>
             </div>
           </div>
         </div>
@@ -139,14 +139,14 @@
               </div>
             </div>
             <div class="seller-actions">
-              <el-button 
+              <UnifiedButton 
                 type="primary" 
                 :disabled="!contactCheck.canContact"
                 @click="handleContact"
               >
                 {{ contactCheck.reason || '联系卖家' }}
-              </el-button>
-              <el-button @click="viewSellerProfile">查看资料</el-button>
+              </UnifiedButton>
+              <UnifiedButton @click="viewSellerProfile">查看资料</UnifiedButton>
             </div>
           </div>
         </div>
@@ -163,11 +163,15 @@ import { useUserStore } from '../stores/user'
 import { commodityAPI, contactAPI, imageAPI } from '../api'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
+import UnifiedTag from '../components/common/UnifiedTag.vue'
 import { canCreateOrder, canContactSeller } from '../utils/orderRules'
 
 export default {
   name: 'CommodityDetail',
   components: {
+    UnifiedButton,
+    UnifiedTag,
     ArrowLeft
   },
   setup() {

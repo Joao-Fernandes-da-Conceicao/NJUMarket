@@ -14,11 +14,24 @@
             <div class="pill-info">
               <h1 class="pill-username">{{ sellerProfile?.nickname || '卖家' }}</h1>
               <div class="pill-user-id">用户ID: {{ sellerId }}</div>
+              <span class="pill-vip">{{ sellerProfile?.vipLevel || '普通' }}</span>
             </div>
           </div>
           
-          <!-- 其余信息 -->
+          <!-- 其余信息 - 在下方居中且同行分布 -->
           <div class="profile-details">
+            <div class="stat-item">
+              <span class="stat-label">信用分：</span>
+              <span class="stat-value">{{ sellerProfile?.creditScore || 0 }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">买家评分：</span>
+              <span class="stat-value">{{ sellerProfile?.buyerRating || 0 }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">卖家评分：</span>
+              <span class="stat-value">{{ sellerProfile?.sellerRating || 0 }}</span>
+            </div>
             <div class="stat-item register-time">
               注册时间：{{ formatTime(sellerProfile?.userInfo?.registerTime) }}
             </div>

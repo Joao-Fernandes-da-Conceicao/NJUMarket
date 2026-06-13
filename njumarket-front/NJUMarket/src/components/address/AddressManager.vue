@@ -2,9 +2,9 @@
   <div class="address-manager-shell">
     <div class="address-manager">
     <div class="manager-header">
-      <el-button type="primary" @click="showAddDialog = true">
+      <UnifiedButton type="primary" @click="showAddDialog = true">
         添加新地址
-      </el-button>
+      </UnifiedButton>
     </div>
     
     <div class="address-list" v-loading="loading">
@@ -21,28 +21,28 @@
             <span v-if="address.isDefault" class="default-badge">默认</span>
           </div>
           <div class="address-actions">
-            <el-button 
+            <UnifiedButton 
               type="text" 
               size="small" 
               @click.stop="handleEdit(address)"
             >
               编辑
-            </el-button>
-            <el-button 
+            </UnifiedButton>
+            <UnifiedButton 
               type="text" 
               size="small" 
               @click.stop="handleSetDefault(address)"
               v-if="!address.isDefault"
             >
               设为默认
-            </el-button>
-            <el-button 
+            </UnifiedButton>
+            <UnifiedButton 
               type="text" 
               size="small" 
               @click.stop="handleDelete(address)"
             >
               删除
-            </el-button>
+            </UnifiedButton>
           </div>
         </div>
         
@@ -93,12 +93,14 @@
 import { ref, onMounted } from 'vue'
 import { addressAPI } from '../../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import UnifiedButton from '../common/UnifiedButton.vue'
 import AddressForm from './AddressForm.vue'
 import { Close } from '@element-plus/icons-vue'
 
 export default {
   name: 'AddressManager',
   components: {
+    UnifiedButton,
     AddressForm,
     Close
   },

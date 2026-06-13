@@ -26,12 +26,9 @@ export const useOrderStore = defineStore('order', {
     notificationListeners: [],
     // ✅ 订单更新回调（用于在相关页面时智能更新订单）
     orderUpdateCallbacks: {
-      buyer: null,
-      seller: null
-    },
-    // 订单状态缓存（orderId → { status, operation, timestamp }）
-    // 由 ORDER_CHANGE 推送驱动，复用于聊天窗口订单卡片的实时状态显示
-    orderStatusCache: {}
+      buyer: null, // 买家订单页面更新回调
+      seller: null // 卖家订单页面更新回调
+    }
   }),
   
   getters: {
@@ -157,11 +154,6 @@ export const useOrderStore = defineStore('order', {
       // 这里不再发送ACK，避免重复发送
       
       console.log('收到订单变化通知:', { changeType, orderId, orderStatus, targetRole, timestamp, hasOrderDTO: !!orderDTO })
-
-      // 更新订单状态缓存，复用于聊天窗口的订单卡片实时状态显示
-      if (orderId && orderStatus) {
-        this.orderStatusCache[orderId] = { status: orderStatus, operation: changeType, timestamp }
-      }
       
       // ✅ 预留：保存通知到列表（用于弹出式卡片显示）
       const notificationItem = {

@@ -120,12 +120,12 @@
             </transition>
           </template>
           <template v-else>
-            <el-button type="primary" @click="$router.push('/login')">
+            <UnifiedButton type="primary" @click="$router.push('/login')">
               登录
-            </el-button>
-            <el-button @click="$router.push('/register')">
+            </UnifiedButton>
+            <UnifiedButton @click="$router.push('/register')">
               注册
-            </el-button>
+            </UnifiedButton>
           </template>
         </div>
       </div>
@@ -226,6 +226,7 @@ import { createSafeUserState } from '../../utils/userUtils'
 import { getAvatarUrl } from '../../utils/imageUtils'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, User, ShoppingCart, Box, Plus, SwitchButton, Close, HomeFilled, Goods, Message, ChatDotRound } from '@element-plus/icons-vue'
+import UnifiedButton from '../common/UnifiedButton.vue'
 import UnreadBadge from '../common/UnreadBadge.vue'
 
 const router = useRouter()
@@ -368,9 +369,7 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   
   // 初始获取未读数（WebSocket 会实时更新，不需要定时轮询）
-  if (userStore?.isLoggedIn) {
-    messageStore.fetchUnreadCount()
-  }
+  messageStore.fetchUnreadCount()
 })
 
 onUnmounted(() => {

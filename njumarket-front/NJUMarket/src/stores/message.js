@@ -96,9 +96,6 @@ export const useMessageStore = defineStore('message', {
      */
     async fetchUnreadCount() {
       try {
-        // 未登录时不请求，避免 401 触发全局拦截器清理用户数据
-        const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token')
-        if (!accessToken) return
         const response = await contactAPI.getUnreadCount()
         if (response.success) {
           // ✅ 6.4.1 状态同步优化：使用后端返回的总未读数作为基准
@@ -226,17 +223,14 @@ export const useMessageStore = defineStore('message', {
       
       this.loading.sending = true
       try {
-        let messageType = 'TEXT'
-        if (commodityId) messageType = 'COMMODITY_CARD'
-        else if (orderId) messageType = 'ORDER_CARD'
-
         const messageData = {
           conversationId,
           receiverId,
-          messageType,
+          messageType: 'TEXT',
           content
         }
         
+        // 添加商品或订单ID
         if (commodityId) {
           messageData.commodityId = commodityId
         }
@@ -423,8 +417,19 @@ export const useMessageStore = defineStore('message', {
         this.handleWebSocketMessage(messageData)
       })
       
-      // 订单变更通知由 order.js 的 initWebSocketListeners() 处理
-      // 商品卡片改为快照模式，不再需要 COMMODITY_CHANGE 推送
+      // ✅ 注册订单变更处理函数（忽略，不触发消息列表更新）
+      wsClient.on('ORDER_CHANGE', (messageData) => {
+        // ORDER_CHANGE 消息不应该触发消息列表更新，只用于通知
+        // 订单变更通知应该通过增量轮询获取，而不是直接添加到消息列表
+        console.debug('收到订单变更通知（忽略，不触发消息列表更新）:', messageData)
+      })
+      
+      // ✅ 注册商品变更处理函数（忽略，不触发消息列表更新）
+      wsClient.on('COMMODITY_CHANGE', (messageData) => {
+        // COMMODITY_CHANGE 消息不应该触发消息列表更新，只用于通知
+        // 商品变更通知应该通过增量轮询获取，而不是直接添加到消息列表
+        console.debug('收到商品变更通知（忽略，不触发消息列表更新）:', messageData)
+      })
       
       // ✅ 注册未读数更新处理函数（支持全局角标更新）
       wsClient.on('UNREAD_COUNT_UPDATE', (updateData) => {
@@ -467,10 +472,11 @@ export const useMessageStore = defineStore('message', {
     /**
      * 处理 WebSocket 接收到的消息
      * 实时更新对话列表、消息列表和未读数
-     * 只处理 MESSAGE_NEW 类型的消息；ORDER_CHANGE 由 order.js 处理
+     * ✅ 只处理 MESSAGE_NEW 类型的消息，忽略 ORDER_CHANGE 和 COMMODITY_CHANGE
      */
     async handleWebSocketMessage(messageData) {
-      // 安全检查：只处理 MESSAGE_NEW 类型的消息
+      // ✅ 安全检查：只处理 MESSAGE_NEW 类型的消息
+      // 防止 ORDER_CHANGE 或 COMMODITY_CHANGE 消息被误处理
       if (messageData.type && messageData.type !== 'MESSAGE_NEW') {
         console.warn('收到非 MESSAGE_NEW 类型的消息，忽略处理:', messageData.type, messageData)
         return
@@ -516,12 +522,13 @@ export const useMessageStore = defineStore('message', {
         messageType: messageData.messageType || 'TEXT',
         content: messageData.content || '',
         commodityId: messageData.commodityId || null,
-        commoditySnapshot: messageData.commoditySnapshot || null,
         orderId: messageData.orderId || null,
         senderNickname: messageData.senderNickname || '',
         senderAvatar: messageData.senderAvatar || '',
         isRead: messageData.isRead || false,
+        // 判断是否是当前用户发送的消息
         isMine: messageData.senderId === currentUserId,
+        // createdAt 可能是字符串，需要转换
         createdAt: messageData.createdAt || new Date().toISOString()
       }
       
@@ -793,6 +800,7 @@ export const useMessageStore = defineStore('message', {
       // 移除所有消息处理函数
       wsClient.off('MESSAGE_NEW')
       wsClient.off('ORDER_CHANGE')
+      wsClient.off('COMMODITY_CHANGE')
       wsClient.off('UNREAD_COUNT_UPDATE')
       wsClient.off('MESSAGE_READ')
       wsClient.off('CONVERSATION_VISIBILITY_RESTORED')

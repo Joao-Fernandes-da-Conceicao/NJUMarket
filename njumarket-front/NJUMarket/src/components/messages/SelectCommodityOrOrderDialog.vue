@@ -8,22 +8,22 @@
     class="select-dialog"
   >
     <div class="dialog-content">
-      <!-- ËÑË÷¿ò -->
+      <!-- æœç´¢æ¡† -->
       <div class="search-section">
-        <el-input
+        <UnifiedInput
           v-model="searchKeyword"
-          placeholder="ËÑË÷ÉÌÆ·±êÌâ»ò¶©µ¥ºÅ..."
+          placeholder="æœç´¢å•†å“æ ‡é¢˜æˆ–è®¢å•å·..."
           clearable
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
-        </el-input>
+        </UnifiedInput>
       </div>
 
-      <!-- ÁĞ±í -->
+      <!-- åˆ—è¡¨ -->
       <div class="list-section" v-loading="loading">
-        <!-- ÉÌÆ·ÁĞ±í -->
+        <!-- å•†å“åˆ—è¡¨ -->
         <div v-if="type === 'commodity'" class="commodity-list">
           <div
             v-for="item in filteredItems"
@@ -37,11 +37,11 @@
             </div>
             <div class="item-content">
               <h4 class="item-title">{{ item.title }}</h4>
-              <div class="item-price">£¤{{ formatPrice(item.price) }}</div>
+              <div class="item-price">Â¥{{ formatPrice(item.price) }}</div>
               <div class="item-meta">
                 <span>{{ item.category }}</span>
                 <span>{{ item.conditionLevel }}</span>
-                <span v-if="item.commodityStatus === 'ON_SHELF'" class="status-on-shelf">ÉÏ¼ÜÖĞ</span>
+                <span v-if="item.commodityStatus === 'ON_SHELF'" class="status-on-shelf">ä¸Šæ¶ä¸­</span>
               </div>
             </div>
             <div class="item-seller" v-if="item.sellerNickname || item.sellerId">
@@ -49,7 +49,7 @@
                 <img :src="getAvatarUrl(item.sellerAvatar)" :alt="item.sellerNickname || item.sellerId" />
               </div>
               <div class="seller-info">
-                <span class="seller-label">Âô¼Ò:</span>
+                <span class="seller-label">å–å®¶:</span>
                 <span class="seller-name">{{ item.sellerNickname || item.sellerId }}</span>
               </div>
             </div>
@@ -58,11 +58,11 @@
             </div>
           </div>
           <div v-if="filteredItems.length === 0 && !loading" class="empty-state">
-            <p>ÔİÎŞ{{ type === 'commodity' ? 'ÉÌÆ·' : '¶©µ¥' }}</p>
+            <p>æš‚æ— {{ type === 'commodity' ? 'å•†å“' : 'è®¢å•' }}</p>
           </div>
         </div>
 
-        <!-- ¶©µ¥ÁĞ±í -->
+        <!-- è®¢å•åˆ—è¡¨ -->
         <div v-else class="order-list">
           <div
             v-for="item in filteredItems"
@@ -72,19 +72,19 @@
             @click="selectOrder(item)"
           >
             <div class="item-image" v-if="getOrderImage(item)">
-              <img :src="getImageUrl(getOrderImage(item))" :alt="item.commoditySnapshotTitle || 'ÉÌÆ·'" />
+              <img :src="getImageUrl(getOrderImage(item))" :alt="item.commoditySnapshotTitle || 'å•†å“'" />
             </div>
             <div class="item-content">
               <div class="item-header">
-                <span class="item-id">¶©µ¥ºÅ: {{ item.orderId }}</span>
-                <el-tag :type="getStatusType(item.orderStatus)" size="small">
+                <span class="item-id">è®¢å•å·: {{ item.orderId }}</span>
+                <UnifiedTag :type="getStatusType(item.orderStatus)" size="small">
                   {{ getStatusText(item.orderStatus) }}
-                </el-tag>
+                </UnifiedTag>
               </div>
-              <h4 class="item-title">{{ item.commoditySnapshotTitle || 'ÉÌÆ·' }}</h4>
-              <div class="item-price">£¤{{ formatPrice(item.payAmount || item.totalAmount || item.commoditySnapshotPrice || 0) }}</div>
+              <h4 class="item-title">{{ item.commoditySnapshotTitle || 'å•†å“' }}</h4>
+              <div class="item-price">Â¥{{ formatPrice(item.payAmount || item.totalAmount || item.commoditySnapshotPrice || 0) }}</div>
               <div class="item-meta">
-                <span>ÊıÁ¿: {{ item.quantity }}</span>
+                <span>æ•°é‡: {{ item.quantity }}</span>
                 <span>{{ formatTime(item.createTime) }}</span>
               </div>
             </div>
@@ -94,7 +94,7 @@
                   <img :src="getAvatarUrl(item.sellerAvatar)" :alt="item.sellerNickname || item.sellerId" />
                 </div>
                 <div class="user-info">
-                  <span class="user-label">Âô¼Ò:</span>
+                  <span class="user-label">å–å®¶:</span>
                   <span class="user-name">{{ item.sellerNickname || item.sellerId }}</span>
                 </div>
               </div>
@@ -103,7 +103,7 @@
                   <img :src="getAvatarUrl(item.buyerAvatar)" :alt="item.buyerNickname || item.buyerId" />
                 </div>
                 <div class="user-info">
-                  <span class="user-label">Âò¼Ò:</span>
+                  <span class="user-label">ä¹°å®¶:</span>
                   <span class="user-name">{{ item.buyerNickname || item.buyerId }}</span>
                 </div>
               </div>
@@ -113,7 +113,7 @@
             </div>
           </div>
           <div v-if="filteredItems.length === 0 && !loading" class="empty-state">
-            <p>ÔİÎŞ{{ type === 'commodity' ? 'ÉÌÆ·' : '¶©µ¥' }}</p>
+            <p>æš‚æ— {{ type === 'commodity' ? 'å•†å“' : 'è®¢å•' }}</p>
           </div>
         </div>
       </div>
@@ -121,10 +121,10 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleCancel">È¡ÏûÑ¡Ôñ</el-button>
-        <el-button type="primary" @click="handleConfirm" :disabled="!hasSelection">
-          È·¶¨
-        </el-button>
+        <UnifiedButton @click="handleCancel">å–æ¶ˆé€‰æ‹©</UnifiedButton>
+        <UnifiedButton type="primary" @click="handleConfirm" :disabled="!hasSelection">
+          ç¡®å®š
+        </UnifiedButton>
       </div>
     </template>
   </el-dialog>
@@ -138,9 +138,15 @@ import { Search, Check } from '@element-plus/icons-vue'
 import { commodityAPI, orderAPI, profileAPI } from '../../api'
 import { imageAPI } from '../../api'
 import { formatPrice, formatTime } from '../../utils/formatUtils'
+import UnifiedInput from '../common/UnifiedInput.vue'
+import UnifiedButton from '../common/UnifiedButton.vue'
+import UnifiedTag from '../common/UnifiedTag.vue'
 import { ElMessage } from 'element-plus'
 
-// ? ×¢Èë¸¸×é¼ş£¨Messages.vue£©µÄprofile»º´æ·ÃÎÊ·½·¨
+// âœ… æ³¨å…¥çˆ¶ç»„ä»¶ï¼ˆMessages.vueï¼‰çš„å¢é‡æ›´æ–°ç»“æœ
+const incrementalUpdateResult = inject('incrementalUpdateResult', null)
+
+// âœ… æ³¨å…¥çˆ¶ç»„ä»¶ï¼ˆMessages.vueï¼‰çš„profileç¼“å­˜è®¿é—®æ–¹æ³•
 const profileCacheProvider = inject('profileCacheProvider', null)
 
 const props = defineProps({
@@ -175,7 +181,7 @@ const dialogVisible = computed({
 })
 
 const dialogTitle = computed(() => {
-  return props.type === 'commodity' ? 'Ñ¡ÔñÉÌÆ·' : 'Ñ¡Ôñ¶©µ¥'
+  return props.type === 'commodity' ? 'é€‰æ‹©å•†å“' : 'é€‰æ‹©è®¢å•'
 })
 
 const loading = ref(false)
@@ -183,6 +189,136 @@ const items = ref([])
 const searchKeyword = ref('')
 const selectedCommodityId = ref(null)
 const selectedOrderId = ref(null)
+
+// âœ… æ›´æ–°å¯¹è¯æ¡†åˆ—è¡¨ä¸­çš„å•†å“/è®¢å•æ•°æ®ï¼ˆåŸºäºå¢é‡è½®è¯¢ç»“æœï¼‰- å¼‚æ­¥å¤„ç†profileä¿¡æ¯
+const updateDialogItemsFromPoll = async (commodities = [], orders = []) => {
+  let updatedCount = 0
+  
+  if (commodities.length > 0 && props.type === 'commodity') {
+    const commodityMap = new Map(commodities.map(c => [c.commodityId, c]))
+    const existingIds = new Set(items.value.map(item => item.commodityId))
+    
+    // âœ… æ”¶é›†éœ€è¦è·å–profileçš„å–å®¶ID
+    const sellerIds = []
+    commodities.forEach(commodity => {
+      if (commodity.sellerId && !commodity.sellerNickname && !commodity.sellerAvatar) {
+        sellerIds.push(commodity.sellerId)
+      }
+    })
+    
+    // âœ… æ‰¹é‡è·å–profileä¿¡æ¯ï¼ˆä¼˜å…ˆä½¿ç”¨ç¼“å­˜ï¼‰
+    const profileMap = sellerIds.length > 0 ? await fetchUserProfiles(sellerIds) : new Map()
+    
+    // æ›´æ–°ç°æœ‰å•†å“
+    items.value.forEach((item, index) => {
+      if (commodityMap.has(item.commodityId)) {
+        const updatedCommodity = commodityMap.get(item.commodityId)
+        const sellerProfile = profileMap.get(updatedCommodity.sellerId)
+        
+        // åˆå¹¶æ›´æ–°ï¼Œä¿ç•™åŸæœ‰æ•°æ®ä½†æ›´æ–°å˜æ›´çš„å­—æ®µ
+        items.value[index] = {
+          ...item,
+          ...updatedCommodity,
+          // âœ… åˆå¹¶profileä¿¡æ¯ï¼ˆä¼˜å…ˆä½¿ç”¨æŸ¥è¯¢åˆ°çš„profileï¼Œå¦åˆ™ä½¿ç”¨å·²æœ‰çš„ï¼‰
+          sellerNickname: sellerProfile ? sellerProfile.nickname : (updatedCommodity.sellerNickname || item.sellerNickname),
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : (updatedCommodity.sellerAvatar || item.sellerAvatar)
+        }
+        updatedCount++
+      }
+    })
+    
+    // âœ… æ·»åŠ æ–°åˆ›å»ºçš„å•†å“åˆ°åˆ—è¡¨æœ€é¡¶ç«¯ï¼ˆåˆå¹¶profileä¿¡æ¯ï¼‰
+    commodities.forEach(commodity => {
+      if (!existingIds.has(commodity.commodityId)) {
+        const sellerProfile = profileMap.get(commodity.sellerId)
+        const commodityWithProfile = {
+          ...commodity,
+          sellerNickname: sellerProfile ? sellerProfile.nickname : commodity.sellerNickname,
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : commodity.sellerAvatar
+        }
+        items.value.unshift(commodityWithProfile) // æ·»åŠ åˆ°æœ€å‰é¢
+        updatedCount++
+      }
+    })
+    
+    // âœ… å¦‚æœæœ‰æ›´æ–°æˆ–æ–°å•†å“ï¼Œé‡æ–°æŒ‰å‘å¸ƒæ—¶é—´æ’åº
+    if (updatedCount > 0) {
+      items.value.sort((a, b) => {
+        const timeA = a.publishTime ? new Date(a.publishTime).getTime() : 0
+        const timeB = b.publishTime ? new Date(b.publishTime).getTime() : 0
+        return timeB - timeA // é™åºï¼šæœ€æ–°çš„åœ¨å‰
+      })
+    }
+  }
+  
+  if (orders.length > 0 && props.type === 'order') {
+    const orderMap = new Map(orders.map(o => [o.orderId, o]))
+    const existingIds = new Set(items.value.map(item => item.orderId))
+    
+    // âœ… æ”¶é›†éœ€è¦è·å–profileçš„å–å®¶/ä¹°å®¶ID
+    const userIds = []
+    orders.forEach(order => {
+      if (order.sellerId && !order.sellerNickname && !order.sellerAvatar) {
+        userIds.push(order.sellerId)
+      }
+      if (order.buyerId && !order.buyerNickname && !order.buyerAvatar) {
+        userIds.push(order.buyerId)
+      }
+    })
+    
+    // âœ… æ‰¹é‡è·å–profileä¿¡æ¯ï¼ˆä¼˜å…ˆä½¿ç”¨ç¼“å­˜ï¼‰
+    const profileMap = userIds.length > 0 ? await fetchUserProfiles(userIds) : new Map()
+    
+    // æ›´æ–°ç°æœ‰è®¢å•
+    items.value.forEach((item, index) => {
+      if (orderMap.has(item.orderId)) {
+        const updatedOrder = orderMap.get(item.orderId)
+        const sellerProfile = profileMap.get(updatedOrder.sellerId)
+        const buyerProfile = profileMap.get(updatedOrder.buyerId)
+        
+        // åˆå¹¶æ›´æ–°ï¼Œä¿ç•™åŸæœ‰æ•°æ®ä½†æ›´æ–°å˜æ›´çš„å­—æ®µ
+        items.value[index] = {
+          ...item,
+          ...updatedOrder,
+          // âœ… åˆå¹¶profileä¿¡æ¯ï¼ˆä¼˜å…ˆä½¿ç”¨æŸ¥è¯¢åˆ°çš„profileï¼Œå¦åˆ™ä½¿ç”¨å·²æœ‰çš„ï¼‰
+          sellerNickname: sellerProfile ? sellerProfile.nickname : (updatedOrder.sellerNickname || item.sellerNickname),
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : (updatedOrder.sellerAvatar || item.sellerAvatar),
+          buyerNickname: buyerProfile ? buyerProfile.nickname : (updatedOrder.buyerNickname || item.buyerNickname),
+          buyerAvatar: buyerProfile ? buyerProfile.avatar : (updatedOrder.buyerAvatar || item.buyerAvatar)
+        }
+        updatedCount++
+      }
+    })
+    
+    // âœ… æ·»åŠ æ–°åˆ›å»ºçš„è®¢å•åˆ°åˆ—è¡¨æœ€é¡¶ç«¯ï¼ˆåˆå¹¶profileä¿¡æ¯ï¼‰
+    orders.forEach(order => {
+      if (!existingIds.has(order.orderId)) {
+        const sellerProfile = profileMap.get(order.sellerId)
+        const buyerProfile = profileMap.get(order.buyerId)
+        const orderWithProfile = {
+          ...order,
+          sellerNickname: sellerProfile ? sellerProfile.nickname : order.sellerNickname,
+          sellerAvatar: sellerProfile ? sellerProfile.avatar : order.sellerAvatar,
+          buyerNickname: buyerProfile ? buyerProfile.nickname : order.buyerNickname,
+          buyerAvatar: buyerProfile ? buyerProfile.avatar : order.buyerAvatar
+        }
+        items.value.unshift(orderWithProfile) // æ·»åŠ åˆ°æœ€å‰é¢
+        updatedCount++
+      }
+    })
+    
+    // âœ… å¦‚æœæœ‰æ›´æ–°æˆ–æ–°è®¢å•ï¼Œé‡æ–°æŒ‰åˆ›å»ºæ—¶é—´æ’åº
+    if (updatedCount > 0) {
+      items.value.sort((a, b) => {
+        const timeA = a.createTime ? new Date(a.createTime).getTime() : 0
+        const timeB = b.createTime ? new Date(b.createTime).getTime() : 0
+        return timeB - timeA // é™åºï¼šæœ€æ–°çš„åœ¨å‰
+      })
+    }
+  }
+  
+  return updatedCount
+}
 
 const filteredItems = computed(() => {
   if (!searchKeyword.value.trim()) {
@@ -208,19 +344,19 @@ const hasSelection = computed(() => {
   return props.type === 'commodity' ? selectedCommodityId.value !== null : selectedOrderId.value !== null
 })
 
-// ÏìÓ¦Ê½¿í¶È
+// å“åº”å¼å®½åº¦
 const dialogWidth = computed(() => {
   return globalIsMobile.value ? '90%' : '600px'
 })
 
-// ? »ñÈ¡ÓÃ»§profileĞÅÏ¢£¨ÅúÁ¿£©- ÓÅÏÈÊ¹ÓÃ¶Ô»°¼¶±ğµÄ»º´æ
+// âœ… è·å–ç”¨æˆ·profileä¿¡æ¯ï¼ˆæ‰¹é‡ï¼‰- ä¼˜å…ˆä½¿ç”¨å¯¹è¯çº§åˆ«çš„ç¼“å­˜
 const fetchUserProfiles = async (userIds) => {
   const profileMap = new Map()
   const uniqueUserIds = [...new Set(userIds.filter(id => id))]
   
   if (uniqueUserIds.length === 0) return profileMap
   
-  // ? ÓÅÏÈ´Ó»º´æÖĞ»ñÈ¡
+  // âœ… ä¼˜å…ˆä»ç¼“å­˜ä¸­è·å–
   const cachePromises = uniqueUserIds.map(async (userId) => {
     if (profileCacheProvider?.getProfileFromCache) {
       try {
@@ -230,14 +366,14 @@ const fetchUserProfiles = async (userIds) => {
           return true
         }
       } catch (error) {
-        // ºöÂÔ»º´æ»ñÈ¡´íÎó
+        // å¿½ç•¥ç¼“å­˜è·å–é”™è¯¯
       }
     }
     return false
   })
   await Promise.all(cachePromises)
   
-  // ? ¶ÔÓÚ»º´æÖĞÃ»ÓĞµÄÓÃ»§£¬½øĞĞ²éÑ¯
+  // âœ… å¯¹äºç¼“å­˜ä¸­æ²¡æœ‰çš„ç”¨æˆ·ï¼Œè¿›è¡ŒæŸ¥è¯¢
   const uncachedUserIds = uniqueUserIds.filter(userId => !profileMap.has(userId))
   
   if (uncachedUserIds.length > 0) {
@@ -246,12 +382,12 @@ const fetchUserProfiles = async (userIds) => {
       const response = await profileAPI.getUser(userId)
       if (response.success && response.data) {
         profileMap.set(userId, response.data)
-          // ? ±£´æµ½localStorage»º´æ
+          // âœ… ä¿å­˜åˆ°localStorageç¼“å­˜
           const { saveProfileToStorage } = await import('../../utils/profileCache')
           saveProfileToStorage(userId, response.data)
       }
     } catch (error) {
-      console.error(`»ñÈ¡ÓÃ»§ ${userId} µÄprofileÊ§°Ü:`, error)
+      console.error(`è·å–ç”¨æˆ· ${userId} çš„profileå¤±è´¥:`, error)
     }
   })
     await Promise.all(queryPromises)
@@ -260,13 +396,13 @@ const fetchUserProfiles = async (userIds) => {
   return profileMap
 }
 
-// »ñÈ¡ÉÌÆ·ÁĞ±í£¨Ë«·½µÄÉÌÆ·£©
+// è·å–å•†å“åˆ—è¡¨ï¼ˆåŒæ–¹çš„å•†å“ï¼‰
 const fetchCommodities = async () => {
   loading.value = true
   try {
     let allCommodities = []
     
-    // »ñÈ¡µ±Ç°ÓÃ»§µÄÉÌÆ·£¨ÉÏ¼Ü×´Ì¬£©
+    // è·å–å½“å‰ç”¨æˆ·çš„å•†å“ï¼ˆä¸Šæ¶çŠ¶æ€ï¼‰
     if (props.currentUserId) {
       try {
         const myResponse = await commodityAPI.getMy(1, 100, 'ON_SHELF')
@@ -275,11 +411,11 @@ const fetchCommodities = async () => {
           allCommodities.push(...myCommodities)
         }
       } catch (error) {
-        console.error('»ñÈ¡µ±Ç°ÓÃ»§ÉÌÆ·Ê§°Ü:', error)
+        console.error('è·å–å½“å‰ç”¨æˆ·å•†å“å¤±è´¥:', error)
       }
     }
     
-    // »ñÈ¡¶Ô·½ÓÃ»§µÄÉÌÆ·£¨¹«¿ª¿É¼û£¬ÉÏ¼Ü×´Ì¬£©
+    // è·å–å¯¹æ–¹ç”¨æˆ·çš„å•†å“ï¼ˆå…¬å¼€å¯è§ï¼Œä¸Šæ¶çŠ¶æ€ï¼‰
     if (props.otherUserId) {
       try {
         const otherResponse = await commodityAPI.getSellerCommodities(props.otherUserId, 1, 100, 'ON_SHELF')
@@ -288,11 +424,11 @@ const fetchCommodities = async () => {
           allCommodities.push(...otherCommodities)
         }
       } catch (error) {
-        console.error('»ñÈ¡¶Ô·½ÓÃ»§ÉÌÆ·Ê§°Ü:', error)
+        console.error('è·å–å¯¹æ–¹ç”¨æˆ·å•†å“å¤±è´¥:', error)
       }
     }
     
-    // È¥ÖØ£¨¸ù¾İ commodityId£©
+    // å»é‡ï¼ˆæ ¹æ® commodityIdï¼‰
     const uniqueCommodities = []
     const commodityIds = new Set()
     for (const commodity of allCommodities) {
@@ -302,13 +438,13 @@ const fetchCommodities = async () => {
       }
     }
     
-    // ÌáÈ¡ËùÓĞÂô¼ÒID
+    // æå–æ‰€æœ‰å–å®¶ID
     const sellerIds = uniqueCommodities.map(c => c.sellerId).filter(id => id)
     
-    // ÅúÁ¿»ñÈ¡Âô¼ÒprofileĞÅÏ¢
+    // æ‰¹é‡è·å–å–å®¶profileä¿¡æ¯
     const profileMap = await fetchUserProfiles(sellerIds)
     
-    // ºÏ²¢profileĞÅÏ¢µ½ÉÌÆ·Êı¾İ
+    // åˆå¹¶profileä¿¡æ¯åˆ°å•†å“æ•°æ®
     let commoditiesWithProfile = uniqueCommodities.map(commodity => {
       const profile = profileMap.get(commodity.sellerId)
       if (profile) {
@@ -321,16 +457,16 @@ const fetchCommodities = async () => {
       return commodity
     })
     
-    // ? °´·¢²¼Ê±¼ä½µĞòÅÅĞò£¨×îĞÂµÄÔÚ×îÇ°Ãæ£©
+    // âœ… æŒ‰å‘å¸ƒæ—¶é—´é™åºæ’åºï¼ˆæœ€æ–°çš„åœ¨æœ€å‰é¢ï¼‰
     commoditiesWithProfile.sort((a, b) => {
       const timeA = a.publishTime ? new Date(a.publishTime).getTime() : 0
       const timeB = b.publishTime ? new Date(b.publishTime).getTime() : 0
-      return timeB - timeA // ½µĞò£º×îĞÂµÄÔÚÇ°
+      return timeB - timeA // é™åºï¼šæœ€æ–°çš„åœ¨å‰
     })
     
     items.value = commoditiesWithProfile
     
-    // Èç¹ûÓĞÄ¬ÈÏID£¬×Ô¶¯Ñ¡Ôñ
+    // å¦‚æœæœ‰é»˜è®¤IDï¼Œè‡ªåŠ¨é€‰æ‹©
     if (props.defaultId) {
       const found = items.value.find(item => item.commodityId === props.defaultId)
       if (found) {
@@ -338,22 +474,22 @@ const fetchCommodities = async () => {
       }
     }
   } catch (error) {
-    ElMessage.error('»ñÈ¡ÉÌÆ·ÁĞ±íÊ§°Ü')
+    ElMessage.error('è·å–å•†å“åˆ—è¡¨å¤±è´¥')
   } finally {
     loading.value = false
   }
 }
 
-// »ñÈ¡¶©µ¥ÁĞ±í£¨Ë«·½µÄ¶©µ¥£©
+// è·å–è®¢å•åˆ—è¡¨ï¼ˆåŒæ–¹çš„è®¢å•ï¼‰
 const fetchOrders = async () => {
   loading.value = true
   try {
-    // »ñÈ¡µ±Ç°ÓÃ»§Óë¶Ô·½ÓÃ»§Ö®¼äµÄ¶©µ¥
+    // è·å–å½“å‰ç”¨æˆ·ä¸å¯¹æ–¹ç”¨æˆ·ä¹‹é—´çš„è®¢å•
     let allOrders = []
     
-    // »ñÈ¡µ±Ç°ÓÃ»§Óë¶Ô·½ÓÃ»§Ö®¼äµÄ¶©µ¥
+    // è·å–å½“å‰ç”¨æˆ·ä¸å¯¹æ–¹ç”¨æˆ·ä¹‹é—´çš„è®¢å•
     if (props.currentUserId && props.otherUserId) {
-      // »ñÈ¡Âò¼Ò¶©µ¥£¨µ±Ç°ÓÃ»§×÷ÎªÂò¼Ò£©
+      // è·å–ä¹°å®¶è®¢å•ï¼ˆå½“å‰ç”¨æˆ·ä½œä¸ºä¹°å®¶ï¼‰
       try {
         const buyerResponse = await orderAPI.getBuyerOrders(1, 100)
         if (buyerResponse.success) {
@@ -363,10 +499,10 @@ const fetchOrders = async () => {
           ))
         }
       } catch (error) {
-        console.error('»ñÈ¡Âò¼Ò¶©µ¥Ê§°Ü:', error)
+        console.error('è·å–ä¹°å®¶è®¢å•å¤±è´¥:', error)
       }
       
-      // »ñÈ¡Âô¼Ò¶©µ¥£¨µ±Ç°ÓÃ»§×÷ÎªÂô¼Ò£©
+      // è·å–å–å®¶è®¢å•ï¼ˆå½“å‰ç”¨æˆ·ä½œä¸ºå–å®¶ï¼‰
       try {
         const sellerResponse = await orderAPI.getSellerOrders(1, 100)
         if (sellerResponse.success) {
@@ -376,11 +512,11 @@ const fetchOrders = async () => {
           ))
         }
       } catch (error) {
-        console.error('»ñÈ¡Âô¼Ò¶©µ¥Ê§°Ü:', error)
+        console.error('è·å–å–å®¶è®¢å•å¤±è´¥:', error)
       }
     }
     
-    // È¥ÖØ£¨¸ù¾İ orderId£©
+    // å»é‡ï¼ˆæ ¹æ® orderIdï¼‰
     const uniqueOrders = []
     const orderIds = new Set()
     for (const order of allOrders) {
@@ -390,17 +526,17 @@ const fetchOrders = async () => {
       }
     }
     
-    // ÌáÈ¡ËùÓĞÂô¼ÒºÍÂò¼ÒID
+    // æå–æ‰€æœ‰å–å®¶å’Œä¹°å®¶ID
     const userIds = []
     uniqueOrders.forEach(order => {
       if (order.sellerId) userIds.push(order.sellerId)
       if (order.buyerId) userIds.push(order.buyerId)
     })
     
-    // ÅúÁ¿»ñÈ¡ÓÃ»§profileĞÅÏ¢
+    // æ‰¹é‡è·å–ç”¨æˆ·profileä¿¡æ¯
     const profileMap = await fetchUserProfiles(userIds)
     
-    // ºÏ²¢profileĞÅÏ¢µ½¶©µ¥Êı¾İ
+    // åˆå¹¶profileä¿¡æ¯åˆ°è®¢å•æ•°æ®
     let ordersWithProfile = uniqueOrders.map(order => {
       const sellerProfile = profileMap.get(order.sellerId)
       const buyerProfile = profileMap.get(order.buyerId)
@@ -414,16 +550,16 @@ const fetchOrders = async () => {
       }
     })
     
-    // ? °´´´½¨Ê±¼ä½µĞòÅÅĞò£¨×îĞÂµÄÔÚ×îÇ°Ãæ£©
+    // âœ… æŒ‰åˆ›å»ºæ—¶é—´é™åºæ’åºï¼ˆæœ€æ–°çš„åœ¨æœ€å‰é¢ï¼‰
     ordersWithProfile.sort((a, b) => {
       const timeA = a.createTime ? new Date(a.createTime).getTime() : 0
       const timeB = b.createTime ? new Date(b.createTime).getTime() : 0
-      return timeB - timeA // ½µĞò£º×îĞÂµÄÔÚÇ°
+      return timeB - timeA // é™åºï¼šæœ€æ–°çš„åœ¨å‰
     })
     
     items.value = ordersWithProfile
     
-    // Èç¹ûÓĞÄ¬ÈÏID£¬×Ô¶¯Ñ¡Ôñ
+    // å¦‚æœæœ‰é»˜è®¤IDï¼Œè‡ªåŠ¨é€‰æ‹©
     if (props.defaultId) {
       const found = items.value.find(item => item.orderId === props.defaultId)
       if (found) {
@@ -431,7 +567,7 @@ const fetchOrders = async () => {
       }
     }
   } catch (error) {
-    ElMessage.error('»ñÈ¡¶©µ¥ÁĞ±íÊ§°Ü')
+    ElMessage.error('è·å–è®¢å•åˆ—è¡¨å¤±è´¥')
   } finally {
     loading.value = false
   }
@@ -439,7 +575,7 @@ const fetchOrders = async () => {
 
 const selectCommodity = (commodity) => {
   if (selectedCommodityId.value === commodity.commodityId) {
-    // È¡ÏûÑ¡Ôñ
+    // å–æ¶ˆé€‰æ‹©
     selectedCommodityId.value = null
   } else {
     selectedCommodityId.value = commodity.commodityId
@@ -448,7 +584,7 @@ const selectCommodity = (commodity) => {
 
 const selectOrder = (order) => {
   if (selectedOrderId.value === order.orderId) {
-    // È¡ÏûÑ¡Ôñ
+    // å–æ¶ˆé€‰æ‹©
     selectedOrderId.value = null
   } else {
     selectedOrderId.value = order.orderId
@@ -472,8 +608,8 @@ const handleCancel = () => {
 }
 
 const handleClose = () => {
-  // ²»Çå¿ÕÑ¡ÖĞ×´Ì¬£¬±£Áô×´Ì¬ÒÔ±ãÏÂ´Î´ò¿ªÊ±»Ö¸´
-  // Ö»Çå¿ÕËÑË÷¹Ø¼ü´Ê
+  // ä¸æ¸…ç©ºé€‰ä¸­çŠ¶æ€ï¼Œä¿ç•™çŠ¶æ€ä»¥ä¾¿ä¸‹æ¬¡æ‰“å¼€æ—¶æ¢å¤
+  // åªæ¸…ç©ºæœç´¢å…³é”®è¯
   searchKeyword.value = ''
 }
 
@@ -491,9 +627,9 @@ const getAvatarUrl = (avatar) => {
   return `http://localhost:8080/api/images/avatars/${avatar}`
 }
 
-// »ñÈ¡¶©µ¥ÉÌÆ·¿ìÕÕµÄµÚÒ»ÕÅÍ¼Æ¬
+// è·å–è®¢å•å•†å“å¿«ç…§çš„ç¬¬ä¸€å¼ å›¾ç‰‡
 const getOrderImage = (order) => {
-  // ÓÅÏÈ¼¶1: commoditySnapshotImages ×Ö¶Î£¨×Ö·û´®»òÊı×é£©
+  // ä¼˜å…ˆçº§1: commoditySnapshotImages å­—æ®µï¼ˆå­—ç¬¦ä¸²æˆ–æ•°ç»„ï¼‰
   if (order.commoditySnapshotImages) {
     if (typeof order.commoditySnapshotImages === 'string') {
       const images = order.commoditySnapshotImages.split(',').map(img => img.trim()).filter(img => img)
@@ -507,7 +643,7 @@ const getOrderImage = (order) => {
     }
   }
   
-  // ÓÅÏÈ¼¶2: commoditySnapshot.images ×Ö¶Î
+  // ä¼˜å…ˆçº§2: commoditySnapshot.images å­—æ®µ
   if (order.commoditySnapshot && order.commoditySnapshot.images) {
     if (typeof order.commoditySnapshot.images === 'string') {
       const images = order.commoditySnapshot.images.split(',').map(img => img.trim()).filter(img => img)
@@ -521,7 +657,7 @@ const getOrderImage = (order) => {
     }
   }
   
-  // ÓÅÏÈ¼¶3: commoditySnapshotImage ×Ö¶Î£¨×Ö·û´®»òÊı×é£©
+  // ä¼˜å…ˆçº§3: commoditySnapshotImage å­—æ®µï¼ˆå­—ç¬¦ä¸²æˆ–æ•°ç»„ï¼‰
   if (order.commoditySnapshotImage) {
     if (typeof order.commoditySnapshotImage === 'string') {
       const images = order.commoditySnapshotImage.split(',').map(img => img.trim()).filter(img => img)
@@ -535,7 +671,7 @@ const getOrderImage = (order) => {
     }
   }
   
-  // ÓÅÏÈ¼¶4: commoditySnapshot ÊÇ×Ö·û´®£¬³¢ÊÔ½âÎöJSON
+  // ä¼˜å…ˆçº§4: commoditySnapshot æ˜¯å­—ç¬¦ä¸²ï¼Œå°è¯•è§£æJSON
   if (typeof order.commoditySnapshot === 'string') {
     try {
       const snapshot = JSON.parse(order.commoditySnapshot)
@@ -552,11 +688,11 @@ const getOrderImage = (order) => {
         }
       }
     } catch (e) {
-      // JSON½âÎöÊ§°Ü£¬ºöÂÔ
+      // JSONè§£æå¤±è´¥ï¼Œå¿½ç•¥
     }
   }
   
-  // ÓÅÏÈ¼¶5: commoditySnapshot ÊÇ¶ÔÏó
+  // ä¼˜å…ˆçº§5: commoditySnapshot æ˜¯å¯¹è±¡
   if (order.commoditySnapshot && typeof order.commoditySnapshot === 'object' && !Array.isArray(order.commoditySnapshot)) {
     if (order.commoditySnapshot.images) {
       if (typeof order.commoditySnapshot.images === 'string') {
@@ -577,25 +713,25 @@ const getOrderImage = (order) => {
 
 const getStatusText = (status) => {
   const statusMap = {
-    'PENDING': '´ı¸¶¿î',
-    'CREATED': '´ıÖ§¸¶',
-    'PAID': 'ÒÑ¸¶¿î',
-    'SHIPPED': 'ÒÑ·¢»õ',
-    'DELIVERED': 'ÒÑËÍ´ï',
-    'COMPLETED': 'ÒÑÍê³É',
-    'CANCELLED': 'ÒÑÈ¡Ïû',
-    'REFUNDED': 'ÒÑÍË¿î',
-    'REFUND_PENDING': 'ÍË¿î´ı´¦Àí',
-    'REFUND_REQUESTED': 'ÍË¿îÖĞ',
-    'REFUND_APPROVED': 'ÍË¿îÍê³É',
-    'REFUND_REJECTED': 'ÍË¿î±»¾Ü',
-    'REFUND_PROCESSING': 'ÍË¿î´¦ÀíÖĞ',
-    'RETURN_PENDING': 'ÍË»õ´ı´¦Àí',
-    'RETURN_APPROVED': 'ÍË»õÒÑÅú×¼',
-    'RETURN_REJECTED': 'ÍË»õ±»¾Ü',
-    'RETURN_PROCESSING': 'ÍË»õ´¦ÀíÖĞ',
-    'RETURN_SHIPPED': 'ÍË»õÒÑ·¢»õ',
-    'RETURN_COMPLETED': 'ÍË»õÒÑÍê³É'
+    'PENDING': 'å¾…ä»˜æ¬¾',
+    'CREATED': 'å¾…æ”¯ä»˜',
+    'PAID': 'å·²ä»˜æ¬¾',
+    'SHIPPED': 'å·²å‘è´§',
+    'DELIVERED': 'å·²é€è¾¾',
+    'COMPLETED': 'å·²å®Œæˆ',
+    'CANCELLED': 'å·²å–æ¶ˆ',
+    'REFUNDED': 'å·²é€€æ¬¾',
+    'REFUND_PENDING': 'é€€æ¬¾å¾…å¤„ç†',
+    'REFUND_REQUESTED': 'é€€æ¬¾ä¸­',
+    'REFUND_APPROVED': 'é€€æ¬¾å®Œæˆ',
+    'REFUND_REJECTED': 'é€€æ¬¾è¢«æ‹’',
+    'REFUND_PROCESSING': 'é€€æ¬¾å¤„ç†ä¸­',
+    'RETURN_PENDING': 'é€€è´§å¾…å¤„ç†',
+    'RETURN_APPROVED': 'é€€è´§å·²æ‰¹å‡†',
+    'RETURN_REJECTED': 'é€€è´§è¢«æ‹’',
+    'RETURN_PROCESSING': 'é€€è´§å¤„ç†ä¸­',
+    'RETURN_SHIPPED': 'é€€è´§å·²å‘è´§',
+    'RETURN_COMPLETED': 'é€€è´§å·²å®Œæˆ'
   }
   return statusMap[status] || status
 }
@@ -625,12 +761,12 @@ const getStatusType = (status) => {
   return typeMap[status] || 'info'
 }
 
-// ¼àÌıµ¯´°ÏÔÊ¾£¬¼ÓÔØÊı¾İ²¢»Ö¸´Ñ¡ÖĞ×´Ì¬
+// ç›‘å¬å¼¹çª—æ˜¾ç¤ºï¼ŒåŠ è½½æ•°æ®å¹¶æ¢å¤é€‰ä¸­çŠ¶æ€
 watch(() => props.modelValue, async (visible) => {
   if (visible) {
     searchKeyword.value = ''
     
-    // »Ö¸´Ñ¡ÖĞ×´Ì¬£¨Èç¹ûÓĞdefaultId£©
+    // æ¢å¤é€‰ä¸­çŠ¶æ€ï¼ˆå¦‚æœæœ‰defaultIdï¼‰
     if (props.defaultId) {
       if (props.type === 'commodity') {
         selectedCommodityId.value = props.defaultId
@@ -639,7 +775,7 @@ watch(() => props.modelValue, async (visible) => {
       }
     }
     
-    // ¼ÓÔØÁĞ±íÊı¾İ
+    // åŠ è½½åˆ—è¡¨æ•°æ®
     if (props.type === 'commodity') {
       await fetchCommodities()
     } else {
@@ -648,8 +784,21 @@ watch(() => props.modelValue, async (visible) => {
   }
 })
 
+// âœ… ç›‘å¬çˆ¶ç»„ä»¶ï¼ˆMessages.vueï¼‰çš„å¢é‡æ›´æ–°ç»“æœï¼Œå®æ—¶æ›´æ–°å¯¹è¯æ¡†åˆ—è¡¨
+if (incrementalUpdateResult) {
+  watch(() => incrementalUpdateResult.timestamp, async (newTimestamp) => {
+    // åªæœ‰å½“å¯¹è¯æ¡†æ‰“å¼€ä¸”æœ‰æ—¶é—´æˆ³æ›´æ–°æ—¶æ‰å¤„ç†
+    if (props.modelValue && newTimestamp && items.value.length > 0) {
+      // âœ… awaitå¼‚æ­¥å‡½æ•°ï¼Œç¡®ä¿profileä¿¡æ¯è¢«æ­£ç¡®è·å–å’Œåˆå¹¶
+      await updateDialogItemsFromPoll(
+        incrementalUpdateResult.commodities || [],
+        incrementalUpdateResult.orders || []
+      )
+    }
+  })
+}
 
-// ¼àÌıdefaultId±ä»¯£¬¸üĞÂÑ¡ÖĞ×´Ì¬£¨µ±¶Ô»°¿ò´ò¿ªÊ±£©
+// ç›‘å¬defaultIdå˜åŒ–ï¼Œæ›´æ–°é€‰ä¸­çŠ¶æ€ï¼ˆå½“å¯¹è¯æ¡†æ‰“å¼€æ—¶ï¼‰
 watch(() => props.defaultId, (newId) => {
   if (props.modelValue && newId) {
     if (props.type === 'commodity') {
@@ -887,7 +1036,7 @@ watch(() => props.defaultId, (newId) => {
   gap: 12px;
 }
 
-/* ÒÆ¶¯¶ËÑùÊ½ */
+/* ç§»åŠ¨ç«¯æ ·å¼ */
 @media (max-width: 900px) {
   :deep(.el-dialog.select-dialog) {
     margin: 5vh auto !important;
@@ -930,7 +1079,7 @@ watch(() => props.defaultId, (newId) => {
     flex-wrap: wrap;
   }
   
-  /* ÒÆ¶¯¶Ë£ºÉÌÆ·¿¨Æ¬µÄÂô¼ÒĞÅÏ¢ÒÆµ½ÏÂ¶Ë£¬Í¬Ò»ĞĞÆ½ÆÌ */
+  /* ç§»åŠ¨ç«¯ï¼šå•†å“å¡ç‰‡çš„å–å®¶ä¿¡æ¯ç§»åˆ°ä¸‹ç«¯ï¼ŒåŒä¸€è¡Œå¹³é“º */
   .item-seller {
     width: 100%;
     flex-direction: row;
@@ -939,7 +1088,7 @@ watch(() => props.defaultId, (newId) => {
     padding-left: 0;
     padding-top: 6px;
     gap: 6px;
-    order: 999; /* ÒÆµ½×îÏÂ·½ */
+    order: 999; /* ç§»åˆ°æœ€ä¸‹æ–¹ */
   }
   
   .seller-avatar {
@@ -961,7 +1110,7 @@ watch(() => props.defaultId, (newId) => {
     font-size: 11px;
   }
   
-  /* ÒÆ¶¯¶Ë£º¶©µ¥¿¨Æ¬µÄÓÃ»§ĞÅÏ¢ÒÆµ½ÏÂ¶Ë£¬Í¬Ò»ĞĞÆ½ÆÌ */
+  /* ç§»åŠ¨ç«¯ï¼šè®¢å•å¡ç‰‡çš„ç”¨æˆ·ä¿¡æ¯ç§»åˆ°ä¸‹ç«¯ï¼ŒåŒä¸€è¡Œå¹³é“º */
   .item-users {
     width: 100%;
     flex-direction: row;
@@ -970,7 +1119,7 @@ watch(() => props.defaultId, (newId) => {
     padding-left: 0;
     padding-top: 6px;
     gap: 12px;
-    order: 999; /* ÒÆµ½×îÏÂ·½ */
+    order: 999; /* ç§»åˆ°æœ€ä¸‹æ–¹ */
   }
   
   .item-user {
@@ -999,7 +1148,7 @@ watch(() => props.defaultId, (newId) => {
   }
   
   .item-check {
-    order: 998; /* ±£³ÖÔÚÓÃ»§ĞÅÏ¢Ö®Ç° */
+    order: 998; /* ä¿æŒåœ¨ç”¨æˆ·ä¿¡æ¯ä¹‹å‰ */
   }
 }
 </style>

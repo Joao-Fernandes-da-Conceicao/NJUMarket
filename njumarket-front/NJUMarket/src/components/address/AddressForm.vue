@@ -7,49 +7,49 @@
       label-width="100px"
     >
       <el-form-item label="收货人姓名" prop="recipientName">
-        <el-input
+        <UnifiedInput
           v-model="form.recipientName"
           placeholder="请输入收货人姓名"
         />
       </el-form-item>
       
       <el-form-item label="收货人电话" prop="recipientPhone">
-        <el-input
+        <UnifiedInput
           v-model="form.recipientPhone"
           placeholder="请输入收货人电话"
         />
       </el-form-item>
       
       <el-form-item label="省份" prop="province">
-        <el-input
+        <UnifiedInput
           v-model="form.province"
           placeholder="请输入省份"
         />
       </el-form-item>
       
       <el-form-item label="城市" prop="city">
-        <el-input
+        <UnifiedInput
           v-model="form.city"
           placeholder="请输入城市"
         />
       </el-form-item>
       
       <el-form-item label="区/县" prop="district">
-        <el-input
+        <UnifiedInput
           v-model="form.district"
           placeholder="请输入区/县"
         />
       </el-form-item>
       
       <el-form-item label="街道地址" prop="streetAddress">
-        <el-input
+        <UnifiedInput
           v-model="form.streetAddress"
           placeholder="请输入街道地址"
         />
       </el-form-item>
       
       <el-form-item label="详细地址" prop="detailAddress">
-        <el-input
+        <UnifiedInput
           v-model="form.detailAddress"
           type="textarea"
           placeholder="请输入详细地址（楼栋、门牌号等，可选）"
@@ -74,7 +74,7 @@
       </el-form-item>
       
       <el-form-item label="地址标签" prop="addressLabel">
-        <el-select
+        <UnifiedSelect
           v-model="form.addressLabel"
           :options="labelOptions"
           placeholder="请选择地址标签"
@@ -87,8 +87,8 @@
       
       <el-form-item>
         <div class="form-actions">
-          <el-button @click="handleCancel">取消</el-button>
-          <el-button type="primary" @click="handleSubmit">确定</el-button>
+          <UnifiedButton @click="handleCancel">取消</UnifiedButton>
+          <UnifiedButton type="primary" @click="handleSubmit">确定</UnifiedButton>
         </div>
       </el-form-item>
     </el-form>
@@ -97,11 +97,17 @@
 
 <script>
 import { ref, reactive, watch } from 'vue'
+import UnifiedInput from '../common/UnifiedInput.vue'
+import UnifiedSelect from '../common/UnifiedSelect.vue'
+import UnifiedButton from '../common/UnifiedButton.vue'
 import AddressMapPicker from './AddressMapPicker.vue'
 
 export default {
   name: 'AddressForm',
   components: {
+    UnifiedInput,
+    UnifiedSelect,
+    UnifiedButton,
     AddressMapPicker
   },
   props: {

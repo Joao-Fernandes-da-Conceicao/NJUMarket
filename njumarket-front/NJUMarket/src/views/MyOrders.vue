@@ -8,15 +8,15 @@
           <h2>请先登录</h2>
           <p>您需要登录后才能查看订单信息</p>
           <div class="prompt-actions">
-            <el-button type="primary" @click="$router.push('/login')">
+            <UnifiedButton type="primary" @click="$router.push('/login')">
               立即登录
-            </el-button>
-            <el-button @click="$router.push('/register')">
+            </UnifiedButton>
+            <UnifiedButton @click="$router.push('/register')">
               注册账号
-            </el-button>
-            <el-button @click="$router.push('/')">
+            </UnifiedButton>
+            <UnifiedButton @click="$router.push('/')">
               返回首页
-            </el-button>
+            </UnifiedButton>
           </div>
         </div>
       </div>
@@ -28,12 +28,12 @@
         <div class="page-header">
           <h1>买家订单</h1>
           <div class="header-actions">
-            <el-button type="success" @click="$router.push('/seller-orders')">
+            <UnifiedButton type="success" @click="$router.push('/seller-orders')">
               卖家订单
-            </el-button>
-            <el-button type="primary" @click="$router.push('/commodities')">
+            </UnifiedButton>
+            <UnifiedButton type="primary" @click="$router.push('/commodities')">
               继续购物
-            </el-button>
+            </UnifiedButton>
           </div>
         </div>
 
@@ -48,9 +48,9 @@
         <div class="orders-list" v-loading="loading">
           <div v-if="orders.length === 0 && !loading" class="empty-state">
             <el-empty :description="getEmptyDescription()">
-              <el-button type="primary" @click="handleEmptyAction()">
+              <UnifiedButton type="primary" @click="handleEmptyAction()">
                 {{ getEmptyActionText() }}
-              </el-button>
+              </UnifiedButton>
             </el-empty>
           </div>
 
@@ -64,75 +64,75 @@
           >
             <template #actions>
               <!-- 状态相关操作 -->
-              <el-button
+              <UnifiedButton
                 v-if="canPay(order)"
                 type="primary"
                 class="action-btn-desktop"
                 @click="handlePay(order.orderId)"
               >
                 立即支付
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="canConfirm(order)"
                 type="success"
                 class="action-btn-desktop"
                 @click="handleConfirm(order.orderId)"
               >
                 确认收货
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="canCancel(order)"
                 class="action-btn-desktop"
                 @click="handleCancel(order.orderId)"
               >
                 取消订单
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="order.orderStatus === 'COMPLETED'"
                 class="action-btn-desktop"
                 @click="handleRefund(order.orderId)"
               >
                 申请退款
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="order.orderStatus === 'REFUND_REJECTED'"
                 type="warning"
                 class="action-btn-desktop"
                 @click="handleRefund(order.orderId)"
               >
                 重新申请退款
-              </el-button>
+              </UnifiedButton>
               
               <!-- 桌面端：查询商品、再下一单、查看详情、删除 -->
-              <el-button
+              <UnifiedButton
                 v-if="canQueryCommodity(order)"
                 class="action-btn-desktop"
                 @click="handleQueryCommodity(order.orderId)"
               >
                 查询商品
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="canCreateNewOrder(order)"
                 type="success"
                 class="action-btn-desktop"
                 @click="handleCreateNewOrder(order.orderId)"
               >
                 再下一单
-              </el-button>
-              <el-button 
+              </UnifiedButton>
+              <UnifiedButton 
                 class="action-btn-desktop"
                 @click="viewOrderDetail(order.orderId)"
               >
                 查看详情
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="canDeleteOrder(order)"
                 type="danger"
                 class="action-btn-desktop"
                 @click="handleDelete(order.orderId)"
               >
                 删除
-              </el-button>
+              </UnifiedButton>
               
               <!-- 移动端：操作选择器 -->
               <div class="action-select-mobile" @click.stop="toggleActionSelect(order.orderId)">
@@ -203,6 +203,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import OrderTabs from '../components/order/OrderTabs.vue'
 import OrderCard from '../components/order/OrderCard.vue'
 import Pagination from '../components/common/Pagination.vue'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
 
 export default {
   name: 'MyOrders',
@@ -211,6 +212,7 @@ export default {
     OrderCard,
     ArrowDown,
     Pagination,
+    UnifiedButton
   },
   setup() {
     const router = useRouter()

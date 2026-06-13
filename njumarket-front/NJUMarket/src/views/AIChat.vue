@@ -4,10 +4,10 @@
       <div class="chat-sidebar">
         <div class="sidebar-header">
           <h3>聊天列表</h3>
-          <el-button text @click="createNewChat" size="small">
+          <UnifiedButton text @click="createNewChat" size="small">
             <el-icon><Plus /></el-icon>
             新建对话
-          </el-button>
+          </UnifiedButton>
         </div>
         <div class="chat-list" v-loading="chatListLoading">
           <div 
@@ -40,7 +40,7 @@
             </div>
           </div>
           <div class="header-actions">
-            <el-button text @click="clearConversation">清空对话</el-button>
+            <UnifiedButton text @click="clearConversation">清空对话</UnifiedButton>
           </div>
         </div>
 
@@ -111,7 +111,7 @@
 
         <!-- 输入区域 -->
         <div class="input-area">
-          <el-input
+          <UnifiedInput
             v-model="inputMessage"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 6 }"
@@ -121,7 +121,7 @@
           />
           <div class="input-actions">
             <span class="input-tip">Enter 发送，Ctrl + Enter 换行</span>
-            <el-button 
+            <UnifiedButton 
               type="primary" 
               :disabled="!inputMessage.trim() || sending" 
               @click="sendMessage"
@@ -129,7 +129,7 @@
               <el-icon v-if="!sending"><Promotion /></el-icon>
               <span v-if="!sending">发送</span>
               <span v-else>发送中...</span>
-            </el-button>
+            </UnifiedButton>
           </div>
         </div>
       </div>
@@ -143,6 +143,8 @@ import { useUserStore } from '../stores/user'
 import { commodityAPI } from '../api'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, Promotion, Plus } from '@element-plus/icons-vue'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
+import UnifiedInput from '../components/common/UnifiedInput.vue'
 import CommodityCard from '../components/commodity/CommodityCard.vue'
 import { formatTime } from '../utils/formatUtils'
 

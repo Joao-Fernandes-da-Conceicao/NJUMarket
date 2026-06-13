@@ -12,6 +12,7 @@
               v-model:keyword="searchKeyword"
               placeholder="搜索商品..."
               @search="handleSearch"
+              @ai-search="handleAISearch"
             />
             <QuickLinks @click="searchByCategory" />
           </div>
@@ -83,6 +84,19 @@ const handleSearch = () => {
     router.push({
       path: '/commodities',
       query: { keyword: searchKeyword.value.trim() }
+    })
+  }
+}
+
+// AI搜索处理
+const handleAISearch = () => {
+  if (searchKeyword.value.trim()) {
+    router.push({
+      path: '/commodities',
+      query: { 
+        keyword: searchKeyword.value.trim(),
+        aiSearch: 'true'
+      }
     })
   }
 }

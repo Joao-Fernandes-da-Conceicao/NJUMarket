@@ -6,9 +6,9 @@
         <div class="page-header">
           <h1>{{ isEdit ? '编辑商品' : '发布商品' }}</h1>
           <div class="header-actions">
-            <el-button @click="$router.push('/home')">
+            <UnifiedButton @click="$router.push('/home')">
               返回商品管理
-            </el-button>
+            </UnifiedButton>
           </div>
         </div>
 
@@ -25,7 +25,7 @@
               <h3 class="section-title">基本信息</h3>
               
               <el-form-item label="商品标题" prop="title">
-                <el-input
+                <UnifiedInput
                   v-model="publishForm.title"
                   placeholder="请输入商品标题"
                   maxlength="50"
@@ -34,7 +34,7 @@
               </el-form-item>
 
               <el-form-item label="商品描述" prop="description">
-                <el-input
+                <UnifiedInput
                   v-model="publishForm.description"
                   type="textarea"
                   placeholder="请详细描述商品信息"
@@ -46,7 +46,7 @@
               </el-form-item>
 
               <el-form-item label="商品分类" prop="category">
-                <el-select
+                <UnifiedSelect
                   v-model="publishForm.category"
                   :options="categoryOptions"
                   :placeholder="'请选择分类'"
@@ -54,7 +54,7 @@
               </el-form-item>
 
               <el-form-item label="成色等级" prop="conditionLevel">
-                <el-select
+                <UnifiedSelect
                   v-model="publishForm.conditionLevel"
                   :options="conditionOptions"
                   :placeholder="'请选择成色'"
@@ -67,7 +67,7 @@
               <h3 class="section-title">价格库存</h3>
               
               <el-form-item label="商品价格" prop="price">
-                <el-input
+                <UnifiedInput
                   v-model="publishForm.price"
                   placeholder="请输入商品价格"
                   type="number"
@@ -78,7 +78,7 @@
               </el-form-item>
 
               <el-form-item label="库存数量" prop="stock">
-                <el-input
+                <UnifiedInput
                   v-model="publishForm.stock"
                   placeholder="请输入库存数量"
                   type="number"
@@ -98,7 +98,7 @@
                   @change="handleAddressChange"
                 />
                 <!-- 保留原有字段用于兼容（隐藏） -->
-                <el-input
+                <UnifiedInput
                   v-model="publishForm.location"
                   placeholder="请输入所在位置（如果未选择地址）"
                   class="pill-input"
@@ -134,10 +134,10 @@
 
             <!-- 提交按钮 -->
             <div class="form-actions">
-              <el-button size="large" @click="handleCancel">
+              <UnifiedButton size="large" @click="handleCancel">
                 取消
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="!isEdit"
                 type="warning"
                 size="large"
@@ -145,16 +145,16 @@
                 @click="handleSaveAsDraft"
               >
                 保存草稿
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 type="primary"
                 size="large"
                 :loading="publishLoading"
                 @click="handlePublish"
               >
                 {{ isEdit ? '更新商品' : '发布商品' }}
-              </el-button>
-              <el-button
+              </UnifiedButton>
+              <UnifiedButton
                 v-if="!isEdit"
                 type="success"
                 size="large"
@@ -162,7 +162,7 @@
                 @click="handlePublishAndActivate"
               >
                 发布并上架
-              </el-button>
+              </UnifiedButton>
             </div>
           </el-form>
         </div>
@@ -177,11 +177,17 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { commodityAPI } from '../api'
 import { ElMessage } from 'element-plus'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
+import UnifiedSelect from '../components/common/UnifiedSelect.vue'
+import UnifiedInput from '../components/common/UnifiedInput.vue'
 import AddressSelector from '../components/address/AddressSelector.vue'
 
 export default {
   name: 'PublishCommodity',
   components: {
+    UnifiedButton,
+    UnifiedSelect,
+    UnifiedInput,
     AddressSelector
   },
   setup() {

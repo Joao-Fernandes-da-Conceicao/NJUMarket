@@ -15,13 +15,13 @@
         </div>
       </div>
       <span class="order-time">{{ formatTime(order.createTime) }}</span>
-      <el-tag 
+      <UnifiedTag 
         :type="getStatusType(order.orderStatus)" 
         size="small"
         class="order-status-tag"
       >
         {{ getStatusText(order.orderStatus) }}
-      </el-tag>
+      </UnifiedTag>
     </div>
 
     <div class="order-content">
@@ -39,14 +39,14 @@
         <div class="commodity-details">
           <h3 class="commodity-title">
             {{ getCommoditySnapshotTitle(order) || order.commodity?.title }}
-            <el-tag 
+            <UnifiedTag 
               v-if="isCommoditySnapshotOffShelf(order)" 
               type="warning" 
               size="small"
               style="margin-left: 8px;"
             >
               已下架
-            </el-tag>
+            </UnifiedTag>
           </h3>
           <p class="commodity-price">¥{{ order.payAmount }}</p>
           <p class="commodity-quantity">数量：{{ order.quantity }}</p>
@@ -139,6 +139,7 @@ import { defineProps, defineEmits, ref } from 'vue'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { ElAvatar } from 'element-plus'
 import { formatTime } from '../../utils/formatUtils'
+import UnifiedTag from '../common/UnifiedTag.vue'
 import { imageAPI } from '../../api'
 
 const props = defineProps({

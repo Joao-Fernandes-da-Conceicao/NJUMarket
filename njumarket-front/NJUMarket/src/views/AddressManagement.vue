@@ -5,9 +5,9 @@
         <div class="page-header">
           <h1>地址管理</h1>
           <div class="header-actions">
-            <el-button @click="$router.go(-1)">
+            <UnifiedButton @click="$router.go(-1)">
               返回
-            </el-button>
+            </UnifiedButton>
           </div>
         </div>
         
@@ -19,11 +19,13 @@
 
 <script>
 import { defineComponent } from 'vue'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
 import AddressManager from '../components/address/AddressManager.vue'
 
 export default defineComponent({
   name: 'AddressManagement',
   components: {
+    UnifiedButton,
     AddressManager
   }
 })

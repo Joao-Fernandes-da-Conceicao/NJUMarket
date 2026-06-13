@@ -15,12 +15,12 @@
       
       <!-- 商品状态标签 -->
       <div class="status-badge">
-        <el-tag 
+        <UnifiedTag 
           :type="getStatusType(commodity.commodityStatus)"
           size="small"
         >
           {{ getStatusText(commodity.commodityStatus) }}
-        </el-tag>
+        </UnifiedTag>
       </div>
     </div>
     
@@ -52,12 +52,12 @@
       
       <!-- 标签（分类和成色） -->
       <div v-if="commodity.category || commodity.conditionLevel" class="commodity-tags">
-        <el-tag v-if="commodity.category" size="small" type="info">
+        <UnifiedTag v-if="commodity.category" size="small" type="info">
           {{ commodity.category }}
-        </el-tag>
-        <el-tag v-if="commodity.conditionLevel" size="small" type="warning">
+        </UnifiedTag>
+        <UnifiedTag v-if="commodity.conditionLevel" size="small" type="warning">
           {{ commodity.conditionLevel }}
-        </el-tag>
+        </UnifiedTag>
       </div>
       
       <!-- 价格 -->
@@ -70,51 +70,51 @@
     <div v-if="showActions" class="commodity-actions">
       <div class="action-buttons">
         <!-- 草稿商品：发布按钮 -->
-        <el-button
+        <UnifiedButton
           v-if="commodity.commodityStatus === 'DRAFT'"
           type="primary"
           @click="$emit('publish', commodity.commodityId)"
         >
           发布
-        </el-button>
+        </UnifiedButton>
         
         <!-- 已发布商品：上架按钮 -->
-        <el-button
+        <UnifiedButton
           v-if="commodity.commodityStatus === 'PUBLISHED'"
           type="success"
           @click="$emit('shelf', commodity.commodityId)"
         >
           上架
-        </el-button>
+        </UnifiedButton>
         
         <!-- 已上架商品：下架按钮 -->
-        <el-button
+        <UnifiedButton
           v-if="commodity.commodityStatus === 'ON_SHELF'"
           @click="$emit('unshelf', commodity.commodityId)"
         >
           下架
-        </el-button>
+        </UnifiedButton>
         
         <!-- 已下架商品：重新上架按钮 -->
-        <el-button
+        <UnifiedButton
           v-if="commodity.commodityStatus === 'OFF_SHELF'"
           type="primary"
           @click="$emit('republish', commodity.commodityId)"
         >
           重新上架
-        </el-button>
+        </UnifiedButton>
         
         <!-- 所有商品：编辑按钮 -->
-        <el-button @click="$emit('edit', commodity.commodityId)">
+        <UnifiedButton @click="$emit('edit', commodity.commodityId)">
           编辑
-        </el-button>
+        </UnifiedButton>
         
-        <el-button
+        <UnifiedButton
           type="danger"
           @click="$emit('delete', commodity.commodityId)"
         >
           删除
-        </el-button>
+        </UnifiedButton>
       </div>
     </div>
   </div>
@@ -125,6 +125,8 @@ import { defineProps, defineEmits } from 'vue'
 import { imageAPI } from '../../api'
 import { formatPrice } from '../../utils/formatUtils'
 import { Picture, Location, View, ShoppingBag } from '@element-plus/icons-vue'
+import UnifiedButton from '../common/UnifiedButton.vue'
+import UnifiedTag from '../common/UnifiedTag.vue'
 
 const props = defineProps({
   commodity: {

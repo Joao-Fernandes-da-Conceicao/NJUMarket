@@ -188,6 +188,10 @@ export const commodityAPI = {
   // 搜索商品
   search: (params) => api.get('/public/commodity/search', { params }),
   
+  // AI语义搜索
+  aiSearch: (query, location) => 
+    api.get('/public/commodity/ai-search', { params: { query, location } }),
+  
   // 获取商品详情
   getDetail: (id) => api.get(`/public/commodity/${id}`),
   
@@ -329,58 +333,9 @@ export const commodityAPI = {
       const decoder = new TextDecoder();
       let buffer = '';
       
-      // 解析 buffer 中的 SSE 事件，返回 true 表示已处理 complete/error 并结束
-      const processSSEBuffer = (buf) => {
-        const lines = buf.split('\n');
-        let eventType = 'message';
-        let eventData = '';
-        for (const line of lines) {
-          if (line.startsWith('event:')) {
-            eventType = line.substring(6).trim();
-          } else if (line.startsWith('data:')) {
-            eventData = line.substring(5).trim();
-          } else if (line === '') {
-            if (eventData) {
-              if (eventType === 'token') {
-                if (onToken) onToken(eventData);
-              } else if (eventType === 'complete') {
-                try {
-                  const data = JSON.parse(eventData);
-                  if (onComplete) onComplete(data);
-                  return true;
-                } catch (e) {
-                  console.error('解析完成事件失败:', e);
-                  if (onError) onError('解析完成事件失败');
-                  return true;
-                }
-              } else if (eventType === 'error') {
-                try {
-                  const data = JSON.parse(eventData);
-                  if (onError) onError(data.error || '流式对话失败');
-                } catch (e) {
-                  if (onError) onError('流式对话失败');
-                }
-                return true;
-              }
-            }
-            eventType = 'message';
-            eventData = '';
-          }
-        }
-        return false;
-      };
-
       const readStream = () => {
         reader.read().then(({ done, value }) => {
           if (done) {
-            // 流结束：先处理剩余 buffer（complete 可能随最后一块到达）
-            if (buffer.trim()) {
-              const ended = processSSEBuffer(buffer + '\n\n');
-              if (ended) {
-                isClosed = true;
-                return;
-              }
-            }
             if (!isClosed) {
               isClosed = true;
               if (onError) {
@@ -390,18 +345,66 @@ export const commodityAPI = {
             return;
           }
           
-          if (value && value.length) {
-            buffer += decoder.decode(value, { stream: true });
-          }
+          // 解码数据
+          buffer += decoder.decode(value, { stream: true });
+          
+          // 处理 SSE 格式的数据
           const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
+          buffer = lines.pop() || ''; // 保留最后一行（可能不完整）
           
-          const ended = processSSEBuffer(lines.join('\n') + '\n');
-          if (ended) {
-            isClosed = true;
-            return;
+          let eventType = 'message';
+          let eventData = '';
+          
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventType = line.substring(6).trim();
+            } else if (line.startsWith('data:')) {
+              eventData = line.substring(5).trim();
+            } else if (line === '') {
+              // 空行表示一个事件结束
+              if (eventData) {
+                if (eventType === 'token') {
+                  if (onToken) {
+                    onToken(eventData);
+                  }
+                } else if (eventType === 'complete') {
+                  try {
+                    const data = JSON.parse(eventData);
+                    if (onComplete) {
+                      onComplete(data);
+                    }
+                    isClosed = true;
+                    return;
+                  } catch (e) {
+                    console.error('解析完成事件失败:', e);
+                    if (onError) {
+                      onError('解析完成事件失败');
+                    }
+                    isClosed = true;
+                    return;
+                  }
+                } else if (eventType === 'error') {
+                  try {
+                    const data = JSON.parse(eventData);
+                    if (onError) {
+                      onError(data.error || '流式对话失败');
+                    }
+                  } catch (e) {
+                    if (onError) {
+                      onError('流式对话失败');
+                    }
+                  }
+                  isClosed = true;
+                  return;
+                }
+              }
+              // 重置事件数据
+              eventType = 'message';
+              eventData = '';
+            }
           }
           
+          // 继续读取
           readStream();
         }).catch(error => {
           if (!isClosed && error.name !== 'AbortError') {
@@ -436,6 +439,12 @@ export const commodityAPI = {
       }
     };
   },
+  // ✅ AI Agent 智能搜索（超时时间 30 秒，因为 AI Agent 处理较慢）
+  aiAgentSearch: (query, conversationId) =>
+    api.get('/user/ai-agent/search', { 
+      params: { query, conversationId },
+      timeout: 60000 // 60 秒超时
+    }),
   // ✅ 获取用户的所有AI聊天列表
   getAIChatList: (limit = 50) =>
     api.get('/user/ai-agent/chats', { 
@@ -554,18 +563,14 @@ export const profileAPI = {
   // 更新资料（使用新的UserProfileUpdateDTO）
   update: (data) => api.put('/user/profile/me', data),
   
-  // 上传头像到 Image 服务（第一步），返回 imageUrl
+  // 上传头像
   uploadAvatar: (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post('/user/image/upload-avatar', formData, {
+    return api.post('/user/profile/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
-
-  // 将头像 URL 写入用户档案（第二步）
-  setAvatarUrl: (imageUrl) =>
-    api.post('/user/profile/avatar', null, { params: { imageUrl } }),
   
   // 搜索用户
   search: (keyword, page = 1, size = 10) => 

@@ -3,7 +3,7 @@
     <el-form-item :label="label" :prop="prop" :required="required">
       <div class="address-selector-content">
         <!-- 地址选择下拉框 -->
-        <el-select
+        <UnifiedSelect
           v-model="selectedAddressId"
           :options="addressOptions"
           :placeholder="placeholder"
@@ -12,14 +12,14 @@
         />
         
         <!-- 管理地址按钮 -->
-        <el-button 
+        <UnifiedButton 
           type="default" 
           size="small" 
           @click="showManageDialog = true"
           class="manage-btn"
         >
           管理地址
-        </el-button>
+        </UnifiedButton>
       </div>
       
       <!-- 显示选中的地址信息 -->
@@ -71,12 +71,16 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { addressAPI } from '../../api'
 import { ElMessage } from 'element-plus'
+import UnifiedSelect from '../common/UnifiedSelect.vue'
+import UnifiedButton from '../common/UnifiedButton.vue'
 import AddressManager from './AddressManager.vue'
 import { Close } from '@element-plus/icons-vue'
 
 export default {
   name: 'AddressSelector',
   components: {
+    UnifiedSelect,
+    UnifiedButton,
     AddressManager,
     Close
   },

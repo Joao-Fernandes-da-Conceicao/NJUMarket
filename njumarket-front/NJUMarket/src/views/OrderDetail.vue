@@ -9,21 +9,21 @@
       <div class="page-header">
         <h1>订单详情</h1>
         <div class="page-header-actions">
-          <el-button 
+          <UnifiedButton 
             @click="$router.back()" 
             icon="ArrowLeft"
             class="back-button"
             :round="true"
           >
             返回
-          </el-button>
-          <el-tag 
+          </UnifiedButton>
+          <UnifiedTag 
             :type="getStatusType(order.orderStatus)" 
             size="large"
             class="status-tag"
           >
             {{ getStatusText(order.orderStatus) }}
-          </el-tag>
+          </UnifiedTag>
         </div>
       </div>
 
@@ -79,14 +79,14 @@
           <div class="commodity-details">
             <h3 class="commodity-title">
               {{ getCommodityTitle(order) }}
-              <el-tag 
+              <UnifiedTag 
                 v-if="isCommoditySnapshotOffShelf(order)" 
                 type="warning" 
                 size="small"
                 style="margin-left: 8px;"
               >
                 已下架
-              </el-tag>
+              </UnifiedTag>
             </h3>
             <p class="commodity-price">单价：¥{{ getCommodityPrice(order) }}</p>
             <p class="commodity-quantity">数量：{{ order.quantity }}</p>
@@ -145,15 +145,15 @@
               邮箱：{{ getSellerEmail(order) }}
             </p>
             <div v-if="isSellerDeleted(order)" class="deleted-notice">
-              <el-tag type="danger" size="small">用户已注销</el-tag>
+              <UnifiedTag type="danger" size="small">用户已注销</UnifiedTag>
             </div>
             <div v-else class="seller-actions">
-              <el-button @click="contactSeller" type="primary" size="small">
+              <UnifiedButton @click="contactSeller" type="primary" size="small">
                 联系卖家
-              </el-button>
-              <el-button @click="viewSellerProfile" size="small">
+              </UnifiedButton>
+              <UnifiedButton @click="viewSellerProfile" size="small">
                 查看资料
-              </el-button>
+              </UnifiedButton>
             </div>
           </div>
         </div>
@@ -182,15 +182,15 @@
               邮箱：{{ getBuyerEmail(order) }}
             </p>
             <div v-if="isBuyerDeleted(order)" class="deleted-notice">
-              <el-tag type="danger" size="small">用户已注销</el-tag>
+              <UnifiedTag type="danger" size="small">用户已注销</UnifiedTag>
             </div>
             <div v-else class="buyer-actions">
-              <el-button @click="contactBuyer" type="primary" size="small">
+              <UnifiedButton @click="contactBuyer" type="primary" size="small">
                 联系买家
-              </el-button>
-              <el-button @click="viewBuyerProfile" size="small">
+              </UnifiedButton>
+              <UnifiedButton @click="viewBuyerProfile" size="small">
                 查看资料
-              </el-button>
+              </UnifiedButton>
             </div>
           </div>
         </div>
@@ -201,14 +201,14 @@
         <div class="section-header">
         <h2>收货信息</h2>
           <!-- 修改地址按钮：只有买家或卖家本人，且订单状态为 CREATED 或 PAID 时显示 -->
-          <el-button 
+          <UnifiedButton 
             v-if="canModifyAddress"
             type="primary" 
             size="small"
             @click="showEditAddressDialog = true"
           >
             修改地址
-          </el-button>
+          </UnifiedButton>
         </div>
         <div class="shipping-info">
           <!-- 收货人信息（如果有快照） -->
@@ -278,10 +278,10 @@
               />
             </div>
             <div class="address-manager-modal__footer">
-              <el-button @click="showEditAddressDialog = false">取消</el-button>
-              <el-button type="primary" @click="handleUpdateAddress" :loading="updatingAddress">
+              <UnifiedButton @click="showEditAddressDialog = false">取消</UnifiedButton>
+              <UnifiedButton type="primary" @click="handleUpdateAddress" :loading="updatingAddress">
                 确认修改
-              </el-button>
+              </UnifiedButton>
             </div>
           </div>
         </div>
@@ -343,56 +343,56 @@
         <div class="action-buttons">
           <!-- 买家操作 -->
           <template v-if="isBuyer">
-            <el-button
+            <UnifiedButton
               v-if="payCheck.canPay"
               type="primary"
               @click="handlePay"
             >
               立即支付
-            </el-button>
-            <el-button
+            </UnifiedButton>
+            <UnifiedButton
               v-if="confirmCheck.canConfirm"
               type="success"
               @click="handleConfirm"
             >
               确认收货
-            </el-button>
-            <el-button
+            </UnifiedButton>
+            <UnifiedButton
               v-if="cancelCheck.canCancel"
               @click="handleCancel"
             >
               取消订单
-            </el-button>
-            <el-button
+            </UnifiedButton>
+            <UnifiedButton
               v-if="order.orderStatus === 'COMPLETED'"
               @click="handleRate"
             >
               评价订单
-            </el-button>
-            <el-button
+            </UnifiedButton>
+            <UnifiedButton
               v-if="order.orderStatus === 'COMPLETED'"
               @click="handleReorder"
             >
               再来一单
-            </el-button>
+            </UnifiedButton>
           </template>
 
           <!-- 卖家操作 -->
           <template v-if="isSeller">
-            <el-button
+            <UnifiedButton
               v-if="shipCheck.canShip"
               type="primary"
               @click="handleShip"
             >
               立即发货
-            </el-button>
-            <el-button
+            </UnifiedButton>
+            <UnifiedButton
               v-if="order.orderStatus === 'REFUND_REQUESTED'"
               type="warning"
               @click="handleRefund"
             >
               处理退款
-            </el-button>
+            </UnifiedButton>
           </template>
         </div>
       </div>
@@ -402,7 +402,7 @@
 
     <div v-else class="empty-state">
       <el-empty description="订单不存在或已删除">
-        <el-button @click="$router.back()">返回</el-button>
+        <UnifiedButton @click="$router.back()">返回</UnifiedButton>
       </el-empty>
     </div>
   </div>
@@ -416,12 +416,16 @@ import { orderAPI, imageAPI, contactAPI } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Close } from '@element-plus/icons-vue'
 import { canPayOrder, canConfirmOrder, canCancelOrder, canShipOrder } from '../utils/orderRules'
+import UnifiedButton from '../components/common/UnifiedButton.vue'
+import UnifiedTag from '../components/common/UnifiedTag.vue'
 import AddressSelector from '../components/address/AddressSelector.vue'
 
 export default {
   name: 'OrderDetail',
   components: {
+    UnifiedButton,
     Close,
+    UnifiedTag,
     AddressSelector
   },
   setup() {
