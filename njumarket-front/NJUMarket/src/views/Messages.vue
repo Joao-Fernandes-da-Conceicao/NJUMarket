@@ -265,8 +265,11 @@ export default {
     
     // 获取头像URL
     const getAvatarUrl = (avatar) => {
-      if (!avatar) return ''
+      if (!avatar) return 'http://localhost:8080/api/images/avatars/default'
       if (avatar.startsWith('http')) return avatar
+      // 已是完整路径（以 / 开头）
+      if (avatar.startsWith('/')) return `http://localhost:8080${avatar}`
+      // 纯文件名
       return `http://localhost:8080/api/images/avatars/${avatar}`
     }
     
@@ -817,6 +820,7 @@ export default {
     let pollTimer = null
     let isPolling = false // 防止并发轮询
     
+    // eslint-disable-next-line no-unused-vars
     const startPolling = () => {
       // 清除旧的定时器
       if (pollTimer) {
@@ -867,6 +871,7 @@ export default {
       }, POLL_INTERVAL)
     }
     
+    // eslint-disable-next-line no-unused-vars
     const stopPolling = () => {
       if (pollTimer) {
         clearInterval(pollTimer)
@@ -944,8 +949,7 @@ export default {
       // 监听窗口大小变化
       window.addEventListener('resize', handleResize)
       
-      // ✅ 启动定期轮询
-      startPolling()
+      // 轮询已废弃，后端 message 服务通过 WebSocket 推送实时消息
       window.addEventListener('orientationchange', handleResize)
       
       if (isLoggedIn.value) {
@@ -970,8 +974,7 @@ export default {
       window.removeEventListener('resize', handleResize)
       window.removeEventListener('orientationchange', handleResize)
       
-      // ✅ 停止定期轮询
-      stopPolling()
+      // 轮询已废弃
       
       // ✅ 清空当前选中的对话，避免切换到其他页面后仍自动标记已读
       messageStore.clearCurrentConversation()

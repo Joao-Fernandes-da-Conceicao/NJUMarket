@@ -1,6 +1,8 @@
 package com.njumarket.gateway.filter;
 
 import com.njumarket.njumarket.utils.JwtUtils;
+import com.njumarket.njumarket.web.AuthCookieNames;
+import org.springframework.http.HttpCookie;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -85,13 +87,16 @@ public class AdminAuthenticationFilter implements GlobalFilter, Ordered {
      * 从请求中获取Token
      */
     private String getTokenFromRequest(ServerHttpRequest request) {
-        // 1. 从Authorization头获取
+        HttpCookie cookie = request.getCookies().getFirst(AuthCookieNames.ADMIN_TOKEN);
+        if (cookie != null && StringUtils.hasText(cookie.getValue())) {
+            return cookie.getValue();
+        }
+
         String bearerToken = request.getHeaders().getFirst("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
 
-        // 2. 从查询参数获取（备用方案）
         String tokenParam = request.getQueryParams().getFirst("token");
         if (StringUtils.hasText(tokenParam)) {
             return tokenParam;

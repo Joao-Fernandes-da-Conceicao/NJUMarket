@@ -2,6 +2,8 @@ package com.njumarket.gateway.filter;
 
 import com.njumarket.njumarket.utils.JwtUtils;
 import com.njumarket.njumarket.utils.RedisConstants;
+import com.njumarket.njumarket.web.AuthCookieNames;
+import org.springframework.http.HttpCookie;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -17,6 +19,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -61,7 +64,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         String token = getTokenFromRequest(request);
         
         if (!StringUtils.hasText(token)) {
-            log.warn("请求缺少Authorization头: {}", requestURI);
+            log.warn("请求缺少用户认证 Cookie 或 Authorization 头: {}", requestURI);
             return unauthorizedResponse(exchange, "用户未登录，请先登录");
         }
 
@@ -97,10 +100,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                                             .header("X-User-Id", userId)
                                             .header("X-Authenticated", "true")
                                             .build();
-                                    return chain.filter(exchange.mutate().request(modifiedRequest).build());
+                                    return chain.filter(exchange.mutate().request(modifiedRequest).build())
+                                            .onErrorResume(ex -> upstreamErrorResponse(exchange, requestURI, ex));
                                 });
                     })
                     .onErrorResume(e -> {
+                        if (isUpstreamError(e)) {
+                            return upstreamErrorResponse(exchange, requestURI, e);
+                        }
                         log.error("Session模式Token验证失败: sessionId={}, uri={}, error={}", sessionId, requestURI, e.getMessage(), e);
                         return unauthorizedResponse(exchange, "Token验证失败，请重新登录");
                     });
@@ -124,9 +131,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                             .header("X-User-Id", userId)
                             .header("X-Authenticated", "true")
                             .build();
-                    return chain.filter(exchange.mutate().request(modifiedRequest).build());
+                    return chain.filter(exchange.mutate().request(modifiedRequest).build())
+                            .onErrorResume(ex -> upstreamErrorResponse(exchange, requestURI, ex));
                 })
                 .onErrorResume(e -> {
+                    if (isUpstreamError(e)) {
+                        return upstreamErrorResponse(exchange, requestURI, e);
+                    }
                     log.error("旧版Token验证失败: userId={}, uri={}, error={}", userId, requestURI, e.getMessage(), e);
                     return unauthorizedResponse(exchange, "Token验证失败，请重新登录");
                 });
@@ -136,13 +147,19 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
      * 从请求中获取Token
      */
     private String getTokenFromRequest(ServerHttpRequest request) {
-        // 1. 从Authorization头获取
+        // 1. HttpOnly Cookie（优先，避免 XSS 窃取 token）
+        HttpCookie accessCookie = request.getCookies().getFirst(AuthCookieNames.USER_ACCESS);
+        if (accessCookie != null && StringUtils.hasText(accessCookie.getValue())) {
+            return accessCookie.getValue();
+        }
+
+        // 2. Authorization 头（兼容旧客户端）
         String bearerToken = request.getHeaders().getFirst("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
 
-        // 2. 从查询参数获取（备用方案）
+        // 3. 查询参数（WebSocket/SockJS 等历史兼容）
         String tokenParam = request.getQueryParams().getFirst("token");
         if (StringUtils.hasText(tokenParam)) {
             return tokenParam;
@@ -203,6 +220,33 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 // 如果设置失败，尝试直接返回空响应
                 return Mono.empty();
             }
+        });
+    }
+
+    private boolean isUpstreamError(Throwable e) {
+        return e instanceof UnknownHostException
+                || e instanceof java.net.ConnectException
+                || e instanceof java.util.concurrent.TimeoutException
+                || e instanceof io.netty.channel.ConnectTimeoutException;
+    }
+
+    private Mono<Void> upstreamErrorResponse(ServerWebExchange exchange, String requestURI, Throwable e) {
+        log.error("上游服务不可达: uri={}, error={}", requestURI, e.getMessage());
+        ServerHttpResponse response = exchange.getResponse();
+        if (response.isCommitted()) {
+            return Mono.empty();
+        }
+        return Mono.defer(() -> {
+            response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+            try {
+                if (!response.getHeaders().containsKey("Content-Type")) {
+                    response.getHeaders().add("Content-Type", MediaType.APPLICATION_JSON_VALUE);
+                }
+            } catch (UnsupportedOperationException ignored) { }
+            String body = "{\"success\":false,\"errorMsg\":\"服务暂时不可用，请稍后重试\"}";
+            return response.writeWith(
+                    Mono.just(response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8)))
+            );
         });
     }
 

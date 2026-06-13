@@ -15,7 +15,8 @@ import java.util.List;
  * 启用 Resilience4j 熔断器保护
  */
 @FeignClient(
-    name = "njumarket-service-order", 
+    name = "njumarket-service-trade",
+    contextId = "messageOrderClient",
     path = "/api/internal",
     fallback = com.njumarket.message.client.fallback.OrderClientFallback.class
 )
@@ -26,5 +27,17 @@ public interface OrderClient {
      */
     @GetMapping("/order/{orderId}")
     Result getOrderById(@PathVariable String orderId);
+
+    /**
+     * 批量查询订单基础信息（内部接口，供增量轮询使用）
+     */
+    @PostMapping("/orders/batch")
+    Result getOrdersBatch(@RequestBody List<String> orderIds);
+
+    /**
+     * 批量查询商品基础信息（内部接口，复用 /api/internal 路径）
+     */
+    @PostMapping("/commodities/batch")
+    Result getCommoditiesBatch(@RequestBody List<String> commodityIds);
 }
 

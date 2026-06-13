@@ -149,5 +149,37 @@ public interface MessageRepository extends JpaRepository<Message, String>, org.s
     List<MessageIdProjection> findUnreadMessageIdsByConversationAndReceiver(
             @Param("conversationId") String conversationId,
             @Param("receiverId") String receiverId);
+
+    // ✅ 增量轮询：查询用户消息中涉及的所有商品ID（去重）
+    @Query("SELECT DISTINCT m.commodityId FROM Message m WHERE " +
+           "(m.senderId = :userId OR m.receiverId = :userId) " +
+           "AND m.commodityId IS NOT NULL " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true)")
+    List<String> findDistinctCommodityIdsByUser(@Param("userId") String userId);
+
+    // ✅ 增量轮询：查询用户消息中涉及的所有订单ID（去重）
+    @Query("SELECT DISTINCT m.orderId FROM Message m WHERE " +
+           "(m.senderId = :userId OR m.receiverId = :userId) " +
+           "AND m.orderId IS NOT NULL " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true)")
+    List<String> findDistinctOrderIdsByUser(@Param("userId") String userId);
+
+    // ✅ 增量轮询（时间戳过滤）：查询指定时间之后消息中涉及的商品ID（去重）
+    @Query("SELECT DISTINCT m.commodityId FROM Message m WHERE " +
+           "(m.senderId = :userId OR m.receiverId = :userId) " +
+           "AND m.commodityId IS NOT NULL " +
+           "AND m.createdAt > :since " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true)")
+    List<String> findDistinctCommodityIdsByUserAndSince(@Param("userId") String userId,
+                                                         @Param("since") LocalDateTime since);
+
+    // ✅ 增量轮询（时间戳过滤）：查询指定时间之后消息中涉及的订单ID（去重）
+    @Query("SELECT DISTINCT m.orderId FROM Message m WHERE " +
+           "(m.senderId = :userId OR m.receiverId = :userId) " +
+           "AND m.orderId IS NOT NULL " +
+           "AND m.createdAt > :since " +
+           "AND NOT (m.deletedBySender = true AND m.deletedByReceiver = true)")
+    List<String> findDistinctOrderIdsByUserAndSince(@Param("userId") String userId,
+                                                     @Param("since") LocalDateTime since);
 }
 

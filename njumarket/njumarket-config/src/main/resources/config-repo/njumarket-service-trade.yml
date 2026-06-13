@@ -1,0 +1,152 @@
+# 交易服务（商品 + 订单）配置（从 Config Server 加载）
+
+server:
+  port: 8092
+
+spring:
+  application:
+    name: njumarket-service-trade
+  thymeleaf:
+    cache: false
+  cloud:
+    openfeign:
+      micrometer:
+        enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:admin}
+    password: ${RABBITMQ_PASSWORD:admin}
+    virtual-host: /
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://elasticsearch:9200}
+    username: ${ELASTICSEARCH_USERNAME:elastic}
+    password: ${ELASTICSEARCH_PASSWORD:changeme}
+
+feign:
+  circuitbreaker:
+    enabled: true
+  resilience4j:
+    enabled: true
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 10000
+      njumarket-service-auth:
+        connectTimeout: 3000
+        readTimeout: 5000
+      njumarket-service-message:
+        connectTimeout: 3000
+        readTimeout: 5000
+      njumarket-service-image:
+        connectTimeout: 3000
+        readTimeout: 5000
+        circuitbreaker:
+          name: imageService
+      njumarket-service-notification:
+        connectTimeout: 3000
+        readTimeout: 5000
+        circuitbreaker:
+          name: notificationService
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers,configprops,conditions
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      circuitbreakers:
+        enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+  os:
+    enabled: true
+  tracing:
+    enabled: true
+    sampling:
+      probability: 0.05
+    propagation:
+      type: B3
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+      connect-timeout: 10000
+      read-timeout: 10000
+  logging:
+    level:
+      com.njumarket.trade.client: DEBUG
+      com.njumarket.trade.client.fallback: INFO
+      com.njumarket.trade.filter: INFO
+      com.njumarket.trade.service: INFO
+      com.njumarket.trade.controller: INFO
+      com.njumarket.njumarket.resolver: INFO
+      io.github.resilience4j: DEBUG
+      io.github.resilience4j.circuitbreaker: DEBUG
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      notificationService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 100
+        slowCallDurationThreshold: 2s
+      imageService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 100
+        slowCallDurationThreshold: 2s
+  timelimiter:
+    instances:
+      notificationService:
+        timeoutDuration: 2s
+      imageService:
+        timeoutDuration: 3s
+
+logging:
+  level:
+    com.njumarket.trade.client: DEBUG
+    com.njumarket.trade.client.fallback: INFO
+    com.njumarket.trade.filter: INFO
+    com.njumarket.trade.service: INFO
+    com.njumarket.trade.controller: INFO
+    com.njumarket.njumarket.resolver: INFO
+    com.njumarket.trade.search: DEBUG
+    org.springframework.data.elasticsearch: DEBUG
+
+commodity:
+  search:
+    enabled: ${COMMODITY_SEARCH_ENABLED:true}
+    elasticsearch:
+      enabled: ${COMMODITY_SEARCH_ES_ENABLED:true}
+      highlight-enabled: ${COMMODITY_SEARCH_HIGHLIGHT:true}
+      index: ${COMMODITY_SEARCH_INDEX:commodities}
+    sync:
+      auto-reindex-on-startup: ${COMMODITY_SEARCH_AUTO_REINDEX:false}
+      page-size: ${COMMODITY_SEARCH_SYNC_PAGE_SIZE:500}

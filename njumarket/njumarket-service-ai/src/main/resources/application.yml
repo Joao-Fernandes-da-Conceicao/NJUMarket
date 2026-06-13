@@ -5,15 +5,27 @@
 
 server:
   port: 8098
-  # 增加连接超时时间，支持 AI 对话等耗时操作
-  connection-timeout: 120000  # 120 秒
+  # 增加连接超时时间，支持 AI 对话与 SSE（多轮工具调用期间可能长时间无输出）
+  connection-timeout: 600000  # 10 分钟
   tomcat:
-    connection-timeout: 120000  # 120 秒
-    keep-alive-timeout: 120000  # 120 秒
+    connection-timeout: 600000
+    keep-alive-timeout: 1800000  # 30 分钟，与网关 AI 路由下游超时对齐
 
 spring:
   application:
     name: njumarket-service-ai
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${AUTH_DATASOURCE_URL:jdbc:postgresql://localhost:5432/njumarket?currentSchema=nju_market}
+    username: ${AUTH_DATASOURCE_USERNAME:postgres}
+    password: ${AUTH_DATASOURCE_PASSWORD:Hqz20050316}
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
   cloud:
     config:
       # 本地开发默认不使用 Config Server（需要时可通过环境变量开启）
@@ -35,6 +47,8 @@ eureka:
 
 njumarket:
   ai:
+    # 流式对话上游 HTTP 超时（秒），需覆盖多步工具调用
+    streaming-http-timeout-seconds: ${AI_STREAMING_HTTP_TIMEOUT_SECONDS:600}
     milvus:
       enabled: ${MILVUS_ENABLED:true}
       uri: ${MILVUS_URI:http://localhost:19530}

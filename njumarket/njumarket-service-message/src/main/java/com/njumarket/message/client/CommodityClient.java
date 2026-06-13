@@ -16,7 +16,8 @@ import java.util.List;
  * 启用 Resilience4j 熔断器保护
  */
 @FeignClient(
-    name = "njumarket-service-commodity", 
+    name = "njumarket-service-trade",
+    contextId = "messageCommodityClient",
     path = "/api/public",
     fallback = com.njumarket.message.client.fallback.CommodityClientFallback.class
 )

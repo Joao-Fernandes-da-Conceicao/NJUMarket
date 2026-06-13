@@ -214,29 +214,34 @@ services:
       retries: 5
       start_period: 60s
 
-  # 商品服务
-  commodity-service:
+  # 交易服务（商品 + 订单，统一进程）
+  trade-service:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        SERVICE_NAME: njumarket-service-commodity
+        SERVICE_NAME: njumarket-service-trade
         SERVICE_PORT: 8092
-    container_name: njumarket-service-commodity
+    container_name: njumarket-service-trade
     ports:
       - "8092:8092"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
+      - TRADE_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
       - COMMODITY_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - ORDER_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
       - COMMODITY_DATASOURCE_USERNAME=postgres
       - COMMODITY_DATASOURCE_PASSWORD=Hqz20050316
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
       - ELASTICSEARCH_URIS=http://elasticsearch:9200
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=admin
+      - RABBITMQ_PASSWORD=admin
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
-      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
       - LANG=C.UTF-8
       - LC_ALL=C.UTF-8
       - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
@@ -251,55 +256,6 @@ services:
         condition: service_healthy
       elasticsearch:
         condition: service_healthy
-      zipkin:
-        condition: service_healthy
-    networks:
-      - njumarket-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8092/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-
-  # 订单服务
-  order-service:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        SERVICE_NAME: njumarket-service-order
-        SERVICE_PORT: 8093
-    container_name: njumarket-service-order
-    ports:
-      - "8093:8093"
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_CONFIG_IMPORT=optional:configserver:http://config-server:8888
-      - ORDER_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
-      - ORDER_DATASOURCE_USERNAME=postgres
-      - ORDER_DATASOURCE_PASSWORD=Hqz20050316
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=hqz20050316
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=5672
-      - RABBITMQ_USERNAME=admin
-      - RABBITMQ_PASSWORD=admin
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
-      # ✅ 设置字符编码环境变量（解决中文日志乱码问题）
-      - LANG=C.UTF-8
-      - LC_ALL=C.UTF-8
-      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai
-    depends_on:
-      discovery:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       zipkin:
@@ -307,7 +263,7 @@ services:
     networks:
       - njumarket-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8093/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8092/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -517,6 +473,10 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=hqz20050316
+      # 会话/消息权威存储（与 postgres 服务 POSTGRES_PASSWORD 一致）
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=Hqz20050316
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery:8761/eureka
       # LangChain4j / Doubao API 配置
       # 使用 Docker Compose 的默认值语法 ${VARIABLE:-default}
@@ -541,6 +501,8 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       milvus-standalone:
@@ -556,9 +518,62 @@ services:
       retries: 5
       start_period: 60s
 
+  # Python AI 服务（LangGraph + LangChain4j 替代，处理 /api/user/ai-agent/**）
+  ai-python-service:
+    build:
+      context: ../njumarket-ai-python
+      dockerfile: Dockerfile
+    container_name: njumarket-ai-python
+    ports:
+      - "8099:8099"
+    environment:
+      - SERVER_PORT=8099
+      - HOST=0.0.0.0
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/njumarket?currentSchema=nju_market
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=Hqz20050316
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=hqz20050316
+      - AI_REDIS_DATABASE=3
+      - MILVUS_ENABLED=true
+      - MILVUS_URI=http://milvus-standalone:19530
+      - MILVUS_DB_NAME=default
+      - MILVUS_COMMODITY_COLLECTION=commodity_vectors
+      - MILVUS_USER_PROFILE_COLLECTION=user_profile_vectors
+      - MILVUS_CONVERSATION_COLLECTION=conversation_memory_vectors
+      - MILVUS_DIMENSION=${MILVUS_DIMENSION:-1024}
+      - MILVUS_MEMORY_TOP_K=${MILVUS_MEMORY_TOP_K:-12}
+      - DOUBAO_API_KEY=${DOUBAO_API_KEY:-8736b46e-a38e-4d2c-8859-0460a1167310}
+      - DOUBAO_BASE_URL=${DOUBAO_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}
+      - DOUBAO_CHAT_MODEL=${DOUBAO_CHAT_MODEL:-doubao-seed-1-6-250615}
+      - DOUBAO_EMBEDDING_MODEL=${DOUBAO_EMBEDDING_MODEL:-doubao-embedding-text-240715}
+      # 交易服务（商品批量查询）
+      - COMMODITY_BASE_URL=http://trade-service:8092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      milvus-standalone:
+        condition: service_healthy
+      trade-service:
+        condition: service_healthy
+    networks:
+      - njumarket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8099/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
   # Zipkin 分布式链路追踪服务
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.elasticsearch
+    image: njumarket-elasticsearch:8.13.4-ik
     container_name: njumarket-elasticsearch
     environment:
       - discovery.type=single-node

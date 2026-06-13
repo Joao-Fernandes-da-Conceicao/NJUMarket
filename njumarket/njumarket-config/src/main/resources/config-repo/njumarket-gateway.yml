@@ -17,23 +17,30 @@ spring:
           lower-case-service-id: true
       routes:
         - id: ai-service-user
-          uri: lb://njumarket-service-ai
+          uri: http://${AI_PYTHON_HOST:njumarket-ai-python}:${AI_PYTHON_PORT:8099}
           predicates:
             - Path=/api/user/ai-agent/**
+          # SSE 长连接：下游读超时（毫秒），避免多轮工具调用时被网关提前断开
+          metadata:
+            response-timeout: 1800000
         - id: commodity-service-public
-          uri: lb://njumarket-service-commodity
+          uri: lb://njumarket-service-trade
           predicates:
             - Path=/api/public/commodity/**
         - id: commodity-service-user
-          uri: lb://njumarket-service-commodity
+          uri: lb://njumarket-service-trade
           predicates:
             - Path=/api/user/commodity/**
+        - id: message-service-chat-incremental
+          uri: lb://njumarket-service-message
+          predicates:
+            - Path=/api/user/chat/incremental-update
         - id: notification-service-chat
           uri: lb://njumarket-service-notification
           predicates:
             - Path=/api/user/chat/**
         - id: order-service
-          uri: lb://njumarket-service-order
+          uri: lb://njumarket-service-trade
           predicates:
             - Path=/api/user/order/**,/api/user/complaint/**
         - id: message-service-user
@@ -73,7 +80,13 @@ spring:
       globalcors:
         cors-configurations:
           '[/api/user/**]':
-            allowedOriginPatterns: "*"
+            allowedOriginPatterns:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:8081"
+              - "http://127.0.0.1:8081"
+              - "http://localhost:8082"
+              - "http://127.0.0.1:8082"
             allowedMethods:
               - GET
               - POST
@@ -83,7 +96,13 @@ spring:
             allowedHeaders: "*"
             allowCredentials: true
           '[/api/contact/**]':
-            allowedOriginPatterns: "*"
+            allowedOriginPatterns:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:8081"
+              - "http://127.0.0.1:8081"
+              - "http://localhost:8082"
+              - "http://127.0.0.1:8082"
             allowedMethods:
               - GET
               - POST
@@ -93,7 +112,13 @@ spring:
             allowedHeaders: "*"
             allowCredentials: true
           '[/api/admin/**]':
-            allowedOriginPatterns: "*"
+            allowedOriginPatterns:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:8081"
+              - "http://127.0.0.1:8081"
+              - "http://localhost:8082"
+              - "http://127.0.0.1:8082"
             allowedMethods:
               - GET
               - POST
@@ -103,7 +128,13 @@ spring:
             allowedHeaders: "*"
             allowCredentials: true
           '[/api/public/**]':
-            allowedOriginPatterns: "*"
+            allowedOriginPatterns:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:8081"
+              - "http://127.0.0.1:8081"
+              - "http://localhost:8082"
+              - "http://127.0.0.1:8082"
             allowedMethods:
               - GET
               - POST
@@ -113,7 +144,13 @@ spring:
             allowedHeaders: "*"
             allowCredentials: true
           '[/api/images/**]':
-            allowedOriginPatterns: "*"
+            allowedOriginPatterns:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:8081"
+              - "http://127.0.0.1:8081"
+              - "http://localhost:8082"
+              - "http://127.0.0.1:8082"
             allowedMethods:
               - GET
               - POST
@@ -123,7 +160,13 @@ spring:
             allowedHeaders: "*"
             allowCredentials: true
           '[/api/auth/**]':
-            allowedOriginPatterns: "*"
+            allowedOriginPatterns:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+              - "http://localhost:8081"
+              - "http://127.0.0.1:8081"
+              - "http://localhost:8082"
+              - "http://127.0.0.1:8082"
             allowedMethods:
               - GET
               - POST

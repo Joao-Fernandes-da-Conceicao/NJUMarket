@@ -18,105 +18,34 @@ export const useUserStore = defineStore('user', {
   
   actions: {
     // 初始化用户状态
-    initUser() {
-      const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token') // 兼容旧版本
-      const refreshToken = localStorage.getItem('refreshToken')
-      const userStr = localStorage.getItem('user')
-      
-      console.log('初始化用户状态:', { 
-        hasAccessToken: !!accessToken, 
-        hasRefreshToken: !!refreshToken,
-        hasUserStr: !!userStr,
-        accessTokenLength: accessToken?.length,
-        refreshTokenLength: refreshToken?.length,
-        userStrLength: userStr?.length
-      })
-      
-      if (accessToken && userStr) {
-        try {
-          // 检查用户数据是否为有效字符串
-          if (userStr === 'undefined' || userStr === 'null' || userStr.trim() === '') {
-            console.warn('用户数据无效:', userStr)
-            this.clearUserData()
-            return
-          }
-          
-          // 验证accessToken是否过期
-          if (this.isTokenExpired(accessToken)) {
-            console.warn('AccessToken已过期')
-            // 如果有refreshToken，尝试刷新（但不阻塞初始化）
-            if (refreshToken && !this.isTokenExpired(refreshToken)) {
-              console.log('检测到RefreshToken有效，将在首次请求时自动刷新')
-              // 不在这里刷新，让响应拦截器处理
-            } else {
-              console.warn('RefreshToken也无效，清除用户数据')
-              this.clearUserData()
-              return
-            }
-          }
-          
-          // 解析用户数据
-          const userData = JSON.parse(userStr)
-          
-          // 验证用户数据格式
-          if (!userData || typeof userData !== 'object') {
-            console.warn('用户数据格式无效')
-            this.clearUserData()
-            return
-          }
-          
-          // 检查必要字段
-          if (!userData.userId) {
-            console.warn('用户数据缺少userId字段')
-            this.clearUserData()
-            return
-          }
-          
-          this.accessToken = accessToken
-          this.refreshToken = refreshToken
-          this.user = userData
+    // Cookie 模式：通过 /me 接口判断是否已登录（Cookie 自动传递）
+    async initUser() {
+      console.log('初始化用户状态（Cookie 模式）')
+      try {
+        const meRes = await authAPI.getCurrentUser()
+        if (meRes.success && meRes.data) {
+          this.user = meRes.data.userInfo || meRes.data
           this.isLoggedIn = true
-          
-          // 同步更新localStorage（如果旧版本只有token，迁移到accessToken）
-          if (accessToken && !localStorage.getItem('accessToken')) {
-            localStorage.setItem('accessToken', accessToken)
-          }
-          
-          console.log('用户状态初始化成功:', {
-            userId: userData.userId,
-            nickname: userData.nickname,
-            avatar: userData.avatar,
-            hasProfile: !!(userData.nickname || userData.avatar)
-          })
-          
-          // 如果已登录，初始化 WebSocket 连接（异步，不阻塞初始化）
-          import('./message').then(({ useMessageStore }) => {
-            const messageStore = useMessageStore()
-            messageStore.initWebSocket()
-          }).catch(err => {
-            console.error('初始化 WebSocket 失败:', err)
-          })
-          
-          // ✅ 初始化订单变化提醒的 WebSocket 监听
-          import('./order').then(({ useOrderStore }) => {
-            const orderStore = useOrderStore()
-            orderStore.initWebSocketListeners()
-            
-            // ✅ v1.3.x: 从后端获取订单提醒状态（应用启动时扫描profile）
-            orderStore.fetchOrderReminderStatus().catch(err => {
-              console.warn('获取订单提醒状态失败（不影响应用启动）:', err)
-            })
-          }).catch(err => {
-            console.error('初始化订单 WebSocket 监听失败:', err)
-          })
-          
-        } catch (error) {
-          console.error('解析用户信息失败:', error)
-          console.error('原始用户数据:', userStr)
-          this.clearUserData()
+          localStorage.setItem('user', JSON.stringify(this.user))
+          console.log('用户已登录（Cookie 有效）:', { userId: this.user?.userId })
         }
-      } else {
-        console.log('没有找到token或用户数据')
+      } catch (e) {
+        console.log('用户未登录或 Cookie 已过期')
+        this.clearUserData()
+        return
+      }
+      // Cookie 有效，初始化 WebSocket
+      if (this.isLoggedIn) {
+        import('./message').then(({ useMessageStore }) => {
+          useMessageStore().initWebSocket()
+        }).catch(err => console.error('初始化 WebSocket 失败:', err))
+        
+        import('./order').then(({ useOrderStore }) => {
+          const orderStore = useOrderStore()
+          orderStore.initWebSocketListeners()
+          orderStore.fetchOrderReminderStatus().catch(err =>
+            console.warn('获取订单提醒状态失败:', err))
+        }).catch(err => console.error('初始化订单 WebSocket 失败:', err))
       }
     },
     
@@ -221,21 +150,26 @@ export const useUserStore = defineStore('user', {
         throw error
       }
     },
-    // 登录
+    // 登录（Cookie 模式：后端返回的 token 已在 HttpOnly Cookie 中，从响应体取 user 信息或调 /me）
     async login(loginData) {
       const response = await authAPI.login(loginData)
       if (response.success) {
-        // 保存AccessToken和RefreshToken
-        const accessToken = response.data.accessToken || response.data.token // 兼容旧版本
-        const refreshToken = response.data.refreshToken
-        this.saveTokens(accessToken, refreshToken)
-        
-        // 保存用户信息
-        this.user = response.data.userInfo || response.data.user // 兼容两种数据结构
-        this.isLoggedIn = true
-        localStorage.setItem('user', JSON.stringify(this.user))
-        
-        console.log('登录成功，用户数据:', this.user)
+        // Cookie 模式：token 在 HttpOnly Cookie 中（JS 不可读），直接从 /me 获取用户信息
+        try {
+          const meRes = await authAPI.getCurrentUser()
+          if (meRes.success && meRes.data) {
+            this.user = meRes.data.userInfo || meRes.data
+            this.isLoggedIn = true
+            localStorage.setItem('user', JSON.stringify(this.user))
+            console.log('登录成功（Cookie 模式），用户数据:', this.user)
+          }
+        } catch (e) {
+          // /me 失败时回退到响应体中的 user 信息
+          this.user = response.data.userInfo || response.data.user
+          this.isLoggedIn = true
+          localStorage.setItem('user', JSON.stringify(this.user))
+          console.log('登录成功（回退模式），用户数据:', this.user)
+        }
         
         // 初始化 WebSocket 连接
         const { useMessageStore } = await import('./message')
@@ -261,21 +195,24 @@ export const useUserStore = defineStore('user', {
       }
     },
     
-    // 验证码登录
+    // 验证码登录（Cookie 模式）
     async loginByCode(phone, code) {
       const response = await authAPI.loginByCode(phone, code)
       if (response.success) {
-        // 保存AccessToken和RefreshToken
-        const accessToken = response.data.accessToken || response.data.token // 兼容旧版本
-        const refreshToken = response.data.refreshToken
-        this.saveTokens(accessToken, refreshToken)
-        
-        // 保存用户信息
-        this.user = response.data.userInfo || response.data.user // 兼容两种数据结构
-        this.isLoggedIn = true
-        localStorage.setItem('user', JSON.stringify(this.user))
-        
-        console.log('验证码登录成功，用户数据:', this.user)
+        try {
+          const meRes = await authAPI.getCurrentUser()
+          if (meRes.success && meRes.data) {
+            this.user = meRes.data.userInfo || meRes.data
+            this.isLoggedIn = true
+            localStorage.setItem('user', JSON.stringify(this.user))
+            console.log('验证码登录成功（Cookie 模式），用户数据:', this.user)
+          }
+        } catch (e) {
+          this.user = response.data.userInfo || response.data.user
+          this.isLoggedIn = true
+          localStorage.setItem('user', JSON.stringify(this.user))
+          console.log('验证码登录成功（回退模式），用户数据:', this.user)
+        }
         
         // 初始化 WebSocket 连接
         const { useMessageStore } = await import('./message')
@@ -302,20 +239,23 @@ export const useUserStore = defineStore('user', {
     },
     
     // 注册
+    // 注册（Cookie 模式）
     async register(registerData) {
       const response = await authAPI.register(registerData)
       if (response.success) {
-        // 保存AccessToken和RefreshToken
-        const accessToken = response.data.accessToken || response.data.token // 兼容旧版本
-        const refreshToken = response.data.refreshToken
-        this.saveTokens(accessToken, refreshToken)
-        
-        // 保存用户信息
-        this.user = response.data.userInfo || response.data.user // 兼容两种数据结构
-        this.isLoggedIn = true
-        localStorage.setItem('user', JSON.stringify(this.user))
-        
-        console.log('注册成功，用户数据:', this.user)
+        try {
+          const meRes = await authAPI.getCurrentUser()
+          if (meRes.success && meRes.data) {
+            this.user = meRes.data.userInfo || meRes.data
+            this.isLoggedIn = true
+            localStorage.setItem('user', JSON.stringify(this.user))
+            console.log('注册成功（Cookie 模式），用户数据:', this.user)
+          }
+        } catch (e) {
+          this.user = response.data.userInfo || response.data.user
+          this.isLoggedIn = true
+          localStorage.setItem('user', JSON.stringify(this.user))
+        }
         
         // 初始化 WebSocket 连接
         const { useMessageStore } = await import('./message')

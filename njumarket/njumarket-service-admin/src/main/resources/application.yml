@@ -39,3 +39,10 @@ eureka:
   instance:
     prefer-ip-address: true
 
+njumarket:
+  admin:
+    cookie:
+      same-site: Strict
+      secure: false
+      path: /
+

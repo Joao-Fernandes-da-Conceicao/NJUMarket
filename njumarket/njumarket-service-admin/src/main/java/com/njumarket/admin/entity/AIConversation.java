@@ -38,5 +38,12 @@ public class AIConversation {
     
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /** 与 AI 服务一致：当前窗口内 user/assistant 条数（不含历史摘要行） */
+    @Column(name = "window_message_count")
+    private Integer windowMessageCount;
+
+    @Column(name = "memory_summary", columnDefinition = "TEXT")
+    private String memorySummary;
 }
 

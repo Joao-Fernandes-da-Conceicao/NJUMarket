@@ -23,10 +23,7 @@ feign:
       njumarket-service-auth:
         connectTimeout: 3000
         readTimeout: 5000
-      njumarket-service-commodity:
-        connectTimeout: 3000
-        readTimeout: 5000
-      njumarket-service-order:
+      njumarket-service-trade:
         connectTimeout: 3000
         readTimeout: 5000
       njumarket-service-message:
@@ -37,6 +34,13 @@ feign:
       enabled: true
     response:
       enabled: true
+
+njumarket:
+  admin:
+    cookie:
+      same-site: Strict
+      secure: false
+      path: /
 
 # Actuator 配置
 management:

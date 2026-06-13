@@ -4,22 +4,17 @@ import axios from 'axios'
 const api = axios.create({
   baseURL: 'http://localhost:8080/api',
   timeout: 10000,
+  withCredentials: true,  // 允许发送 Cookie（Gateway 优先从 Cookie 读 token）
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
-// 刷新Token的Promise（防止并发刷新）
-let refreshTokenPromise = null
 
 // 请求拦截器
 api.interceptors.request.use(
   config => {
-    // 优先使用accessToken，兼容旧版本的token
-    const accessToken = localStorage.getItem('accessToken') || localStorage.getItem('token')
-    if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`
-    }
+    // Cookie 模式：Gateway 优先从 USER_ACCESS Cookie 读取 token，无需手动设置 Authorization 头
     return config
   },
   error => {
@@ -45,17 +40,13 @@ api.interceptors.response.use(
   async error => {
     const originalRequest = error.config
     
-    // ✅ 处理401错误：尝试自动刷新Token
+    // Cookie 模式：401 时尝试调用 refresh-token，Cookie 自动传递和更新
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // 排除刷新Token接口本身，避免无限循环
       if (originalRequest.url === '/user/auth/refresh-token') {
-        // RefreshToken也失效了，清除数据并跳转登录
         if (typeof window !== 'undefined') {
           import('../stores/user').then(({ useUserStore }) => {
-            const userStore = useUserStore()
-            userStore.clearUserData()
+            useUserStore().clearUserData()
           })
-          
           import('element-plus').then(({ ElMessage }) => {
             ElMessage.error('登录已过期，请重新登录')
           })
@@ -63,65 +54,23 @@ api.interceptors.response.use(
         return Promise.reject(error)
       }
       
-      // 标记请求，防止重复刷新
       originalRequest._retry = true
       
-      // 获取RefreshToken
-      const refreshToken = localStorage.getItem('refreshToken')
-      
-      if (refreshToken && typeof window !== 'undefined') {
-        try {
-          // 如果已经有刷新请求在进行，等待它完成
-          if (refreshTokenPromise) {
-            await refreshTokenPromise
-          } else {
-            // 创建新的刷新请求
-            refreshTokenPromise = (async () => {
-              try {
-                const { useUserStore } = await import('../stores/user')
-                const userStore = useUserStore()
-                await userStore.refreshAccessToken()
-              } finally {
-                refreshTokenPromise = null
-              }
-            })()
-            await refreshTokenPromise
-          }
-          
-          // 刷新成功，使用新的AccessToken重试原请求
-          const newAccessToken = localStorage.getItem('accessToken')
-          if (newAccessToken) {
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
-            return api(originalRequest)
-          }
-        } catch (refreshError) {
-          // 刷新失败，清除数据
-          console.error('Token自动刷新失败:', refreshError)
-          if (typeof window !== 'undefined') {
-            import('../stores/user').then(({ useUserStore }) => {
-              const userStore = useUserStore()
-              userStore.clearUserData()
-            })
-            
-            import('element-plus').then(({ ElMessage }) => {
-              ElMessage.error('登录已过期，请重新登录')
-            })
-          }
-          return Promise.reject(refreshError)
-        }
-      } else {
-        // 没有RefreshToken，清除数据
+      try {
+        // Cookie 模式：直接调 refresh，浏览器自动带 refresh cookie，响应自动更新 access cookie
+        await api.post('/user/auth/refresh-token')
+        return api(originalRequest)
+      } catch (refreshError) {
+        console.error('Token 自动刷新失败:', refreshError)
         if (typeof window !== 'undefined') {
           import('../stores/user').then(({ useUserStore }) => {
-            const userStore = useUserStore()
-            userStore.clearUserData()
+            useUserStore().clearUserData()
           })
-          
           import('element-plus').then(({ ElMessage }) => {
-            const errorMsg = error.response?.data?.errorMsg || error.response?.data?.message || '用户未登录，请先登录'
-            ElMessage.error(errorMsg)
+            ElMessage.error('登录已过期，请重新登录')
           })
         }
+        return Promise.reject(refreshError)
       }
     } else if (error.response?.status === 403) {
       // ✅ 处理403禁止访问错误（账户被封禁/暂停）
@@ -322,7 +271,8 @@ export const commodityAPI = {
     fetch(url, {
       method: 'GET',
       headers: headers,
-      signal: abortController.signal
+      signal: abortController.signal,
+      credentials: 'include'  // Cookie 模式：发送 HttpOnly Cookie
     })
     .then(response => {
       if (!response.ok) {
@@ -439,10 +389,10 @@ export const commodityAPI = {
       }
     };
   },
-  // ✅ AI Agent 智能搜索（超时时间 30 秒，因为 AI Agent 处理较慢）
+  // ✅ AI Agent 智能搜索（后端合并入 /chat，此处复用 chat 接口）
   aiAgentSearch: (query, conversationId) =>
-    api.get('/user/ai-agent/search', { 
-      params: { query, conversationId },
+    api.post('/user/ai-agent/chat', null, { 
+      params: { message: query, conversationId },
       timeout: 60000 // 60 秒超时
     }),
   // ✅ 获取用户的所有AI聊天列表
@@ -563,11 +513,11 @@ export const profileAPI = {
   // 更新资料（使用新的UserProfileUpdateDTO）
   update: (data) => api.put('/user/profile/me', data),
   
-  // 上传头像
+  // 上传头像（改用独立图片服务）
   uploadAvatar: (file) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post('/user/profile/avatar', formData, {
+    return api.post('/user/image/upload-avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
   },
@@ -576,9 +526,9 @@ export const profileAPI = {
   search: (keyword, page = 1, size = 10) => 
     api.get('/user/profile/search', { params: { keyword, page, size } }),
   
-  // 获取排行榜
+  // 获取排行榜（后端无独立接口，使用用户搜索兜底）
   getRankings: (type, page = 1, size = 10) => 
-    api.get('/user/profile/rankings', { params: { type, page, size } }),
+    api.get('/user/profile/search', { params: { keyword: type, page, size } }),
   
   // ✅ v1.3.x: 清除订单提醒状态
   clearOrderReminder: (role) => 

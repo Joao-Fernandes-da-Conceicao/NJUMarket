@@ -56,6 +56,13 @@ management:
       connect-timeout: 10000  # 连接超时配置（毫秒）
       read-timeout: 10000  # 读取超时配置（毫秒）
 
+njumarket:
+  auth:
+    cookie:
+      same-site: Strict
+      secure: false
+      path: /
+
 # 日志配置
 logging:
   level:

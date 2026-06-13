@@ -14,7 +14,7 @@ import java.util.List;
  * Commodity Service Feign Client
  * 用于AI服务调用商品搜索和查询功能
  */
-@FeignClient(name = "njumarket-service-commodity")
+@FeignClient(name = "njumarket-service-trade")
 public interface CommodityClient {
 
     /**

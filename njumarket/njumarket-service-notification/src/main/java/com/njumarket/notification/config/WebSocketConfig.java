@@ -1,6 +1,7 @@
 package com.njumarket.notification.config;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
@@ -12,6 +13,8 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -31,20 +34,36 @@ import java.util.Map;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     /**
+     * TaskScheduler，供 SimpleBroker 的心跳机制驱动定时发送。
+     * 配置了 heartbeatValue 时必须提供，否则启动报 "no TaskScheduler provided"。
+     */
+    @Bean
+    public TaskScheduler webSocketHeartbeatScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(1);
+        scheduler.setThreadNamePrefix("ws-heartbeat-");
+        scheduler.initialize();
+        return scheduler;
+    }
+
+    /**
      * 配置消息代理
      */
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        // 启用简单的内存消息代理，用于向客户端发送消息
-        // 客户端订阅 /user/queue/notification 来接收所有通知
-        config.enableSimpleBroker("/queue", "/topic");
-        
-        // 设置应用程序消息的前缀
+        // 启用简单的内存消息代理，并配置 STOMP 心跳。
+        // heart-beat 协商规则：双方各取 max(client, server) 的间隔，任一方为 0 则该方向不发。
+        // 此处设置 [10000, 10000]，与前端 heartbeatOutgoing/Incoming=10000 匹配，
+        // 协商结果：服务端每 10s 向客户端发一次心跳，客户端每 10s 向服务端发一次心跳。
+        // 若某方向连续 3 个心跳周期（30s）未收到，则视为半连接并主动关闭，触发客户端重连。
+        config.enableSimpleBroker("/queue", "/topic")
+              .setHeartbeatValue(new long[]{10000, 10000})
+              .setTaskScheduler(webSocketHeartbeatScheduler());
+
         // 客户端发送消息到 /app/xxx
         config.setApplicationDestinationPrefixes("/app");
-        
-        // 设置用户目标前缀
-        // 服务器发送消息到 /user/{userId}/queue/notification
+
+        // 服务器发送消息到 /user/{userId}/queue/...
         config.setUserDestinationPrefix("/user");
     }
 

@@ -6,44 +6,53 @@ import com.njumarket.notification.service.WebSocketRetryService;
 import com.njumarket.notification.websocket.WebSocketEventListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Set;
 
 /**
- * WebSocket消息推送重试服务实现
- * 
- * 设计思路：
- * 1. 推送前检查用户是否在线（如果不在线，不推送，直接加入重试队列）
- * 2. 如果用户在线但推送失败（内部错误），记录到重试队列
- * 3. 定时任务检查重试队列，如果用户在线且达到重试时间，重试推送
- * 4. 使用指数退避策略（5s, 10s, 20s），最多重试3次
- * 
- * 适用场景：
- * - 用户网络波动导致推送失败
- * - 用户短暂离线后重新上线
- * - 系统内部错误导致的推送失败
+ * WebSocket 消息推送重试服务实现（多实例安全版）。
+ *
+ * <p>设计思路（扇出模型下的重试机制）：
+ * <ol>
+ *   <li>每个 Notification 实例使用 <strong>实例专属的 Redis Sorted Set</strong> 作为重试队列，
+ *       键名格式为 {@code websocket:retry:queue:<instanceId>}，实例间互不干扰。</li>
+ *   <li>仅当目标用户 <strong>连接在本实例</strong> 时才入队：
+ *       若用户不在本地，{@code convertAndSendToUser} 已静默丢弃，无需重试；
+ *       若用户在本地，入队后通过 ACK 确认最终投递。</li>
+ *   <li>重试策略：指数退避（5s / 10s / 20s），最多 3 次；超时后依赖客户端重连拉取未读消息。</li>
+ * </ol>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class WebSocketRetryServiceImpl implements WebSocketRetryService {
-    
+
     private final SimpMessagingTemplate messagingTemplate;
     private final WebSocketEventListener webSocketEventListener;
     private final RedisTemplate<String, Object> redisTemplate;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
-    
-    // Redis重试队列key
-    private static final String RETRY_QUEUE_KEY = com.njumarket.njumarket.utils.RedisConstants.WEBSOCKET_RETRY_QUEUE_KEY;
-    
+
+    /**
+     * 实例唯一标识（JVM 生命周期内固定），用于隔离各实例的重试队列。
+     */
+    private static final String INSTANCE_ID =
+            java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+
+    // 实例专属 Redis 重试队列键
+    private static final String RETRY_QUEUE_KEY =
+            com.njumarket.njumarket.utils.RedisConstants.WEBSOCKET_RETRY_QUEUE_KEY + ":" + INSTANCE_ID;
+
     // 消息过期时间（30分钟）
     private static final long MESSAGE_EXPIRE_SECONDS = com.njumarket.njumarket.utils.RedisConstants.WEBSOCKET_RETRY_TTL;
     
@@ -60,51 +69,38 @@ public class WebSocketRetryServiceImpl implements WebSocketRetryService {
     @Override
     public void pushWithRetry(String receiverId, Object messageData, String messageType, String messageId) {
         try {
-            // ✅ 优化：先尝试推送，再检查在线状态
-            // 原因：SimpUserRegistry可能更新延迟，导致误判用户不在线
-            // convertAndSendToUser是异步的，即使推送失败也不会抛出异常
-            // 所以即使在线检查返回false，也尝试推送一次（Spring会自动处理离线用户）
-            
-            // 根据消息类型选择不同的队列
             String destination = getDestinationByMessageType(messageType);
-            
-            // ✅ 确保messageData中包含messageId（如果messageId不为null）
-            // 这样前端才能提取messageId并发送ACK
-            if (messageId != null && !messageId.trim().isEmpty()) {
-                if (messageData instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> dataMap = (Map<String, Object>) messageData;
-                    // 如果messageData中没有messageId，则添加
-                    if (!dataMap.containsKey("messageId")) {
-                        dataMap.put("messageId", messageId);
-                    }
-                }
+
+            // 确保 messageData 中携带 messageId，供前端发送 ACK
+            if (messageId != null && !messageId.trim().isEmpty() && messageData instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> dataMap = (Map<String, Object>) messageData;
+                dataMap.putIfAbsent("messageId", messageId);
             }
-            
-            // ✅ 先尝试推送（不阻塞）
-            // 注意：推送后不设置"已推送"标记，只有收到ACK才设置
+
+            // 尝试推送；若用户未连接到本实例，convertAndSendToUser 静默丢弃，不抛出异常
             messagingTemplate.convertAndSendToUser(receiverId, destination, messageData);
-            log.debug("WebSocket推送尝试: receiverId={}, messageType={}, messageId={}", receiverId, messageType, messageId);
-            
-            // ✅ 为了确保消息不丢失，总是加入重试队列
-            // 重试机制基于ACK确认：只有收到ACK才认为消息真正送达
-            // 如果用户在线，第一次推送会成功，前端会发送ACK，ACK处理时会从队列移除
-            // 如果用户离线，第一次推送会被丢弃，重试时会继续等待用户上线
-            // 如果推送成功但前端未收到（网络问题），重试时会继续推送直到收到ACK
-            log.debug("消息已加入重试队列（等待ACK确认）: receiverId={}, messageType={}, messageId={}", 
-                receiverId, messageType, messageId);
-            addToRetryQueue(receiverId, messageData, messageType, messageId);
-            
-            // 注意：Spring的convertAndSendToUser是异步的，不会抛出异常
-            // 如果推送失败（内部错误），我们无法直接检测到
-            // 但通常情况下，如果用户在线且订阅正常，推送会成功
-            // 如果用户不在线，Spring会自动丢弃消息，不会报错
-            
+            log.debug("WebSocket 推送已尝试: receiverId={}, messageType={}, messageId={}", receiverId, messageType, messageId);
+
+            // 仅当用户连接在本实例时才入重试队列：
+            //   - 用户在本地 → 推送已成功发出，入队等待 ACK 确认最终投递
+            //   - 用户不在本地 → 推送已被静默丢弃，由持有用户连接的实例负责推送和重试；
+            //     若此刻所有实例均无该用户连接（用户离线），客户端重连后通过 REST 拉取未读消息
+            if (webSocketEventListener.isUserOnline(receiverId)) {
+                log.debug("用户在本实例在线，加入重试队列等待 ACK: receiverId={}, messageType={}, messageId={}",
+                        receiverId, messageType, messageId);
+                addToRetryQueue(receiverId, messageData, messageType, messageId);
+            } else {
+                log.debug("用户未连接到本实例，跳过重试队列: receiverId={}, messageType={}", receiverId, messageType);
+            }
+
         } catch (Exception e) {
-            // 推送过程中出现异常（如序列化失败），记录到重试队列
-            log.error("❌ WebSocket推送失败（异常），加入重试队列: receiverId={}, messageType={}, messageId={}, error={}, errorType={}", 
-                receiverId, messageType, messageId, e.getMessage(), e.getClass().getName(), e);
-            addToRetryQueue(receiverId, messageData, messageType, messageId);
+            log.error("WebSocket 推送异常，尝试加入重试队列: receiverId={}, messageType={}, messageId={}, error={}",
+                    receiverId, messageType, messageId, e.getMessage(), e);
+            // 异常时同样只在本地在线的情况下入队（异常推送通常意味着序列化等本地问题）
+            if (webSocketEventListener.isUserOnline(receiverId)) {
+                addToRetryQueue(receiverId, messageData, messageType, messageId);
+            }
         }
     }
     
@@ -309,6 +305,43 @@ public class WebSocketRetryServiceImpl implements WebSocketRetryService {
         }
     }
     
+    /**
+     * 监听 WebSocket 会话断开事件，立即清理该用户在本实例重试队列中的全部条目。
+     *
+     * <p>不做此清理时，断开用户的条目要经历完整的指数退避周期（最长约 5 分钟）才被
+     * 自然淘汰，期间产生大量无效的 Redis 读写和在线状态检查。
+     */
+    @EventListener
+    public void handleSessionDisconnect(SessionDisconnectEvent event) {
+        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
+        String userId = accessor.getUser() != null ? accessor.getUser().getName() : null;
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+
+        Set<Object> allEntries = redisTemplate.opsForZSet().range(RETRY_QUEUE_KEY, 0, -1);
+        if (allEntries == null || allEntries.isEmpty()) {
+            return;
+        }
+
+        int removed = 0;
+        for (Object entry : allEntries) {
+            try {
+                RetryMessageDTO msg = objectMapper.readValue(entry.toString(), RetryMessageDTO.class);
+                if (userId.equals(msg.getReceiverId())) {
+                    redisTemplate.opsForZSet().remove(RETRY_QUEUE_KEY, entry);
+                    removed++;
+                }
+            } catch (Exception e) {
+                log.warn("用户下线清理：解析重试队列条目失败，跳过: {}", e.getMessage());
+            }
+        }
+
+        if (removed > 0) {
+            log.info("用户下线，已从重试队列清理 {} 条记录: userId={}", removed, userId);
+        }
+    }
+
     /**
      * 处理ACK确认
      * 收到前端ACK后，从重试队列中移除对应的消息

@@ -29,6 +29,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.persistence.criteria.Predicate;
@@ -455,12 +456,16 @@ public class UserServiceImpl implements UserService {
 
     // ========== 用户档案相关 ==========
     @Override
+    @Transactional(readOnly = true)
     public Result getCurrentUser() {
-            // 获取当前用户信息（使用 SecurityUtils）
-            Object userObj = SecurityUtils.getCurrentUser();
-            User currentUser = userObj instanceof User ? (User) userObj : null;
+            String userId = SecurityUtils.getCurrentUserId();
+            if (!StringUtils.hasText(userId)) {
+                throw new BusinessException("用户未登录");
+            }
+            // 从数据库加载完整 User（含 UserProfile），UserContextFilter 构建的最简 User 不包含 profile
+            User currentUser = userRepository.findById(userId).orElse(null);
             if (currentUser == null) {
-            throw new BusinessException("用户未登录");
+                throw new BusinessException("用户不存在");
             }
             
             // 转换为UserDTO（包含profile信息）

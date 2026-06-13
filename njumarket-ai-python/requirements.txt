@@ -1,0 +1,15 @@
+# Aligned with njumarket-service-ai: PostgreSQL + Redis + Milvus + LangChain
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+httpx>=0.27.0
+pydantic-settings>=2.6.0
+python-dotenv>=1.0.0
+
+sqlalchemy>=2.0.0
+psycopg[binary]>=3.1.0
+redis>=5.0.0
+pymilvus>=2.4.0
+
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+langgraph>=0.2.0

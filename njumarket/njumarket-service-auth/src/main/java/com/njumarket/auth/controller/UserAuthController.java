@@ -8,6 +8,8 @@ import com.njumarket.auth.dto.RegisterDTO;
 import com.njumarket.auth.dto.UpdatePhoneDTO;
 import com.njumarket.njumarket.exception.BusinessException;
 import com.njumarket.auth.service.UserService;
+import com.njumarket.auth.service.UserAuthCookieService;
+import com.njumarket.njumarket.web.AuthCookieNames;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,8 +17,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import java.util.Map;
 
@@ -30,6 +36,7 @@ import java.util.Map;
 public class UserAuthController {
 
     private final UserService userService;
+    private final UserAuthCookieService userAuthCookieService;
 
     @Operation(summary = "用户登录", description = "使用手机号和密码进行登录")
     @ApiResponses({
@@ -37,8 +44,10 @@ public class UserAuthController {
         @ApiResponse(responseCode = "400", description = "登录失败")
     })
     @PostMapping("/login")
-    public Result login(@Valid @RequestBody LoginFormDTO loginForm, HttpSession session) {
-        return userService.login(loginForm, session);
+    public Result login(@Valid @RequestBody LoginFormDTO loginForm, HttpSession session, HttpServletResponse response) {
+        Result r = userService.login(loginForm, session);
+        userAuthCookieService.applyLoginCookiesIfSuccess(response, r);
+        return r;
     }
 
     @Operation(summary = "用户注册", description = "注册新用户账号")
@@ -57,8 +66,10 @@ public class UserAuthController {
         @ApiResponse(responseCode = "400", description = "注册失败，参数错误或手机号已存在")
     })
     @PostMapping("/register-new")
-    public Result registerNew(@Valid @RequestBody RegisterDTO registerDTO) {
-        return userService.registerUser(registerDTO);
+    public Result registerNew(@Valid @RequestBody RegisterDTO registerDTO, HttpServletResponse response) {
+        Result r = userService.registerUser(registerDTO);
+        userAuthCookieService.applyLoginCookiesIfSuccess(response, r);
+        return r;
     }
 
     @Operation(summary = "发送验证码", description = "向指定手机号发送登录验证码")
@@ -77,10 +88,12 @@ public class UserAuthController {
         @ApiResponse(responseCode = "400", description = "验证码错误或已过期")
     })
     @PostMapping("/login-by-code")
-    public Result loginByCode(@Parameter(description = "手机号", example = "13800138000") @RequestParam String phone, 
+    public Result loginByCode(@Parameter(description = "手机号", example = "13800138000") @RequestParam String phone,
                              @Parameter(description = "验证码", example = "123456") @RequestParam String code,
-                             HttpSession session) {
-        return userService.loginByCode(phone, code, session);
+                             HttpSession session, HttpServletResponse response) {
+        Result r = userService.loginByCode(phone, code, session);
+        userAuthCookieService.applyLoginCookiesIfSuccess(response, r);
+        return r;
     }
 
     /**
@@ -102,24 +115,45 @@ public class UserAuthController {
     public Result getCurrentUser() {
         return userService.getCurrentUser();
     }
-    
+
     @PostMapping("/logout")
-    public Result logout(HttpSession session) {
-        return userService.logout(session);
+    public Result logout(HttpSession session, HttpServletResponse response) {
+        Result r = userService.logout(session);
+        if (Boolean.TRUE.equals(r.getSuccess())) {
+            userAuthCookieService.clear(response);
+        }
+        return r;
     }
-    
-    @Operation(summary = "刷新Token", description = "使用RefreshToken刷新AccessToken")
+
+    @Operation(summary = "刷新Token", description = "使用 RefreshToken（HttpOnly Cookie 或 body）刷新 AccessToken")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "刷新成功，返回新的AccessToken和RefreshToken"),
+        @ApiResponse(responseCode = "200", description = "刷新成功"),
         @ApiResponse(responseCode = "400", description = "RefreshToken无效或已过期")
     })
     @PostMapping("/refresh-token")
-    public Result refreshToken(@RequestBody Map<String, String> request) {
-        String refreshToken = request.get("refreshToken");
-        if (refreshToken == null || refreshToken.trim().isEmpty()) {
+    public Result refreshToken(HttpServletRequest request, HttpServletResponse response,
+                               @RequestBody(required = false) Map<String, String> body) {
+        String refreshToken = resolveRefreshToken(request, body);
+        if (!StringUtils.hasText(refreshToken)) {
             throw new BusinessException("RefreshToken不能为空");
         }
-        return userService.refreshToken(refreshToken.trim());
+        Result r = userService.refreshToken(refreshToken.trim());
+        userAuthCookieService.applyRefreshCookiesIfSuccess(response, r);
+        return r;
+    }
+
+    private String resolveRefreshToken(HttpServletRequest request, Map<String, String> body) {
+        if (request.getCookies() != null) {
+            for (Cookie c : request.getCookies()) {
+                if (AuthCookieNames.USER_REFRESH.equals(c.getName()) && StringUtils.hasText(c.getValue())) {
+                    return c.getValue();
+                }
+            }
+        }
+        if (body != null && StringUtils.hasText(body.get("refreshToken"))) {
+            return body.get("refreshToken");
+        }
+        return null;
     }
 
     @Operation(summary = "重置密码", description = "通过手机验证码重置密码")
@@ -129,12 +163,11 @@ public class UserAuthController {
     })
     @PostMapping("/reset-password")
     public Result resetPassword(@Valid @RequestBody PasswordDTO passwordDTO) {
-        // 验证密码确认
-        if (passwordDTO.getConfirmPassword() != null && 
+        if (passwordDTO.getConfirmPassword() != null &&
             !passwordDTO.getNewPassword().equals(passwordDTO.getConfirmPassword())) {
             throw new BusinessException("两次输入的密码不一致");
         }
-        
+
         return userService.resetPassword(passwordDTO.getPhone(), passwordDTO.getCode(), passwordDTO.getNewPassword());
     }
 
@@ -149,4 +182,3 @@ public class UserAuthController {
         return userService.updatePhone(updatePhoneDTO.getNewPhone(), updatePhoneDTO.getCode());
     }
 }
-

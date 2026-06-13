@@ -13,8 +13,7 @@ COPY njumarket-discovery/pom.xml ./njumarket-discovery/
 COPY njumarket-config/pom.xml ./njumarket-config/
 COPY njumarket-gateway/pom.xml ./njumarket-gateway/
 COPY njumarket-service-auth/pom.xml ./njumarket-service-auth/
-COPY njumarket-service-commodity/pom.xml ./njumarket-service-commodity/
-COPY njumarket-service-order/pom.xml ./njumarket-service-order/
+COPY njumarket-service-trade/pom.xml ./njumarket-service-trade/
 COPY njumarket-service-message/pom.xml ./njumarket-service-message/
 COPY njumarket-service-image/pom.xml ./njumarket-service-image/
 COPY njumarket-service-admin/pom.xml ./njumarket-service-admin/

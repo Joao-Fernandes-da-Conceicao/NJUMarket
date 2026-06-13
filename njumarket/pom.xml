@@ -35,8 +35,7 @@
 		<module>njumarket-config</module>
 		<module>njumarket-gateway</module>
 		<module>njumarket-service-auth</module>
-		<module>njumarket-service-commodity</module>
-		<module>njumarket-service-order</module>
+		<module>njumarket-service-trade</module>
 		<module>njumarket-service-message</module>
 		<module>njumarket-service-image</module>
 		<module>njumarket-service-admin</module>

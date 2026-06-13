@@ -6,17 +6,12 @@ import { imageAPI } from '../api'
  * @returns {string} 完整的头像URL
  */
 export const getAvatarUrl = (avatarUrl) => {
-  if (!avatarUrl) return imageAPI.getDefaultAvatar()
-  
-  // 如果已经是完整URL，直接返回
+  if (!avatarUrl) return 'http://localhost:8080/api/images/avatars/default'
   if (avatarUrl.startsWith('http')) return avatarUrl
-  
-  // 如果是文件名，构建完整URL
-  if (avatarUrl.includes('/')) return avatarUrl
-  
-  // 从URL中提取文件名
-  const fileName = avatarUrl.split('/').pop()
-  return imageAPI.getAvatar(fileName)
+  // 以 / 开头的相对路径 → 补全协议和域名
+  if (avatarUrl.startsWith('/')) return `http://localhost:8080${avatarUrl}`
+  // 纯文件名
+  return `http://localhost:8080/api/images/avatars/${avatarUrl}`
 }
 
 /**
@@ -26,16 +21,14 @@ export const getAvatarUrl = (avatarUrl) => {
  */
 export const getCommodityImageUrl = (imageUrl) => {
   if (!imageUrl) return imageAPI.getDefaultCommodityImage()
-  
-  // 如果已经是完整URL，直接返回
   if (imageUrl.startsWith('http')) return imageUrl
-  
-  // 如果是文件名，构建完整URL
-  if (imageUrl.includes('/')) return imageUrl
-  
-  // 从URL中提取文件名
-  const fileName = imageUrl.split('/').pop()
-  return imageAPI.getCommodityImage(fileName)
+  if (imageUrl.startsWith('/')) return `http://localhost:8080${imageUrl}`
+  // 逗号分隔的多图片字符串 → 取第一个
+  if (imageUrl.includes(',')) {
+    imageUrl = imageUrl.split(',')[0].trim()
+  }
+  // 纯文件名
+  return imageAPI.getCommodityImage(imageUrl)
 }
 
 /**

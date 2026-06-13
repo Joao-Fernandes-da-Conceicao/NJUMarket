@@ -2,8 +2,8 @@
   <div class="commodity-card" @click="handleClick">
     <div class="commodity-image">
       <img 
-        v-if="commodity.images && commodity.images.length > 0"
-        :src="getCommodityImageUrl(commodity.images[0])" 
+        v-if="commodityImages.length > 0"
+        :src="getCommodityImageUrl(commodityImages[0])" 
         :alt="commodity.title"
         @error="handleImageError"
       />
@@ -100,6 +100,21 @@ const handleImageError = (event) => {
     nextElement.style.display = 'flex'
   }
 }
+
+// 标准化 images 字段：兼容字符串（AI 服务）和数组（商品列表）两种格式
+const commodityImages = computed(() => {
+  const imgs = props.commodity?.images
+  if (!imgs) return []
+  if (Array.isArray(imgs)) return imgs
+  if (typeof imgs === 'string') {
+    // 逗号分隔的多图片字符串 → 拆分为数组
+    if (imgs.includes(',') && !imgs.startsWith('http')) {
+      return imgs.split(',').map(s => s.trim()).filter(Boolean)
+    }
+    return [imgs]
+  }
+  return []
+})
 
 const getStatusTagType = (status) => {
   const statusMap = {

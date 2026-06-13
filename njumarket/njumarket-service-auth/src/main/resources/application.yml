@@ -39,3 +39,11 @@ eureka:
   instance:
     prefer-ip-address: true
 
+# HttpOnly + SameSite Cookie（生产环境请设置 secure: true）
+njumarket:
+  auth:
+    cookie:
+      same-site: Strict
+      secure: false
+      path: /
+

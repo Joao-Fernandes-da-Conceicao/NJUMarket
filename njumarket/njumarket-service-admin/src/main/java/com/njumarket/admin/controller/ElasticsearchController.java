@@ -35,7 +35,7 @@ public class ElasticsearchController {
 
     // 通过服务名调用（使用 Eureka 服务发现）
     // 格式：http://服务名:端口
-    @Value("${njumarket.service.commodity.url:http://njumarket-service-commodity:8092}")
+    @Value("${njumarket.service.commodity.url:http://njumarket-service-trade:8092}")
     private String commodityServiceUrl;
 
     @Operation(summary = "重建搜索索引", description = "全量重建商品搜索索引，建议在低峰期执行")

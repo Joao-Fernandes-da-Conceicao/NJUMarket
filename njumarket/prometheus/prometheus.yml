@@ -61,23 +61,14 @@ scrape_configs:
           service: 'auth'
           application: 'njumarket-service-auth'
 
-  # Commodity 服务
-  - job_name: 'njumarket-service-commodity'
+  # 交易服务（商品 + 订单）
+  - job_name: 'njumarket-service-trade'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['commodity-service:8092']
+      - targets: ['trade-service:8092']
         labels:
-          service: 'commodity'
-          application: 'njumarket-service-commodity'
-
-  # Order 服务
-  - job_name: 'njumarket-service-order'
-    metrics_path: '/actuator/prometheus'
-    static_configs:
-      - targets: ['order-service:8093']
-        labels:
-          service: 'order'
-          application: 'njumarket-service-order'
+          service: 'trade'
+          application: 'njumarket-service-trade'
 
   # Message 服务
   - job_name: 'njumarket-service-message'

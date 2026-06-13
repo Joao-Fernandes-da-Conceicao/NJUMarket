@@ -194,96 +194,42 @@ const sendMessage = async () => {
   // 如果没有 conversationId，生成一个新的
   if (!conversationId.value) {
     conversationId.value = generateConversationId()
-    console.log('生成新的 conversationId:', conversationId.value)
   }
   
-  // 添加 AI 回复占位符（用于流式输出）
-  const assistantMessageIndex = messages.value.length
-  messages.value.push({
-    role: 'assistant',
-    content: '',
-    recommendedCommodities: [],
-    timestamp: Date.now()
-  })
-  
-  // 滚动到底部
-  await nextTick()
-  scrollToBottom()
-  
-  let eventSource = null
-  
   try {
-    console.log('准备调用流式 API，conversationId:', conversationId.value)
-    
-    // 调用流式 AI Agent 对话接口
-    eventSource = commodityAPI.aiAgentChatStream(
-      userMessage,
-      conversationId.value,
-      // onToken: 接收到新的 token
-      (token) => {
-        // 实时更新 AI 回复内容
-        if (messages.value[assistantMessageIndex]) {
-          messages.value[assistantMessageIndex].content += token
-          // 实时滚动到底部
-          nextTick(() => {
-            scrollToBottom()
-          })
-        }
-      },
-      // onComplete: 流式输出完成
-      (data) => {
-        console.log('流式对话完成:', data)
-        // 更新完整回复和推荐商品
-        if (messages.value[assistantMessageIndex]) {
-          messages.value[assistantMessageIndex].content = data.reply || messages.value[assistantMessageIndex].content
-          messages.value[assistantMessageIndex].recommendedCommodities = data.recommendedCommodities || []
-        }
-        
-                    // 更新 conversationId
-                    if (data.conversationId) {
-                      conversationId.value = data.conversationId
-                    }
-                    
-                    sending.value = false
-                    nextTick(() => {
-                      scrollToBottom()
-                      // 刷新聊天列表
-                      loadChatList()
-                    })
-      },
-      // onError: 发生错误
-      (error) => {
-        console.error('流式对话失败:', error)
-        ElMessage.error(error || 'AI 对话失败，请稍后重试')
-        
-        // 更新错误消息
-        if (messages.value[assistantMessageIndex]) {
-          messages.value[assistantMessageIndex].content = '抱歉，我遇到了一些问题，请稍后再试。'
-        }
-        
-        sending.value = false
-        nextTick(() => {
-          scrollToBottom()
-        })
-      }
-    )
+    // 非流式 AI 对话
+    const response = await commodityAPI.aiAgentChat(userMessage, conversationId.value)
+    if (response.success && response.data) {
+      const { reply, conversationId: cid, recommendedCommodities } = response.data
+      messages.value.push({
+        role: 'assistant',
+        content: reply || '抱歉，我没有理解你的问题。',
+        recommendedCommodities: recommendedCommodities || [],
+        timestamp: Date.now()
+      })
+      if (cid) conversationId.value = cid
+    } else {
+      messages.value.push({
+        role: 'assistant',
+        content: '抱歉，我遇到了一些问题，请稍后再试。',
+        recommendedCommodities: [],
+        timestamp: Date.now()
+      })
+    }
   } catch (error) {
     console.error('AI 对话失败:', error)
     ElMessage.error('AI 对话失败，请稍后重试')
-    
-    // 更新错误消息
-    if (messages.value[assistantMessageIndex]) {
-      messages.value[assistantMessageIndex].content = '抱歉，我遇到了一些问题，请稍后再试。'
-    }
-    
+    messages.value.push({
+      role: 'assistant',
+      content: '抱歉，我遇到了一些问题，请稍后再试。',
+      recommendedCommodities: [],
+      timestamp: Date.now()
+    })
+  } finally {
     sending.value = false
     await nextTick()
     scrollToBottom()
-    
-    // 关闭流式连接（如果已创建）
-    if (eventSource && typeof eventSource.close === 'function') {
-      eventSource.close()
-    }
+    loadChatList()
   }
 }
 

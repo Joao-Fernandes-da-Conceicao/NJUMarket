@@ -40,6 +40,13 @@ public class LangChain4jConfig {
     @Value("${langchain4j.open-ai.embedding-model.model-name:${DOUBAO_EMBEDDING_MODEL:doubao-embedding-text-240715}}")
     private String embeddingModel;
 
+    /**
+     * 流式请求到模型上游的 HTTP 读超时（含多轮工具调用期间无 token 输出的等待）。
+     * 过短会导致长工具迭代时连接被掐断，前端 SSE 提前结束且收不到 complete。
+     */
+    @Value("${njumarket.ai.streaming-http-timeout-seconds:600}")
+    private int streamingHttpTimeoutSeconds;
+
     /** 同步对话模型（用于 ShoppingAssistant.chat() 返回 String） */
     @Bean
     @Primary
@@ -69,7 +76,7 @@ public class LangChain4jConfig {
             .modelName(chatModel)
             .temperature(0.7)
             .maxCompletionTokens(2000)
-            .timeout(Duration.ofSeconds(60))
+            .timeout(Duration.ofSeconds(Math.max(60, streamingHttpTimeoutSeconds)))
             .logRequests(true)
             .logResponses(true)
             .build();

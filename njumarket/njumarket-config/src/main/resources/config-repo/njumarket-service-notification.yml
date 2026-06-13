@@ -35,16 +35,11 @@ feign:
       default:
         connectTimeout: 5000
         readTimeout: 10000
-      njumarket-service-commodity:
+      njumarket-service-trade:
         connectTimeout: 3000
         readTimeout: 8000
         circuitbreaker:
-          name: commodityQueryService
-      njumarket-service-order:
-        connectTimeout: 3000
-        readTimeout: 8000
-        circuitbreaker:
-          name: orderQueryService
+          name: tradeService
       njumarket-service-auth:
         connectTimeout: 3000
         readTimeout: 5000
@@ -102,17 +97,7 @@ management:
 resilience4j:
   circuitbreaker:
     instances:
-      commodityQueryService:
-        registerHealthIndicator: true
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        automaticTransitionFromOpenToHalfOpenEnabled: true
-        waitDurationInOpenState: 10s
-        failureRateThreshold: 50
-        slowCallRateThreshold: 100
-        slowCallDurationThreshold: 2s
-      orderQueryService:
+      tradeService:
         registerHealthIndicator: true
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
@@ -124,8 +109,6 @@ resilience4j:
         slowCallDurationThreshold: 2s
   timelimiter:
     instances:
-      commodityQueryService:
-        timeoutDuration: 3s
-      orderQueryService:
+      tradeService:
         timeoutDuration: 3s
 

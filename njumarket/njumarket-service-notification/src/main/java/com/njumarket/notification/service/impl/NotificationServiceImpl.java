@@ -20,33 +20,31 @@ public class NotificationServiceImpl implements NotificationService {
     private final WebSocketRetryService webSocketRetryService;
     
     @Override
-    public void pushOrderChange(String userId, String orderId, String operation) {
+    public void pushOrderChange(String userId, String orderId, String operation, String recipientRole) {
         Map<String, Object> messageData = new HashMap<>();
         messageData.put("type", "ORDER_CHANGE");
         messageData.put("orderId", orderId);
         messageData.put("operation", operation);
+        messageData.put("changeType", operation);
         messageData.put("timestamp", java.time.LocalDateTime.now().toString());
-        
-        // ✅ 将operation映射为changeType（前端期望的字段名）
-        String changeType = operation;
-        messageData.put("changeType", changeType);
-        
-        // ✅ 根据operation推断orderStatus
+
         String orderStatus = inferOrderStatus(operation);
         if (orderStatus != null) {
             messageData.put("orderStatus", orderStatus);
         }
-        
-        // ✅ 根据operation推断targetRole（通知目标角色）
-        String targetRole = inferTargetRole(operation);
+
+        // 优先使用事件中明确携带的接收方角色，避免对 ORDER_CANCELLED 等双向操作的角色误判；
+        // 仅在未携带时才降级为操作类型推断（向后兼容旧的事件生产者）
+        String targetRole = (recipientRole != null && !recipientRole.isBlank())
+                ? recipientRole
+                : inferTargetRole(operation);
         if (targetRole != null) {
             messageData.put("targetRole", targetRole);
         }
-        
-        // ✅ 生成messageId用于ACK确认（格式：ORDER_CHANGE_{orderId}_{operation}_{timestamp}）
+
         String messageId = "ORDER_CHANGE_" + orderId + "_" + operation + "_" + System.currentTimeMillis();
         messageData.put("messageId", messageId);
-        
+
         webSocketRetryService.pushWithRetry(userId, messageData, "ORDER_CHANGE", messageId);
     }
     

@@ -27,42 +27,19 @@ public class RabbitMQConfig {
     public static final String MESSAGE_PUSH_EXCHANGE = "message.push.exchange";
     
     /**
-     * 消息推送事件队列
-     */
-    public static final String MESSAGE_PUSH_QUEUE = "message.push.queue";
-    
-    /**
      * 消息推送事件路由键
-     * 使用 message.push.# 匹配所有以 message.push. 开头的路由键（如 message.push.message.new, message.push.unread.count.update 等）
-     * # 匹配零个或多个单词，* 只匹配一个单词
+     * 使用 message.push.# 匹配所有以 message.push. 开头的路由键
+     * 消费者队列由 Notification 服务各实例自行声明（AnonymousQueue），生产者只声明交换机
      */
     public static final String MESSAGE_PUSH_ROUTING_KEY = "message.push.#";
 
     /**
-     * 创建消息推送事件交换机（Topic 类型）
+     * 创建消息推送事件交换机（Topic 类型）。
+     * 生产者只声明交换机；消费者队列由 Notification 服务各实例在启动时自行创建（AnonymousQueue）。
      */
     @Bean
     public TopicExchange messagePushExchange() {
         return new TopicExchange(MESSAGE_PUSH_EXCHANGE, true, false);
-    }
-
-    /**
-     * 创建消息推送事件队列
-     */
-    @Bean
-    public Queue messagePushQueue() {
-        return QueueBuilder.durable(MESSAGE_PUSH_QUEUE).build();
-    }
-
-    /**
-     * 绑定消息推送队列到交换机
-     */
-    @Bean
-    public Binding messagePushBinding() {
-        return BindingBuilder
-                .bind(messagePushQueue())
-                .to(messagePushExchange())
-                .with(MESSAGE_PUSH_ROUTING_KEY);
     }
 
     // ========== 消息转换器 ==========

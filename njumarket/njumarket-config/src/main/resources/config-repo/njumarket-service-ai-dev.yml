@@ -1,7 +1,19 @@
 # AI Service - Dev 环境配置
-# 无关系库，仅 Redis + Milvus
+# 会话与消息：PostgreSQL；画像摘要：Redis；语义索引：Milvus
 
 spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/njumarket?currentSchema=nju_market}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: nju_market
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -31,6 +43,7 @@ langchain4j:
 
 njumarket:
   ai:
+    streaming-http-timeout-seconds: ${AI_STREAMING_HTTP_TIMEOUT_SECONDS:600}
     milvus:
       enabled: ${MILVUS_ENABLED:true}
       uri: ${MILVUS_URI:http://localhost:19530}

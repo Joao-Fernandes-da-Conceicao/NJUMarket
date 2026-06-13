@@ -6,6 +6,7 @@ import com.njumarket.ai.client.CommodityClient;
 import com.njumarket.ai.service.MilvusVectorService;
 import com.njumarket.njumarket.dto.Result;
 import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -18,11 +19,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * 商品搜索工具
- * 用于 LangChain4j Function Calling
+ * 商品搜索工具执行器（LangChain4j Function Calling）。
+ * <p>内部按 memoryId 维护会话级状态（推荐列表、累计搜索结果），由 AIAgentService 在每轮生命周期中清理。
+ * <p>工具方法必须带 {@link ToolMemoryId}，由框架注入，不进入发给模型的 JSON Schema；
+ * 这样在 Reactor 流式、异步线程中也能正确写入会话状态（推荐商品卡片）。
  */
 @Slf4j
 @Component
@@ -32,32 +36,57 @@ public class SearchCommoditiesTool {
     private final CommodityClient commodityClient;
     private final ObjectMapper objectMapper;
     private final MilvusVectorService milvusVectorService;
+    private final ConcurrentHashMap<String, CommoditySearchTurnState> stateByMemoryId = new ConcurrentHashMap<>();
 
-    /** 最近一次搜索的原始列表（兼容） */
-    @Getter
-    @Setter
-    private List<CommodityDTO> lastSearchResults = new ArrayList<>();
+    private static String toMemoryId(Object memoryId) {
+        return memoryId == null ? null : memoryId.toString();
+    }
 
-    /** 本轮对话中所有搜索结果的并集（按 commodityId 去重），供 LLM 多轮搜索后从中勾选推荐 */
-    private final Map<String, CommodityDTO> accumulatedSearchResults = new LinkedHashMap<>();
+    private CommoditySearchTurnState stateFor(String memoryId) {
+        if (memoryId == null) {
+            log.warn("SearchCommoditiesTool: memoryId 为空，使用临时状态（推荐卡片可能丢失）");
+            return new CommoditySearchTurnState();
+        }
+        return stateByMemoryId.computeIfAbsent(memoryId, k -> new CommoditySearchTurnState());
+    }
 
-    /** LLM 通过 confirmRecommendedCommodities 确认的本轮推荐 ID，为空则退回用 lastSearchResults */
-    @Getter
-    @Setter
-    private List<String> recommendedIdsForResponse;
+    public void beginConversationTurn(String memoryId) {
+        if (memoryId != null) {
+            stateByMemoryId.put(memoryId, new CommoditySearchTurnState());
+        }
+    }
 
-    /**
-     * 搜索商品工具
-     * LangChain4j 使用 @Tool 注解定义工具函数
-     *
-     * @param query 搜索查询文本
-     * @param location 位置偏好（可选、弱参数，仅用户明确强调地点时传入，多数情况不传）
-     * @param limit 返回数量限制（可选，默认 20）
-     * @return 商品列表的文本描述
-     */
+    public void endConversationTurn(String memoryId) {
+        if (memoryId != null) {
+            stateByMemoryId.remove(memoryId);
+        }
+    }
+
+    public List<CommodityDTO> getRecommendedCommoditiesForResponse(String memoryId) {
+        if (memoryId == null) {
+            return Collections.emptyList();
+        }
+        CommoditySearchTurnState st = stateByMemoryId.get(memoryId);
+        if (st == null) {
+            return Collections.emptyList();
+        }
+        if (st.recommendedIdsForResponse != null && !st.recommendedIdsForResponse.isEmpty()) {
+            return st.recommendedIdsForResponse.stream()
+                    .map(st.accumulatedSearchResults::get)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+        return st.lastSearchResults != null ? new ArrayList<>(st.lastSearchResults) : Collections.emptyList();
+    }
+
     @Tool("搜索商品。根据用户的查询文本和数量限制返回相关商品列表；location 为可选的弱参数，仅当用户明确强调地点时再传。")
-    public String searchCommodities(String query, String location, Integer limit) {
-        log.info("Function Calling: 搜索商品 - query={}, location={}, limit={}", query, location, limit);
+    public String searchCommodities(String query, String location, Integer limit, @ToolMemoryId Object memoryId) {
+        return searchCommoditiesImpl(query, location, limit, toMemoryId(memoryId));
+    }
+
+    private String searchCommoditiesImpl(String query, String location, Integer limit, String memoryId) {
+        log.info("Function Calling: 搜索商品 - query={}, location={}, limit={}, memoryId={}", query, location, limit, memoryId);
+        CommoditySearchTurnState st = stateFor(memoryId);
 
         try {
             int safeLimit = limit != null && limit > 0 ? limit : 20;
@@ -66,15 +95,15 @@ public class SearchCommoditiesTool {
 
             if (result == null || !Boolean.TRUE.equals(result.getSuccess()) || result.getData() == null) {
                 log.warn("商品搜索返回空结果: query={}", query);
-                this.lastSearchResults = new ArrayList<>();
+                st.lastSearchResults = new ArrayList<>();
                 return "抱歉，没有找到相关商品。";
             }
 
             List<CommodityDTO> commodities = extractCommodities(result.getData());
-            this.lastSearchResults = commodities;
+            st.lastSearchResults = commodities;
             for (CommodityDTO c : commodities) {
                 if (c.getCommodityId() != null) {
-                    accumulatedSearchResults.put(c.getCommodityId(), c);
+                    st.accumulatedSearchResults.put(c.getCommodityId(), c);
                 }
             }
 
@@ -99,14 +128,19 @@ public class SearchCommoditiesTool {
 
         } catch (Exception e) {
             log.error("搜索商品失败: query={}, error={}", query, e.getMessage(), e);
-            this.lastSearchResults = new ArrayList<>();
+            st.lastSearchResults = new ArrayList<>();
             return "抱歉，搜索时遇到了问题，请稍后重试。";
         }
     }
 
     @Tool("语义向量搜索商品。适合用户表达模糊、同义词多、口语化强的需求。仅需 query 和 limit。")
-    public String searchCommoditiesByVector(String query, Integer limit) {
-        log.info("Function Calling: 向量搜索商品 - query={}, limit={}", query, limit);
+    public String searchCommoditiesByVector(String query, Integer limit, @ToolMemoryId Object memoryId) {
+        return searchCommoditiesByVectorImpl(query, limit, toMemoryId(memoryId));
+    }
+
+    private String searchCommoditiesByVectorImpl(String query, Integer limit, String memoryId) {
+        log.info("Function Calling: 向量搜索商品 - query={}, limit={}, memoryId={}", query, limit, memoryId);
+        CommoditySearchTurnState st = stateFor(memoryId);
         try {
             int safeLimit = limit != null && limit > 0 ? limit : 20;
             List<Map<String, Object>> vectorHits = milvusVectorService.searchCommodityByText(query, safeLimit);
@@ -118,81 +152,61 @@ public class SearchCommoditiesTool {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
             List<CommodityDTO> commodities = fetchCommoditiesByIds(ids);
-            this.lastSearchResults = commodities;
+            st.lastSearchResults = commodities;
             commodities.forEach(c -> {
                 if (c.getCommodityId() != null) {
-                    accumulatedSearchResults.put(c.getCommodityId(), c);
+                    st.accumulatedSearchResults.put(c.getCommodityId(), c);
                 }
             });
             if (commodities.isEmpty()) {
                 return "向量检索未找到明显匹配商品。";
             }
-            return buildCommodityResultText("向量检索", commodities);
+            return buildCommodityResultText("向量检索", commodities, st);
         } catch (Exception e) {
             log.error("向量搜索失败: query={}, error={}", query, e.getMessage(), e);
-            this.lastSearchResults = new ArrayList<>();
+            st.lastSearchResults = new ArrayList<>();
             return "抱歉，向量搜索时遇到了问题，请稍后重试。";
         }
     }
 
     @Tool("混合检索商品：同时执行关键词检索与向量检索并合并去重，召回更全。location 为弱参数。")
-    public String searchCommoditiesHybrid(String query, String location, Integer limit) {
-        log.info("Function Calling: 混合搜索商品 - query={}, location={}, limit={}", query, location, limit);
+    public String searchCommoditiesHybrid(String query, String location, Integer limit, @ToolMemoryId Object memoryId) {
+        String mid = toMemoryId(memoryId);
+        log.info("Function Calling: 混合搜索商品 - query={}, location={}, limit={}, memoryId={}", query, location, limit, mid);
+        CommoditySearchTurnState st = stateFor(mid);
         int safeLimit = limit != null && limit > 0 ? limit : 20;
-        String esText = searchCommodities(query, location, safeLimit);
-        List<CommodityDTO> esResults = new ArrayList<>(lastSearchResults);
-        String vectorText = searchCommoditiesByVector(query, safeLimit);
-        List<CommodityDTO> vectorResults = new ArrayList<>(lastSearchResults);
+        String esText = searchCommoditiesImpl(query, location, safeLimit, mid);
+        List<CommodityDTO> esResults = new ArrayList<>(st.lastSearchResults);
+        String vectorText = searchCommoditiesByVectorImpl(query, safeLimit, mid);
+        List<CommodityDTO> vectorResults = new ArrayList<>(st.lastSearchResults);
 
         Map<String, CommodityDTO> merged = new LinkedHashMap<>();
         esResults.forEach(c -> merged.put(c.getCommodityId(), c));
         vectorResults.forEach(c -> merged.putIfAbsent(c.getCommodityId(), c));
 
         List<CommodityDTO> finalResults = new ArrayList<>(merged.values());
-        this.lastSearchResults = finalResults;
+        st.lastSearchResults = finalResults;
         finalResults.forEach(c -> {
             if (c.getCommodityId() != null) {
-                accumulatedSearchResults.put(c.getCommodityId(), c);
+                st.accumulatedSearchResults.put(c.getCommodityId(), c);
             }
         });
         if (finalResults.isEmpty()) {
             return "混合检索未找到相关商品。";
         }
-        return buildCommodityResultText("混合检索(ES+Vector)", finalResults)
+        return buildCommodityResultText("混合检索(ES+Vector)", finalResults, st)
                 + "\n（补充信息）ES: " + summarizeToolText(esText) + "；Vector: " + summarizeToolText(vectorText);
     }
 
-    /**
-     * 确认本轮要推荐给用户的商品 ID 列表。只应包含经过过滤、真正符合用户需求的商品。
-     * 在完成搜索并过滤后调用，传入符合要求的 commodityId 列表；未调用则沿用最后一次搜索的完整结果。
-     */
     @Tool("确认本轮要推荐给用户的商品。传入经过过滤、真正符合用户需求的 commodityId 列表（仅这些会作为推荐卡片返回给用户）。若没有符合的则传空列表。")
-    public String confirmRecommendedCommodities(List<String> commodityIds) {
+    public String confirmRecommendedCommodities(List<String> commodityIds, @ToolMemoryId Object memoryId) {
+        String mid = toMemoryId(memoryId);
+        CommoditySearchTurnState st = stateFor(mid);
         if (commodityIds != null) {
-            this.recommendedIdsForResponse = new ArrayList<>(commodityIds);
-            log.info("Agent 确认推荐商品数: {}", commodityIds.size());
+            st.recommendedIdsForResponse = new ArrayList<>(commodityIds);
+            log.info("Agent 确认推荐商品数: {}, memoryId={}", commodityIds.size(), mid);
         }
         return "已记录推荐列表，将仅向用户展示这些商品。";
-    }
-
-    /** 新一轮对话开始时调用，清空累积结果与推荐 ID */
-    public void clearForNewTurn() {
-        this.lastSearchResults = new ArrayList<>();
-        this.accumulatedSearchResults.clear();
-        this.recommendedIdsForResponse = null;
-    }
-
-    /**
-     * 供响应使用：若 LLM 调用了 confirmRecommendedCommodities，则只返回其确认的 ID 对应商品；否则退回最后一次搜索的完整列表。
-     */
-    public List<CommodityDTO> getRecommendedCommoditiesForResponse() {
-        if (recommendedIdsForResponse != null && !recommendedIdsForResponse.isEmpty()) {
-            return recommendedIdsForResponse.stream()
-                .map(accumulatedSearchResults::get)
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toList());
-        }
-        return lastSearchResults;
     }
 
     private List<CommodityDTO> extractCommodities(Object data) {
@@ -232,7 +246,7 @@ public class SearchCommoditiesTool {
         }
     }
 
-    private String buildCommodityResultText(String source, List<CommodityDTO> commodities) {
+    private String buildCommodityResultText(String source, List<CommodityDTO> commodities, CommoditySearchTurnState st) {
         StringBuilder sb = new StringBuilder();
         sb.append(source).append("找到 ").append(commodities.size()).append(" 个相关商品（含 commodityId）：\n");
         for (int i = 0; i < commodities.size() && i < 15; i++) {
@@ -255,9 +269,6 @@ public class SearchCommoditiesTool {
         return normalized.length() > 60 ? normalized.substring(0, 60) + "..." : normalized;
     }
 
-    /**
-     * 简化的商品DTO（用于AI服务内部）
-     */
     @Getter
     @Setter
     public static class CommodityDTO {
@@ -271,5 +282,12 @@ public class SearchCommoditiesTool {
         private String conditionLevel;
         private String location;
         private String addressSnapshotFull;
+    }
+
+    /** 单轮内搜索与推荐累积 */
+    private static final class CommoditySearchTurnState {
+        private List<CommodityDTO> lastSearchResults = new ArrayList<>();
+        private final Map<String, CommodityDTO> accumulatedSearchResults = new LinkedHashMap<>();
+        private List<String> recommendedIdsForResponse;
     }
 }

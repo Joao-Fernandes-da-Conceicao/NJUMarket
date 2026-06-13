@@ -115,8 +115,7 @@ make down     # 停止服务
 | Eureka Dashboard | http://localhost:8761 | 服务注册中心 |
 | API Gateway | http://localhost:8080 | API 网关 |
 | Auth Service | http://localhost:8091 | 认证服务 |
-| Commodity Service | http://localhost:8092 | 商品服务 |
-| Order Service | http://localhost:8093 | 订单服务 |
+| Trade Service（商品+订单） | http://localhost:8092 | 交易服务 |
 | Message Service | http://localhost:8094 | 消息服务 |
 | Image Service | http://localhost:8095 | 图片服务 |
 | Admin Service | http://localhost:8096 | 管理服务 |
@@ -139,8 +138,7 @@ curl http://localhost:8091/actuator/health
 访问 http://localhost:8761，应该看到以下服务已注册：
 - njumarket-gateway
 - njumarket-service-auth
-- njumarket-service-commodity
-- njumarket-service-order
+- njumarket-service-trade
 - njumarket-service-message
 - njumarket-service-image
 - njumarket-service-admin

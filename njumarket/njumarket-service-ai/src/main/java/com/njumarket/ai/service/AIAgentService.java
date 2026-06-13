@@ -24,29 +24,31 @@ import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * AI Agent 服务（无关系库，Redis + Milvus）
+ * AI Agent 服务：会话与消息权威存 PostgreSQL；用户画像摘要存 Redis；Milvus 作语义索引（轮次向量 + 画像 chunk）。
  *
  * <p>对话流程：
  * <ol>
- *   <li>用户画像 → Redis 摘要 + Milvus 语义 chunk</li>
- *   <li>ChatMemory → Milvus 语义召回</li>
- *   <li>Agent 循环（ES/向量/混合检索）</li>
- *   <li>消息持久化 → Redis 列表 + Milvus 向量</li>
- *   <li>画像更新 → Redis + Milvus chunk</li>
+ *   <li>每次 chat：从关系库恢复 ChatMemory（最近窗口）；向量/Milvus 仅作辅助 system 片段</li>
+ *   <li>原生 ChatMemory：窗口制，超过阈值则摘要压缩</li>
+ *   <li>Agent 工具（ES/向量/混合检索）</li>
+ *   <li>持久化：单条消息入 PostgreSQL；每轮 user+assistant 合并写入 Milvus（失败不影响主流程）</li>
+ *   <li>画像异步更新 → Redis + Milvus chunk</li>
  * </ol>
  */
 @Slf4j
 @Service
 public class AIAgentService {
 
+    /** 摘要后保留的最近消息条数（用户/助手消息为主） */
     private static final int MAX_MEMORY_MESSAGES = 15;
-    private static final int SUMMARY_TRIGGER = 20;
+    /** ChatMemory 最大条数（缓冲），超过 {@link #SUMMARY_TRIGGER} 则触发摘要 */
+    private static final int CHAT_MEMORY_BUFFER = 32;
+    private static final int SUMMARY_TRIGGER = 24;
     private static final int PROFILE_UPDATE_INTERVAL = 10;
     private static final int MAX_TOOL_ITERATIONS = 5;
     private static final int MEMORY_RECALL_LIMIT = 12;
@@ -59,6 +61,8 @@ public class AIAgentService {
     private final MilvusProperties milvusProperties;
 
     private final Map<String, ChatMemory> chatMemoryMap = new ConcurrentHashMap<>();
+    /** 本轮请求的辅助 system 片段（按 memoryId），供 {@code systemMessageProvider} 读取，不写入 ChatMemory */
+    private final Map<String, SessionAugmentation> sessionAugmentationByMemoryId = new ConcurrentHashMap<>();
     private final ShoppingAssistant shoppingAssistant;
 
     public interface ShoppingAssistant {
@@ -80,17 +84,19 @@ public class AIAgentService {
         this.milvusVectorService = milvusVectorService;
         this.milvusProperties = milvusProperties;
 
+        Object[] toolObjects = new Object[] { this.searchCommoditiesTool };
+
         this.shoppingAssistant = AiServices.builder(ShoppingAssistant.class)
             .chatModel(chatLanguageModel)
             .streamingChatModel(streamingChatLanguageModel)
-            .tools(searchCommoditiesTool)
+            .tools(toolObjects)
             .maxSequentialToolsInvocations(MAX_TOOL_ITERATIONS)
             .chatMemoryProvider(chatMemoryId -> {
                 String id = chatMemoryId != null ? chatMemoryId.toString() : "default";
                 return chatMemoryMap.computeIfAbsent(id,
-                    k -> MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES));
+                    k -> MessageWindowChatMemory.withMaxMessages(CHAT_MEMORY_BUFFER));
             })
-            .systemMessageProvider(chatMemoryId -> buildBaseSystemPrompt())
+            .systemMessageProvider(this::buildSystemPromptForMemoryId)
             .build();
     }
 
@@ -111,24 +117,24 @@ public class AIAgentService {
         if (!StringUtils.hasText(userMessage) || !StringUtils.hasText(userId)) {
             return new ChatResult("抱歉，我无法理解您的问题。", null);
         }
+        String memoryId = StringUtils.hasText(conversationId) ? conversationId : userId + "_default";
         try {
-            searchCommoditiesTool.clearForNewTurn();
-            String memoryId = StringUtils.hasText(conversationId) ? conversationId : userId + "_default";
+            beginCommodityTurn(memoryId);
 
             initChatMemory(memoryId, conversationId, userId);
-            rebuildMemoryBySimilarity(memoryId, conversationId, userId, userMessage);
-            injectSemanticProfileContext(memoryId, userId, userMessage);
+            prepareSessionAugmentation(memoryId, userId, conversationId, userMessage);
 
             ChatMemory chatMemory = chatMemoryMap.get(memoryId);
-            if (chatMemory.messages().size() >= SUMMARY_TRIGGER) {
+            if (chatMemory != null && chatMemory.messages().size() >= SUMMARY_TRIGGER) {
                 summarizeAndCompress(chatMemory, chatMemory.messages(), memoryId);
             }
 
             String assistantReply = shoppingAssistant.chat(memoryId, userMessage);
-            List<SearchCommoditiesTool.CommodityDTO> recommended = searchCommoditiesTool.getRecommendedCommoditiesForResponse();
+            List<SearchCommoditiesTool.CommodityDTO> recommended = resolveRecommendedCommodities(memoryId);
 
             if (StringUtils.hasText(conversationId)) {
                 persistMessages(conversationId, userId, userMessage, assistantReply, recommended);
+                persistConversationWindowState(conversationId);
                 checkAndUpdateProfile(userId, conversationId);
             }
 
@@ -139,6 +145,9 @@ public class AIAgentService {
         } catch (Exception e) {
             log.error("AI 对话失败: userId={}, error={}", userId, e.getMessage(), e);
             return new ChatResult("抱歉，我遇到了一些问题，请稍后再试。", null);
+        } finally {
+            sessionAugmentationByMemoryId.remove(memoryId);
+            endCommodityTurn(memoryId);
         }
     }
 
@@ -147,22 +156,20 @@ public class AIAgentService {
             return Flux.just(errorEvent("用户消息或用户ID不能为空"));
         }
 
+        String memoryId = StringUtils.hasText(conversationId) ? conversationId : userId + "_default";
         try {
-            searchCommoditiesTool.clearForNewTurn();
-            String memoryId = StringUtils.hasText(conversationId) ? conversationId : userId + "_default";
-
             initChatMemory(memoryId, conversationId, userId);
-            rebuildMemoryBySimilarity(memoryId, conversationId, userId, userMessage);
-            injectSemanticProfileContext(memoryId, userId, userMessage);
+            prepareSessionAugmentation(memoryId, userId, conversationId, userMessage);
 
             ChatMemory chatMemory = chatMemoryMap.get(memoryId);
-            if (chatMemory.messages().size() >= SUMMARY_TRIGGER) {
+            if (chatMemory != null && chatMemory.messages().size() >= SUMMARY_TRIGGER) {
                 summarizeAndCompress(chatMemory, chatMemory.messages(), memoryId);
             }
 
             StringBuilder fullReply = new StringBuilder();
 
             return shoppingAssistant.chatStream(memoryId, userMessage)
+                .doOnSubscribe(s -> beginCommodityTurn(memoryId))
                 .map(token -> {
                     fullReply.append(token);
                     return ServerSentEvent.<String>builder()
@@ -170,7 +177,11 @@ public class AIAgentService {
                         .data(token)
                         .build();
                 })
-                .concatWith(buildCompleteEvent(conversationId, userId, userMessage, fullReply))
+                .concatWith(buildCompleteEvent(memoryId, conversationId, userId, userMessage, fullReply))
+                .doFinally(sig -> {
+                    sessionAugmentationByMemoryId.remove(memoryId);
+                    endCommodityTurn(memoryId);
+                })
                 .onErrorResume(e -> {
                     log.error("AI 流式对话失败: userId={}, cid={}, error={}", userId, conversationId, e.getMessage(), e);
                     return Flux.just(errorEvent(e.getMessage()));
@@ -197,66 +208,161 @@ public class AIAgentService {
         }
     }
 
+    /**
+     * 从关系库恢复最近窗口到 ChatMemory；无 conversationId 时仅用进程内空窗口。
+     * 语义召回与画像见 {@link #prepareSessionAugmentation}。
+     */
     private void initChatMemory(String memoryId, String conversationId, String userId) {
-        chatMemoryMap.computeIfAbsent(memoryId, id -> {
-            ChatMemory mem = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
-            injectUserProfile(mem, userId);
-            return mem;
-        });
+        if (!StringUtils.hasText(conversationId)) {
+            chatMemoryMap.put(memoryId, MessageWindowChatMemory.withMaxMessages(CHAT_MEMORY_BUFFER));
+            return;
+        }
+        ChatMemory restored = buildChatMemoryFromRelationalDb(conversationId, userId);
+        chatMemoryMap.put(memoryId, restored);
     }
 
-    private void rebuildMemoryBySimilarity(String memoryId, String conversationId, String userId, String userMessage) {
+    /**
+     * 按会话快照（memory_summary + window_message_count）从 PostgreSQL 还原窗口；
+     * 无快照或 window=0 时退回「最近 {@link #CHAT_MEMORY_BUFFER} 条」。
+     */
+    private ChatMemory buildChatMemoryFromRelationalDb(String conversationId, String userId) {
+        Optional<AIConversationStorage.ConversationMemorySnapshot> snapOpt =
+                storage.getConversationMemorySnapshot(conversationId);
+        int tailUserAi = snapOpt.map(AIConversationStorage.ConversationMemorySnapshot::windowMessageCount).orElse(0);
+        String summaryBody = snapOpt.map(AIConversationStorage.ConversationMemorySnapshot::memorySummary)
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .orElse(null);
+
+        int loadLimit = tailUserAi > 0 ? Math.min(tailUserAi, CHAT_MEMORY_BUFFER) : CHAT_MEMORY_BUFFER;
+        List<AIConversationStorage.MessageRecord> msgs = storage.getMessages(conversationId, userId, loadLimit);
+
+        ChatMemory mem = MessageWindowChatMemory.withMaxMessages(CHAT_MEMORY_BUFFER);
+        if (StringUtils.hasText(summaryBody)) {
+            mem.add(SystemMessage.from("【历史摘要】" + summaryBody));
+        }
+        for (AIConversationStorage.MessageRecord r : msgs) {
+            if (r == null || !StringUtils.hasText(r.role())) {
+                continue;
+            }
+            String text = r.content() != null ? r.content() : "";
+            if ("user".equalsIgnoreCase(r.role())) {
+                mem.add(UserMessage.from(text));
+            } else if ("assistant".equalsIgnoreCase(r.role())) {
+                mem.add(AiMessage.from(text));
+            }
+        }
+        log.debug("已从关系库恢复 ChatMemory: cid={}, tailUserAi={}, summary={}, loadedRows={}",
+                conversationId, tailUserAi, summaryBody != null, msgs.size());
+        return mem;
+    }
+
+    /**
+     * 将当前 ChatMemory 中的【历史摘要】与窗口内 user/assistant 条数写回会话行，供下次恢复与归纳阈值对齐。
+     */
+    private void persistConversationWindowState(String conversationId) {
+        if (!StringUtils.hasText(conversationId)) {
+            return;
+        }
         try {
-            ChatMemory newMemory = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
-            injectUserProfile(newMemory, userId);
-            if (StringUtils.hasText(conversationId) && StringUtils.hasText(userMessage)) {
-                int topK = Math.max(milvusProperties.getMemoryTopK(), MEMORY_RECALL_LIMIT);
-                List<Map<String, Object>> hits = milvusVectorService.searchConversationByText(userMessage, conversationId, topK);
-                int added = 0;
-                for (Map<String, Object> hit : hits) {
-                    Object entityRaw = hit.get("entity");
-                    if (!(entityRaw instanceof Map<?, ?> entity)) continue;
-                    Object contentObj = entity.get("content");
-                    if (contentObj == null) continue;
-                    String content = String.valueOf(contentObj);
-                    if (content.startsWith("role=user\ncontent=")) {
-                        newMemory.add(UserMessage.from(content.substring("role=user\ncontent=".length())));
-                        added++;
-                    } else if (content.startsWith("role=assistant\ncontent=")) {
-                        newMemory.add(AiMessage.from(content.substring("role=assistant\ncontent=".length())));
+            ChatMemory cm = chatMemoryMap.get(conversationId);
+            if (cm == null) {
+                return;
+            }
+            String summaryBody = null;
+            int userAiCount = 0;
+            for (ChatMessage m : cm.messages()) {
+                if (m instanceof SystemMessage sm) {
+                    String t = sm.text();
+                    if (t != null && t.startsWith("【历史摘要】")) {
+                        summaryBody = t.substring("【历史摘要】".length()).trim();
+                    }
+                } else if (m instanceof UserMessage || m instanceof AiMessage) {
+                    userAiCount++;
+                }
+            }
+            storage.updateConversationMemorySnapshot(conversationId, summaryBody, userAiCount);
+        } catch (Exception e) {
+            log.debug("持久化会话窗口快照失败（忽略）: cid={}, error={}", conversationId, e.getMessage());
+        }
+    }
+
+    /**
+     * 将 Redis 画像摘要、Milvus 对话/用户画像语义召回写入 {@link #sessionAugmentationByMemoryId}，
+     * 由 {@link #buildSystemPromptForMemoryId} 拼入 system，不写入 ChatMemory。
+     */
+    private void prepareSessionAugmentation(String memoryId, String userId, String conversationId, String userMessage) {
+        sessionAugmentationByMemoryId.remove(memoryId);
+        try {
+            String redisProfile = storage.getProfileSummary(userId)
+                .map(AIConversationStorage.ProfileSummary::profileSummary)
+                .filter(StringUtils::hasText)
+                .orElse(null);
+
+            String convRecall = buildConversationSemanticRecall(conversationId, userMessage);
+            String profileSemantic = buildUserProfileSemanticRecall(userId, userMessage);
+
+            SessionAugmentation aug = new SessionAugmentation(redisProfile, convRecall, profileSemantic);
+            if (!aug.isEmpty()) {
+                sessionAugmentationByMemoryId.put(memoryId, aug);
+            }
+        } catch (Exception e) {
+            log.debug("准备会话辅助上下文失败（忽略）: {}", e.getMessage());
+        }
+    }
+
+    private String buildConversationSemanticRecall(String conversationId, String userMessage) {
+        if (!StringUtils.hasText(conversationId) || !StringUtils.hasText(userMessage)) {
+            return null;
+        }
+        try {
+            int topK = Math.max(milvusProperties.getMemoryTopK(), MEMORY_RECALL_LIMIT);
+            List<Map<String, Object>> hits = milvusVectorService.searchConversationByText(userMessage, conversationId, topK);
+            StringBuilder sb = new StringBuilder();
+            int added = 0;
+            for (Map<String, Object> hit : hits) {
+                Object entityRaw = hit.get("entity");
+                if (!(entityRaw instanceof Map<?, ?> entity)) continue;
+                Object contentObj = entity.get("content");
+                if (contentObj == null) continue;
+                String content = String.valueOf(contentObj);
+                if (content.contains("\nrole=assistant\ncontent=") && content.startsWith("role=user\ncontent=")) {
+                    String u = content.substring("role=user\ncontent=".length());
+                    int split = u.indexOf("\nrole=assistant\ncontent=");
+                    if (split >= 0) {
+                        String userPart = u.substring(0, split);
+                        String asstPart = u.substring(split + "\nrole=assistant\ncontent=".length());
+                        sb.append("[轮次] 用户: ").append(userPart).append(" | 助手: ").append(asstPart).append('\n');
                         added++;
                     }
-                    if (added >= MAX_MEMORY_MESSAGES - 3) break;
+                } else if (content.startsWith("role=user\ncontent=")) {
+                    sb.append("[用户片段] ").append(content.substring("role=user\ncontent=".length())).append('\n');
+                    added++;
+                } else if (content.startsWith("role=assistant\ncontent=")) {
+                    sb.append("[助手片段] ").append(content.substring("role=assistant\ncontent=".length())).append('\n');
+                    added++;
                 }
-                log.debug("Milvus 语义记忆召回完成: cid={}, recalled={}", conversationId, added);
+                if (added >= MEMORY_RECALL_LIMIT) {
+                    break;
+                }
             }
-            chatMemoryMap.put(memoryId, newMemory);
+            if (sb.length() == 0) {
+                return null;
+            }
+            log.debug("Milvus 对话语义召回（辅助）: cid={}, lines={}", conversationId, added);
+            return sb.toString().trim();
         } catch (Exception e) {
-            log.warn("基于 Milvus 重建语义记忆失败，回退空记忆: cid={}, error={}", conversationId, e.getMessage());
-            ChatMemory fallback = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
-            injectUserProfile(fallback, userId);
-            chatMemoryMap.put(memoryId, fallback);
+            log.warn("对话语义召回失败: {}", e.getMessage());
+            return null;
         }
     }
 
-    private void injectUserProfile(ChatMemory chatMemory, String userId) {
-        try {
-            storage.getProfileSummary(userId).ifPresent(profile -> {
-                if (StringUtils.hasText(profile.profileSummary())) {
-                    chatMemory.add(SystemMessage.from(
-                        buildBaseSystemPrompt() + "\n\n=== 用户画像 ===\n" + profile.profileSummary()
-                        + "\n请根据以上偏好提供个性化推荐。"));
-                }
-            });
-        } catch (Exception e) {
-            log.debug("注入用户画像失败（可选）: userId={}, error={}", userId, e.getMessage());
-        }
-    }
-
-    private void injectSemanticProfileContext(String memoryId, String userId, String userMessage) {
+    private String buildUserProfileSemanticRecall(String userId, String userMessage) {
         try {
             List<Map<String, Object>> hits = milvusVectorService.searchUserProfileByText(userMessage, 3);
-            if (hits == null || hits.isEmpty()) return;
+            if (hits == null || hits.isEmpty()) {
+                return null;
+            }
             String context = hits.stream()
                     .map(hit -> {
                         Object entityRaw = hit.get("entity");
@@ -270,14 +376,21 @@ public class AIAgentService {
                     })
                     .filter(Objects::nonNull)
                     .collect(Collectors.joining("\n"));
-            if (!StringUtils.hasText(context)) return;
-            ChatMemory chatMemory = chatMemoryMap.get(memoryId);
-            if (chatMemory != null) {
-                chatMemory.add(SystemMessage.from("=== 用户画像语义片段（按当前问题召回）===\n" + context));
-            }
+            return StringUtils.hasText(context) ? context : null;
         } catch (Exception e) {
-            log.debug("注入用户画像语义片段失败（忽略）: userId={}, error={}", userId, e.getMessage());
+            log.debug("用户画像语义召回失败（忽略）: userId={}, error={}", userId, e.getMessage());
+            return null;
         }
+    }
+
+    private String buildSystemPromptForMemoryId(Object memoryIdObj) {
+        String mid = memoryIdObj != null ? memoryIdObj.toString() : "default";
+        String base = buildBaseSystemPrompt();
+        SessionAugmentation aug = sessionAugmentationByMemoryId.get(mid);
+        if (aug == null || aug.isEmpty()) {
+            return base;
+        }
+        return base + "\n\n" + aug.toAppendix();
     }
 
     protected void persistMessages(String conversationId, String userId,
@@ -285,7 +398,6 @@ public class AIAgentService {
                                    List<SearchCommoditiesTool.CommodityDTO> recommended) {
         try {
             AIConversationStorage.MessageRecord userRec = storage.appendMessage(conversationId, userId, "user", userText, null);
-            upsertConversationMemory(userRec.messageId(), userRec.conversationId(), "user", userText);
 
             String recIds = null;
             if (recommended != null && !recommended.isEmpty()) {
@@ -298,32 +410,45 @@ public class AIAgentService {
                 } catch (Exception ignored) {}
             }
             AIConversationStorage.MessageRecord assistantRec = storage.appendMessage(conversationId, userId, "assistant", assistantText, recIds);
-            upsertConversationMemory(assistantRec.messageId(), assistantRec.conversationId(), "assistant", assistantText);
+            upsertConversationTurnVectorSafe(conversationId, userRec, assistantRec, userText, assistantText);
 
         } catch (Exception e) {
             log.error("持久化消息失败（用户回复不受影响）: cid={}, error={}", conversationId, e.getMessage(), e);
         }
     }
 
-    private void upsertConversationMemory(String messageId, String conversationId, String role, String content) {
+    /**
+     * 将「一轮 user+assistant」作为单条向量写入 Milvus（与语义召回格式一致）；失败不影响主流程。
+     */
+    private void upsertConversationTurnVectorSafe(String conversationId,
+                                                  AIConversationStorage.MessageRecord userRec,
+                                                  AIConversationStorage.MessageRecord assistantRec,
+                                                  String userText,
+                                                  String assistantText) {
+        if (!milvusProperties.isEnabled()) {
+            return;
+        }
         try {
-            String vectorContent = "role=" + role + "\ncontent=" + content;
-            milvusVectorService.upsertConversationMessageByText(messageId, conversationId, vectorContent);
+            String pairId = "pair_" + userRec.messageId() + "_" + assistantRec.messageId();
+            String ut = userText != null ? userText : "";
+            String at = assistantText != null ? assistantText : "";
+            String vectorContent = "role=user\ncontent=" + ut + "\nrole=assistant\ncontent=" + at;
+            milvusVectorService.upsertConversationMessageByText(pairId, conversationId, vectorContent);
         } catch (Exception e) {
-            log.debug("写入对话语义记忆失败（不影响主流程）: mid={}, error={}", messageId, e.getMessage());
+            log.warn("Milvus 轮次向量写入失败（不影响主流程）: cid={}, error={}", conversationId, e.getMessage());
         }
     }
 
-    private Flux<ServerSentEvent<String>> buildCompleteEvent(String conversationId, String userId,
+    /**
+     * 先发出 {@code complete} SSE，再异步持久化。
+     * <p>若在持久化完成前才发 complete，最后一个 token 与 complete 之间会长时间无字节写入，
+     * 网关/代理/Tomcat 可能按读空闲掐断连接，表现为前端流中断但库中已有回复。</p>
+     */
+    private Flux<ServerSentEvent<String>> buildCompleteEvent(String memoryId, String conversationId, String userId,
                                                              String userMessage, StringBuilder fullReply) {
-        return Flux.<ServerSentEvent<String>>defer(() -> {
+        return Flux.defer(() -> {
             String reply = fullReply.toString();
-            List<SearchCommoditiesTool.CommodityDTO> recommended = searchCommoditiesTool.getRecommendedCommoditiesForResponse();
-
-            if (StringUtils.hasText(conversationId)) {
-                persistMessages(conversationId, userId, userMessage, reply, recommended);
-                checkAndUpdateProfile(userId, conversationId);
-            }
+            List<SearchCommoditiesTool.CommodityDTO> recommended = resolveRecommendedCommodities(memoryId);
 
             try {
                 Map<String, Object> data = new HashMap<>();
@@ -332,15 +457,36 @@ public class AIAgentService {
                 data.put("recommendedCommodities", recommended);
                 data.put("hasRecommendations", recommended != null && !recommended.isEmpty());
 
-                return Flux.just(ServerSentEvent.<String>builder()
+                String json = objectMapper.writeValueAsString(data);
+                ServerSentEvent<String> complete = ServerSentEvent.<String>builder()
                     .event("complete")
-                    .data(objectMapper.writeValueAsString(data))
-                    .build());
+                    .data(json)
+                    .build();
+
+                return Flux.just(complete).doOnComplete(() -> {
+                    if (!StringUtils.hasText(conversationId)) {
+                        return;
+                    }
+                    final String cid = conversationId;
+                    final String uid = userId;
+                    final String umsg = userMessage;
+                    final String r = reply;
+                    final List<SearchCommoditiesTool.CommodityDTO> rec = recommended;
+                    Schedulers.boundedElastic().schedule(() -> {
+                        try {
+                            persistMessages(cid, uid, umsg, r, rec);
+                            persistConversationWindowState(cid);
+                            checkAndUpdateProfile(uid, cid);
+                        } catch (Exception e) {
+                            log.error("持久化失败（客户端已收到 complete）: cid={}, error={}", cid, e.getMessage(), e);
+                        }
+                    });
+                });
             } catch (Exception e) {
                 log.error("构建 complete 事件失败: {}", e.getMessage(), e);
                 return Flux.empty();
             }
-        }).subscribeOn(Schedulers.boundedElastic());
+        });
     }
 
     private void checkAndUpdateProfile(String userId, String conversationId) {
@@ -356,17 +502,21 @@ public class AIAgentService {
 
     private void summarizeAndCompress(ChatMemory oldMemory, List<ChatMessage> messages, String memoryId) {
         try {
+            if (messages.size() < SUMMARY_TRIGGER) {
+                return;
+            }
             int keepRecent = MAX_MEMORY_MESSAGES;
-            if (messages.size() <= keepRecent) return;
 
             List<ChatMessage> oldMessages = messages.subList(0, messages.size() - keepRecent);
             StringBuilder sb = new StringBuilder();
             for (ChatMessage msg : oldMessages) {
-                String role = msg instanceof UserMessage ? "用户" : "助手";
-                String text = msg instanceof UserMessage
-                    ? ((UserMessage) msg).singleText()
-                    : ((AiMessage) msg).text();
-                sb.append("[").append(role).append("]: ").append(text).append("\n");
+                if (msg instanceof UserMessage um) {
+                    sb.append("[用户]: ").append(um.singleText()).append("\n");
+                } else if (msg instanceof AiMessage am) {
+                    sb.append("[助手]: ").append(am.text()).append("\n");
+                } else if (msg instanceof SystemMessage sm) {
+                    sb.append("[历史摘要]: ").append(sm.text()).append("\n");
+                }
             }
             String prompt = "请用简洁的语言（不超过200字）总结以下对话的主要内容和用户需求偏好：\n\n"
                 + sb + "\n一段话总结：";
@@ -375,12 +525,13 @@ public class AIAgentService {
 
             List<ChatMessage> recentMessages = new ArrayList<>(
                 messages.subList(messages.size() - keepRecent, messages.size()));
-            ChatMemory newMemory = MessageWindowChatMemory.withMaxMessages(MAX_MEMORY_MESSAGES);
+            ChatMemory newMemory = MessageWindowChatMemory.withMaxMessages(CHAT_MEMORY_BUFFER);
             newMemory.add(SystemMessage.from("【历史摘要】" + summary));
             recentMessages.forEach(newMemory::add);
             chatMemoryMap.put(memoryId, newMemory);
 
             log.debug("对话摘要完成，压缩了 {} 条消息", oldMessages.size());
+            persistConversationWindowState(memoryId);
         } catch (Exception e) {
             log.warn("生成对话摘要失败（忽略，保持原有记忆）: {}", e.getMessage());
         }
@@ -443,6 +594,20 @@ public class AIAgentService {
         return chunks;
     }
 
+    private void beginCommodityTurn(String memoryId) {
+        searchCommoditiesTool.beginConversationTurn(memoryId);
+    }
+
+    private void endCommodityTurn(String memoryId) {
+        searchCommoditiesTool.endConversationTurn(memoryId);
+    }
+
+    private List<SearchCommoditiesTool.CommodityDTO> resolveRecommendedCommodities(String memoryId) {
+        List<SearchCommoditiesTool.CommodityDTO> list =
+            searchCommoditiesTool.getRecommendedCommoditiesForResponse(memoryId);
+        return list != null ? list : Collections.emptyList();
+    }
+
     private String buildBaseSystemPrompt() {
         return "你是一个智能购物助手，帮助用户在南大集市（二手交易平台）上找到合适的商品。\n\n"
             + "你的职责：\n"
@@ -465,12 +630,6 @@ public class AIAgentService {
             + "- 你必须对搜索结果做「过滤」：只推荐真正符合用户描述的商品，不要推荐勉强相关却不符合的。\n"
             + "- 例如：用户要「二合一笔记本」时，只推荐二合一/可翻转/触屏本，不要推荐普通笔记本。\n"
             + "- 在给出文字回复前，必须调用 confirmRecommendedCommodities，传入且仅传入「经过过滤、真正符合用户需求」的 commodityId 列表；没有符合的则传空列表。只有被确认的商品会作为推荐卡片展示给用户，未确认的不会展示。\n\n"
-            + "Agent 回溯（仅在「ES 搜索 + LLM 过滤」之后仍不足时）：\n"
-            + "- 流程顺序固定：先做 ES 搜索（粗粒度、OR 型）→ 对本次搜索结果做 LLM 过滤并调用 confirmRecommendedCommodities → 若此时过滤后仍没有或不够合适结果，再考虑回溯。\n"
-            + "- 你可以在首次检索阶段自主选择 ES、向量或混合检索；但都必须先完成过滤与 confirm，再决定是否回溯。\n"
-            + "- 不要在「刚搜完、还没做过滤」时就换词重搜。回溯只发生在「已经过滤并确认过，仍不满意」之后。\n"
-            + "- 回溯时：改进搜索关键词（同义词、限定词、更具体说法），再次 searchCommodities，然后对新区结果同样先过滤、再 confirm，直到有合适推荐或工具调用次数用尽（最多 5 次）。\n"
-            + "- 只有在多次「搜索 + 过滤」后仍无合适结果时，才回复用户说明并建议调整需求。不要凑数推荐不匹配的商品。\n\n"
             + "注意事项：\n"
             + "- 回答要简洁明了、友好自然\n"
             + "- 基于搜索结果回答，不要编造商品信息\n"

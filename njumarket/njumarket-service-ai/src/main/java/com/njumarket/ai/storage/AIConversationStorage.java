@@ -6,8 +6,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * AI 会话与消息存储接口（Redis 实现，替代原 JPA）。
- * 会话元数据、消息列表、用户画像摘要均存 Redis；语义记忆存 Milvus。
+ * AI 会话与消息存储接口。
+ * <p>默认实现 {@link HybridAIConversationStorage}：会话与消息存 PostgreSQL（权威），用户画像摘要存 Redis；Milvus 由业务层写入向量。
  */
 public interface AIConversationStorage {
 
@@ -43,6 +43,18 @@ public interface AIConversationStorage {
     void saveProfileSummary(String userId, String summary);
 
     Optional<ProfileSummary> getProfileSummary(String userId);
+
+    /**
+     * 会话级 ChatMemory 快照：用于跨进程恢复窗口与在相同阈值触发归纳。
+     *
+     * @param memorySummary 【历史摘要】正文（不含「【历史摘要】」前缀），无则为 null
+     * @param windowMessageCount 当前窗口内 user+assistant 消息条数（不含摘要 system 行）
+     */
+    record ConversationMemorySnapshot(String memorySummary, int windowMessageCount) {}
+
+    Optional<ConversationMemorySnapshot> getConversationMemorySnapshot(String conversationId);
+
+    void updateConversationMemorySnapshot(String conversationId, String memorySummary, int windowMessageCount);
 
     record ConvMeta(String conversationId, String userId, String title, int messageCount,
                     String status, LocalDateTime createdAt, LocalDateTime updatedAt) {}

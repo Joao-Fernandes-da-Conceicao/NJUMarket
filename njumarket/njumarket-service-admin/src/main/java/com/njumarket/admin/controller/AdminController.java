@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import com.njumarket.admin.service.AdminAuthCookieService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +30,7 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminService adminService;
+    private final AdminAuthCookieService adminAuthCookieService;
 
     @Operation(summary = "管理员登录", description = "管理员使用用户名和密码登录")
     @ApiResponses({
@@ -36,8 +39,10 @@ public class AdminController {
         @ApiResponse(responseCode = "401", description = "用户名或密码错误")
     })
     @PostMapping("/login")
-    public Result login(@Valid @RequestBody AdminLoginDTO loginDTO, HttpSession session) {
-        return adminService.login(loginDTO, session);
+    public Result login(@Valid @RequestBody AdminLoginDTO loginDTO, HttpSession session, HttpServletResponse response) {
+        Result r = adminService.login(loginDTO, session);
+        adminAuthCookieService.applyLoginCookieIfSuccess(response, r);
+        return r;
     }
 
     @Operation(summary = "管理员登出", description = "管理员登出系统")
@@ -45,8 +50,12 @@ public class AdminController {
         @ApiResponse(responseCode = "200", description = "登出成功")
     })
     @PostMapping("/logout")
-    public Result logout(HttpSession session) {
-        return adminService.logout(session);
+    public Result logout(HttpSession session, HttpServletResponse response) {
+        Result r = adminService.logout(session);
+        if (Boolean.TRUE.equals(r.getSuccess())) {
+            adminAuthCookieService.clear(response);
+        }
+        return r;
     }
 
     @Operation(summary = "获取当前管理员信息", description = "获取当前登录管理员的详细信息")

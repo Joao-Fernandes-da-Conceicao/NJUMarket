@@ -38,16 +38,11 @@ feign:
       njumarket-service-auth:
         connectTimeout: 3000
         readTimeout: 5000
-      njumarket-service-commodity:
+      njumarket-service-trade:
         connectTimeout: 3000
         readTimeout: 5000
         circuitbreaker:
-          name: commodityService
-      njumarket-service-order:
-        connectTimeout: 3000
-        readTimeout: 5000
-        circuitbreaker:
-          name: orderService
+          name: tradeService
   compression:
     request:
       enabled: true
@@ -101,17 +96,7 @@ management:
 resilience4j:
   circuitbreaker:
     instances:
-      commodityService:
-        registerHealthIndicator: true
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        permittedNumberOfCallsInHalfOpenState: 3
-        automaticTransitionFromOpenToHalfOpenEnabled: true
-        waitDurationInOpenState: 10s
-        failureRateThreshold: 50
-        slowCallRateThreshold: 100
-        slowCallDurationThreshold: 2s
-      orderService:
+      tradeService:
         registerHealthIndicator: true
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
@@ -123,8 +108,6 @@ resilience4j:
         slowCallDurationThreshold: 2s
   timelimiter:
     instances:
-      commodityService:
-        timeoutDuration: 3s
-      orderService:
+      tradeService:
         timeoutDuration: 3s
 

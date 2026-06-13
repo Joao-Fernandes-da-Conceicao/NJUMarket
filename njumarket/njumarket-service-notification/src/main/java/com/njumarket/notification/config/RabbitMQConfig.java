@@ -24,44 +24,35 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     // ========== 订单事件相关 ==========
-    
+
     /**
-     * 订单事件交换机
+     * 订单事件交换机（Topic 类型）
      */
     public static final String ORDER_EXCHANGE = "order.exchange";
-    
+
     /**
-     * 订单事件队列
-     */
-    public static final String ORDER_QUEUE = "order.queue";
-    
-    /**
-     * 订单事件路由键
-     * 使用 order.# 匹配所有以 order. 开头的路由键（如 order.refund.approved, order.created 等）
-     * # 匹配零个或多个单词，* 只匹配一个单词
+     * 订单事件路由键（匹配 order.* 全部子类型）
+     * 消费者队列由各实例在启动时自行声明（AnonymousQueue），与消息推送队列同一扇出模型。
      */
     public static final String ORDER_ROUTING_KEY = "order.#";
 
     // ========== 消息推送事件相关 ==========
-    
+
     /**
-     * 消息推送事件交换机（与Message服务共享）
+     * 消息推送事件交换机（与 Message 服务共享，Topic 类型）。
+     * 每个 Notification 实例在启动时声明一个 AnonymousQueue（exclusive + autoDelete），
+     * 并绑定到此交换机，实现扇出（fanout）语义：所有在线实例都能收到每条推送事件，
+     * 各自判断目标用户是否连接在本实例，是则推送，否则静默丢弃。
      */
     public static final String MESSAGE_PUSH_EXCHANGE = "message.push.exchange";
-    
+
     /**
-     * 消息推送事件队列（Notification服务消费）
-     */
-    public static final String MESSAGE_PUSH_QUEUE = "message.push.queue";
-    
-    /**
-     * 消息推送事件路由键
-     * 使用 message.push.# 匹配所有以 message.push. 开头的路由键
+     * 消息推送事件路由键（匹配 message.push.* 全部子类型）
      */
     public static final String MESSAGE_PUSH_ROUTING_KEY = "message.push.#";
 
     /**
-     * 创建订单事件交换机（Topic 类型）
+     * 创建订单事件交换机（Topic 类型）。
      */
     @Bean
     public TopicExchange orderExchange() {
@@ -69,30 +60,35 @@ public class RabbitMQConfig {
     }
 
     /**
-     * 创建订单事件队列
+     * 每个 Notification 实例专属的订单事件临时队列（exclusive + autoDelete）。
+     * 与消息推送队列采用相同的扇出模型：所有在线实例各收一份事件，
+     * 由持有目标用户 WebSocket 连接的实例完成推送。
      */
     @Bean
-    public Queue orderQueue() {
-        Queue queue = QueueBuilder.durable(ORDER_QUEUE).build();
-        log.info("✅ 创建订单事件队列: {}", ORDER_QUEUE);
+    public org.springframework.amqp.core.AnonymousQueue instanceOrderQueue() {
+        org.springframework.amqp.core.AnonymousQueue queue = new org.springframework.amqp.core.AnonymousQueue();
+        log.info("✅ 创建实例专属订单事件队列: {}", queue.getName());
         return queue;
     }
 
     /**
-     * 绑定订单队列到交换机
+     * 将实例专属订单队列绑定到订单事件交换机。
      */
     @Bean
-    public Binding orderBinding() {
+    public Binding instanceOrderBinding(
+            org.springframework.amqp.core.AnonymousQueue instanceOrderQueue,
+            TopicExchange orderExchange) {
         Binding binding = BindingBuilder
-                .bind(orderQueue())
-                .to(orderExchange())
+                .bind(instanceOrderQueue)
+                .to(orderExchange)
                 .with(ORDER_ROUTING_KEY);
-        log.info("✅ 绑定订单队列到交换机: {} -> {} (routingKey: {})", ORDER_QUEUE, ORDER_EXCHANGE, ORDER_ROUTING_KEY);
+        log.info("✅ 绑定实例专属订单队列到交换机: {} -> {} (routingKey: {})",
+                instanceOrderQueue.getName(), ORDER_EXCHANGE, ORDER_ROUTING_KEY);
         return binding;
     }
 
     /**
-     * 创建消息推送事件交换机（Topic 类型，与Message服务共享）
+     * 创建消息推送事件交换机（Topic 类型，与 Message 服务共享）。
      */
     @Bean
     public TopicExchange messagePushExchange() {
@@ -100,26 +96,30 @@ public class RabbitMQConfig {
     }
 
     /**
-     * 创建消息推送事件队列（Notification服务消费）
+     * 每个 Notification 实例专属的临时队列（exclusive + autoDelete）。
+     * 实例启动时自动创建并绑定，实例下线时 RabbitMQ 自动删除，无需手动清理。
+     * 多实例部署时，每个实例拥有独立队列，交换机将每条消息扇出给所有实例。
      */
     @Bean
-    public Queue messagePushQueue() {
-        Queue queue = QueueBuilder.durable(MESSAGE_PUSH_QUEUE).build();
-        log.info("✅ 创建消息推送事件队列: {}", MESSAGE_PUSH_QUEUE);
+    public org.springframework.amqp.core.AnonymousQueue instanceMessagePushQueue() {
+        org.springframework.amqp.core.AnonymousQueue queue = new org.springframework.amqp.core.AnonymousQueue();
+        log.info("✅ 创建实例专属消息推送队列: {}", queue.getName());
         return queue;
     }
 
     /**
-     * 绑定消息推送队列到交换机
+     * 将实例专属队列绑定到消息推送交换机。
      */
     @Bean
-    public Binding messagePushBinding() {
+    public Binding instanceMessagePushBinding(
+            org.springframework.amqp.core.AnonymousQueue instanceMessagePushQueue,
+            TopicExchange messagePushExchange) {
         Binding binding = BindingBuilder
-                .bind(messagePushQueue())
-                .to(messagePushExchange())
+                .bind(instanceMessagePushQueue)
+                .to(messagePushExchange)
                 .with(MESSAGE_PUSH_ROUTING_KEY);
-        log.info("✅ 绑定消息推送队列到交换机: {} -> {} (routingKey: {})", 
-                MESSAGE_PUSH_QUEUE, MESSAGE_PUSH_EXCHANGE, MESSAGE_PUSH_ROUTING_KEY);
+        log.info("✅ 绑定实例专属队列到消息推送交换机: {} -> {} (routingKey: {})",
+                instanceMessagePushQueue.getName(), MESSAGE_PUSH_EXCHANGE, MESSAGE_PUSH_ROUTING_KEY);
         return binding;
     }
 
@@ -188,8 +188,8 @@ public class RabbitMQConfig {
      */
     @PostConstruct
     public void init() {
-        log.info("✅ RabbitMQ 配置初始化完成 - 订单队列: {}, 交换机: {}, 路由键: {}", 
-                ORDER_QUEUE, ORDER_EXCHANGE, ORDER_ROUTING_KEY);
+        log.info("✅ RabbitMQ 配置初始化完成 - 订单交换机: {}, 路由键: {}; 消息推送交换机: {}（队列由各实例动态创建）",
+                ORDER_EXCHANGE, ORDER_ROUTING_KEY, MESSAGE_PUSH_EXCHANGE);
     }
 
     /**

@@ -1,7 +1,7 @@
 package com.njumarket.notification.mq;
 
 import com.njumarket.njumarket.dto.event.OrderEvent;
-import com.njumarket.notification.config.RabbitMQConfig;
+
 import com.njumarket.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,16 +23,17 @@ public class OrderEventConsumer {
 
     private final NotificationService notificationService;
 
-    @RabbitListener(queues = RabbitMQConfig.ORDER_QUEUE, containerFactory = "rabbitListenerContainerFactory")
+    @RabbitListener(queues = "#{instanceOrderQueue.name}", containerFactory = "rabbitListenerContainerFactory")
     public void handleOrderEvent(OrderEvent event) {
         try {
-            log.info("收到订单事件: userId={}, orderId={}, operation={}",
-                    event.getUserId(), event.getOrderId(), event.getOperation());
+            log.info("收到订单事件: userId={}, orderId={}, operation={}, recipientRole={}",
+                    event.getUserId(), event.getOrderId(), event.getOperation(), event.getRecipientRole());
 
             notificationService.pushOrderChange(
                     event.getUserId(),
                     event.getOrderId(),
-                    event.getOperation()
+                    event.getOperation(),
+                    event.getRecipientRole()
             );
 
             log.info("订单事件推送完成: userId={}, orderId={}, operation={}",

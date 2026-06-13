@@ -136,8 +136,7 @@ cd NJUMarket/njumarket
 
 3. **各微服务**（可并行启动）
    - `AuthServiceApplication` (8091) - 认证服务
-   - `CommodityServiceApplication` (8092) - 商品服务
-   - `OrderServiceApplication` (8093) - 订单服务
+   - `TradeServiceApplication` (8092) - 交易服务（商品+订单）
    - `MessageServiceApplication` (8094) - 消息服务
    - `ImageServiceApplication` (8095) - 图片服务
    - `AdminServiceApplication` (8096) - 管理服务（✅ v2.0完整实现）
@@ -176,11 +175,8 @@ njumarket/
 ├── njumarket-service-auth/          # 认证服务
 │   └── AuthServiceApplication
 │
-├── njumarket-service-commodity/     # 商品服务
-│   └── CommodityServiceApplication
-│
-├── njumarket-service-order/        # 订单服务
-│   └── OrderServiceApplication
+├── njumarket-service-trade/         # 交易服务（商品+订单）
+│   └── TradeServiceApplication
 │
 ├── njumarket-service-message/      # 消息服务
 │   └── MessageServiceApplication
@@ -227,8 +223,7 @@ njumarket/
 | Eureka Discovery | 8761 | 服务注册中心 |
 | API Gateway | 8080 | API网关（统一入口） |
 | Auth Service | 8091 | 认证服务 |
-| Commodity Service | 8092 | 商品服务 |
-| Order Service | 8093 | 订单服务 |
+| Trade Service | 8092 | 交易服务（商品+订单） |
 | Message Service | 8094 | 消息服务 |
 | Image Service | 8095 | 图片服务 |
 | Admin Service | 8096 | 管理服务 |

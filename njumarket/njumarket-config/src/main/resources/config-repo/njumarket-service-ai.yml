@@ -3,11 +3,10 @@
 
 server:
   port: 8098
-  # 增加连接超时时间，支持 AI 对话等耗时操作
-  connection-timeout: 120000  # 120 秒
+  connection-timeout: 600000
   tomcat:
-    connection-timeout: 120000  # 120 秒
-    keep-alive-timeout: 120000  # 120 秒
+    connection-timeout: 600000
+    keep-alive-timeout: 1800000
 
 spring:
   application:
@@ -29,11 +28,11 @@ feign:
       default:
         connectTimeout: 10000  # AI服务调用其他服务时使用较长的超时时间
         readTimeout: 30000  # AI服务调用其他服务时使用较长的超时时间（支持AI对话等耗时操作）
-      njumarket-service-commodity:
+      njumarket-service-trade:
         connectTimeout: 5000
         readTimeout: 10000
         circuitbreaker:
-          name: commodityService
+          name: tradeService
       njumarket-service-auth:
         connectTimeout: 5000
         readTimeout: 10000
@@ -93,7 +92,7 @@ management:
 resilience4j:
   circuitbreaker:
     instances:
-      commodityService:
+      tradeService:
         registerHealthIndicator: true
         slidingWindowSize: 10
         minimumNumberOfCalls: 5
@@ -115,7 +114,7 @@ resilience4j:
         slowCallDurationThreshold: 5s
   timelimiter:
     instances:
-      commodityService:
+      tradeService:
         timeoutDuration: 10s  # AI服务调用其他服务时使用较长的超时时间
       authService:
         timeoutDuration: 10s
@@ -133,6 +132,7 @@ logging:
 
 njumarket:
   ai:
+    streaming-http-timeout-seconds: ${AI_STREAMING_HTTP_TIMEOUT_SECONDS:600}
     milvus:
       enabled: ${MILVUS_ENABLED:true}
       uri: ${MILVUS_URI:http://milvus-standalone:19530}

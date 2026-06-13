@@ -48,6 +48,7 @@ public class MessageServiceImpl implements MessageService {
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
     private final CommoditySnapshotRepository commoditySnapshotRepository;
+    private final CommoditySnapshotPersistenceService snapshotPersistenceService;
     private final CommodityClient commodityClient;
     private final OrderClient orderClient;
     private final ObjectMapper objectMapper;
@@ -221,29 +222,21 @@ public class MessageServiceImpl implements MessageService {
             message.setIsRead(false);
             messageRepository.save(message);
 
-            // 保存商品快照（COMMODITY_CARD 类型消息）
+            // 保存商品快照（COMMODITY_CARD 类型消息），使用独立事务隔离，失败不影响消息入库
             CommoditySnapshot savedSnapshot = null;
             if (commodityDataForSnapshot != null) {
                 try {
-                    CommoditySnapshot snapshot = new CommoditySnapshot();
-                    snapshot.setMessageId(message.getMessageId());
-                    snapshot.setCommodityId(message.getCommodityId());
-                    snapshot.setTitle((String) commodityDataForSnapshot.get("title"));
-                    Object priceObj = commodityDataForSnapshot.get("price");
-                    if (priceObj instanceof Number) {
-                        snapshot.setPrice(((Number) priceObj).doubleValue());
-                    }
-                    snapshot.setImageUrl(extractFirstImage((String) commodityDataForSnapshot.get("images")));
-                    snapshot.setStatus((String) commodityDataForSnapshot.get("commodityStatus"));
-                    savedSnapshot = commoditySnapshotRepository.save(snapshot);
-                    log.debug("商品快照已保存: messageId={}, commodityId={}", message.getMessageId(), message.getCommodityId());
+                    String firstImageUrl = extractFirstImage((String) commodityDataForSnapshot.get("images"));
+                    savedSnapshot = snapshotPersistenceService.saveSnapshot(
+                            message.getMessageId(), message.getCommodityId(),
+                            commodityDataForSnapshot, firstImageUrl);
                 } catch (Exception e) {
                     log.warn("保存商品快照失败（消息仍正常发送）: messageId={}, error={}", message.getMessageId(), e.getMessage());
                 }
             }
 
             LocalDateTime now = LocalDateTime.now();
-            String messageContent = request.getContent();
+            String messageContent = message.getContent();
 
             conversation.setLastMessageContent(messageContent);
             conversation.setLastMessageTime(now);
@@ -348,9 +341,6 @@ public class MessageServiceImpl implements MessageService {
 
             messageRepository.save(message);
 
-            conversation = conversationRepository.findById(message.getConversationId())
-                    .orElseThrow(() -> new BusinessException("对话不存在"));
-
             if (newDeletedBySender != null && !newDeletedBySender.equals(oldDeletedBySender)) {
                 boolean wasVisible = !Boolean.TRUE.equals(oldDeletedBySender);
                 boolean isNowVisible = !Boolean.TRUE.equals(newDeletedBySender);
@@ -436,6 +426,7 @@ public class MessageServiceImpl implements MessageService {
     // ==================== 搜索消息 ====================
 
     @Override
+    @Transactional(readOnly = true)
     public Result searchMessages(String userId, String conversationId, String keyword, int page, int size) {
         try {
             Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
